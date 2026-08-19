@@ -7,7 +7,8 @@ local MusicManager = require "music_manager"
 local TrackManager = require "track_manager"
 local GameStates = require "tetris.game_states"
 
--- Variables de Control de Partida Estables
+-- Variables de Control Global
+_G.RestartHalo = 0
 local player = nil
 local bot = nil
 local game_state = "menu"
@@ -45,7 +46,7 @@ local function getCombinedDropRate()
 end
 
 function love.load()
-    love.window.setTitle("Tetris OPT - Versus")
+    love.window.setTitle("MUTRIS - Tetris Versus OPT")
     love.window.setMode(800, 600, {resizable = false, vsync = true})
 
     AudioManager.init()
@@ -63,6 +64,7 @@ function love.load()
 end
 
 function GlobalRestart()
+    _G.RestartHalo = 1.0 -- Dispara el flash blanco
     local d = difficulties[selected_diff]
 
     player = Board.new(80, 50, "human")
@@ -81,10 +83,8 @@ function GlobalRestart()
     player.active_piece = Piece.new(player.bag:next(), player)
     bot.active_piece = Piece.new(bot.bag:next(), bot)
 
-    -- Inicialización de controles nativos
     Input.init(player)
 
-    -- Reinicio absoluto de las colas de combate de basura
     player.garbage_queue = {}
     bot.garbage_queue = {}
 
@@ -97,7 +97,13 @@ function GlobalRestart()
 
     game_state = "play"
 end
+
 function love.update(dt)
+    -- Lógica del desvanecimiento del Halo
+    if _G.RestartHalo > 0 then
+        _G.RestartHalo = math.max(0, _G.RestartHalo - dt * 2.5)
+    end
+
     local danger = 0
     if game_state == "play" and player and player.grid then
         for r = 21, 32 do
@@ -120,10 +126,8 @@ function love.update(dt)
     MusicManager.update(dt)
 
     if game_state == "play" then
-        -- Lectura de teclado competitiva al inicio del frame
         Input.update(dt)
 
-        -- ACTUALIZAR JUGADOR HUMANO
         if player then
             player:update(dt)
             if player.active_piece then
@@ -142,7 +146,6 @@ function love.update(dt)
             end
         end
 
-        -- ACTUALIZAR INTELIGENCIA ARTIFICIAL
         if bot then
             bot:update(dt)
             if bot.ai then bot.ai:update(dt) end
@@ -151,7 +154,6 @@ function love.update(dt)
                 if bot.active_piece.locked then
                     local GarbageManager = require "tetris.garbage_manager"
                     GarbageManager.pushToGrid(bot)
-
                     bot.active_piece = Piece.new(bot.bag:next(), bot)
                 end
             end
@@ -163,6 +165,7 @@ function love.draw()
     love.graphics.push("all")
     local active_punch = _G.TrackEnergyPunch or 0
 
+    -- Rebote por BPM
     if game_state == "play" and _G.AudioBeatPulse and _G.AudioBeatPulse > 0 then
         local vertical_bounce = 0
         if active_punch >= 0.50 then
@@ -189,17 +192,20 @@ function love.draw()
         local HUDCenter = require "tetris.hud_center"
         if HUDCenter and HUDCenter.draw then HUDCenter.draw(player, bot) end
         
-        -- INYECCIÓN CRÍTICA DE TELEMETRÍA SEGURA (Búsqueda multipropósito en minúsculas)
-        local success, Telemetry = pcall(require, "telemetry")
-        if not success then
-            success, Telemetry = pcall(require, "tetris.telemetry")
-        end
+        local success, Telemetry = pcall(require, "tetris.telemetry")
         if success and Telemetry and Telemetry.draw then
             Telemetry.draw(player, bot)
         end
     elseif game_state == "over" then
         GameStates.drawGameOver()
     end
+
+    -- Dibujar Halo de Reinicio
+    if _G.RestartHalo > 0 then
+        love.graphics.setColor(1, 1, 1, _G.RestartHalo)
+        love.graphics.rectangle("fill", 0, 0, 800, 600)
+    end
+
     love.graphics.pop()
 end
 
@@ -217,8 +223,13 @@ function love.keypressed(key)
             Input.keypressed(key)
         end
     elseif game_state == "over" then
-        if key == "return" or key == "space" then
-            game_state = "menu"
+        -- FIX: Ahora "R" funciona en el Game Over también
+        if key == "return" or key == "space" or key == "r" then
+            if key == "r" then
+                GlobalRestart()
+            else
+                game_state = "menu"
+            end
         end
     end
 end
