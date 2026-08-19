@@ -7,20 +7,25 @@ function Shaker.update(board, dt)
 end
 
 function Shaker.apply(board)
-    local active_punch = _G.TrackEnergyPunch or 0
+    local energy = _G.TrackEnergyPunch or 0
+    local pulse = _G.AudioBeatPulse or 0
     
-    -- Impacto inmediato por romper bloques en el juego (siempre activo)
-    local shake_x = (board.shake_time and board.shake_time > 0) and math.random(-board.shake_mag, board.shake_mag) or 0
+    local sx, sy = 0, 0
     
-    -- TIER DE TEMBLOR RÍTMICO LATERAL (Desbloquea RECIÉN arriba del 85% de energía)
-    if active_punch >= 0.85 and _G.AudioBeatPulse and _G.AudioBeatPulse > 0.5 then
-        -- Entra en la fase crítica pre-drop: el sismo despierta de golpe de forma violenta
-        local tier_factor = (active_punch - 0.85) / 0.15
-        local pulse_intensity = 6.0 * tier_factor
-        shake_x = shake_x + math.random(-pulse_intensity, pulse_intensity)
+    -- Sacudida por eventos (Lock/Lines)
+    if board.shake_time and board.shake_time > 0 then
+        sx = math.random(-board.shake_mag, board.shake_mag)
+        sy = math.random(-board.shake_mag, board.shake_mag)
     end
     
-    love.graphics.translate(shake_x, 0)
+    -- Vibración por Beat (Punch!)
+    if energy > 0.8 and pulse > 0.7 then
+        local vibe = (energy - 0.7) * 8
+        sx = sx + math.random(-vibe, vibe)
+        sy = sy + math.random(-vibe, vibe)
+    end
+    
+    love.graphics.translate(sx, sy)
 end
 
 return Shaker
