@@ -7,55 +7,31 @@ local MusicManager = require "music_manager"
 local TrackManager = require "track_manager"
 local GameStates = require "tetris.game_states"
 
--- Variables de Control Global
 _G.RestartHalo = 0
-local player = nil
-local bot = nil
-local game_state = "menu"
-local selected_diff = 1
+_G.Winner = nil 
+
+local player, bot, game_state, selected_diff = nil, nil, "menu", 1
 
 local difficulties = {
-    { name = "APPRENTICE", pps = 0.8, color = {0, 1, 0.5} },
-    { name = "PRO", pps = 2.5, color = {1, 0.8, 0} },
-    { name = "MASTER", pps = 6.0, color = {1, 0.2, 0.2} }
+    { name = "APPRENTICE", pps = 0.8, color = {0.2, 1, 0.5} },
+    { name = "PRO", pps = 2.5, color = {1, 0.8, 0.2} },
+    { name = "MASTER", pps = 6.0, color = {1, 0.2, 0.3} }
 }
 
-local lock_events = {}
-local function trackLock() table.insert(lock_events, love.timer.getTime()) end
-function _G.NotifyPieceLock() trackLock() end
-
-local function getCombinedDropRate()
-    local now = love.timer.getTime()
-    local window = 4
-    local i = 1
-    while i <= #lock_events do
-        if now - lock_events[i] > window then table.remove(lock_events, i)
-        else i = i + 1 end
-    end
-    return #lock_events / window
-end
-
 function love.load()
-    love.window.setTitle("MUTRIS - Tetris Versus OPT")
+    love.window.setTitle("MUTRIS - Ethereal Engine")
     love.window.setMode(800, 600, {resizable = false, vsync = true})
     AudioManager.init()
     TrackManager.init()
     _G.RealMatchTimer, _G.TrackEnergyPunch, _G.AudioBeatPulse = 0, 0, 0
-
-    -- INICIALIZACIÓN DE ESTRELLAS (Fondo reactivo)
     _G.Stars = {}
-    for i=1, 120 do
-        _G.Stars[i] = {
-            x = math.random(0, 800),
-            y = math.random(0, 600),
-            s = math.random(1, 3), -- Tamaño
-            v = math.random(20, 80) -- Velocidad base
-        }
+    for i=1, 150 do
+        _G.Stars[i] = { x = math.random(800), y = math.random(600), s = math.random(1, 2), v = math.random(10, 40) }
     end
 end
 
 function GlobalRestart()
-    _G.RestartHalo = 1.0
+    _G.RestartHalo, _G.Winner = 1.0, nil
     local d = difficulties[selected_diff]
     player = Board.new(80, 50, "human")
     bot = Board.new(480, 50, "bot")
@@ -67,57 +43,34 @@ function GlobalRestart()
     player.active_piece = Piece.new(player.bag:next(), player)
     bot.active_piece = Piece.new(bot.bag:next(), bot)
     Input.init(player)
-    lock_events, _G.RealMatchTimer, _G.TrackEnergyPunch = {}, 0, 0
     MusicManager.stop()
     MusicManager.start()
     game_state = "play"
 end
 
 function love.update(dt)
-    if _G.RestartHalo > 0 then _G.RestartHalo = math.max(0, _G.RestartHalo - dt * 2.5) end
-
+    if _G.RestartHalo > 0 then _G.RestartHalo = math.max(0, _G.RestartHalo - dt * 2.0) end
     local energy = _G.TrackEnergyPunch or 0
-
-    -- ACTUALIZAR ESTRELLAS (Velocidad proporcional a la adrenalina)
     for _, s in ipairs(_G.Stars) do
-        -- En el Drop las estrellas se mueven hasta 6 veces más rápido
-        s.y = s.y + s.v * dt * (1 + energy * 6) 
-        if s.y > 600 then 
-            s.y = 0 
-            s.x = math.random(0, 800) 
-        end
+        s.y = s.y + s.v * dt * (1 + energy * 8) 
+        if s.y > 600 then s.y, s.x = 0, math.random(800) end
     end
-
-    local danger = 0
-    if game_state == "play" and player and player.grid then
-        for r = 21, 32 do
-            for c = 1, 10 do
-                if player.grid[r] and player.grid[r][c] ~= 0 then danger = math.max(danger, (33 - r) / 12) end
-            end
-        end
-    end
-
-    if game_state == "play" then _G.RealMatchTimer = _G.RealMatchTimer + dt end
-
-    local drop_rate = getCombinedDropRate()
-    local drop_intensity = math.min(1, drop_rate / 8)
-
-    AudioManager.update(dt, { danger_level = danger, drop_intensity = drop_intensity })
-    MusicManager.update(dt)
 
     if game_state == "play" then
+        _G.RealMatchTimer = _G.RealMatchTimer + dt
         Input.update(dt)
+        AudioManager.update(dt, { danger_level = 0, drop_intensity = 0 })
+        MusicManager.update(dt)
 
         if player and player.active_piece then
             player:update(dt)
-            local grav = Input.getSoftDropFactor()
-            player.active_piece:update(dt, grav)
-            
+            player.active_piece:update(dt, Input.getSoftDropFactor())
             if player.active_piece.locked then
-                local GarbageManager = require "tetris.garbage_manager"
-                GarbageManager.pushToGrid(player)
+                require("tetris.garbage_manager").pushToGrid(player)
                 player.active_piece = Piece.new(player.bag:next(), player)
-                if not player.active_piece:canMove(player.active_piece.x, player.active_piece.y, 1) then game_state = "over" end
+                if not player.active_piece:canMove(player.active_piece.x, player.active_piece.y, 1) then 
+                    game_state, _G.Winner = "over", "BOT"
+                end
             end
         end
 
@@ -126,9 +79,11 @@ function love.update(dt)
             if bot.ai then bot.ai:update(dt) end
             bot.active_piece:update(dt, 0.8)
             if bot.active_piece.locked then
-                local GarbageManager = require "tetris.garbage_manager"
-                GarbageManager.pushToGrid(bot)
+                require("tetris.garbage_manager").pushToGrid(bot)
                 bot.active_piece = Piece.new(bot.bag:next(), bot)
+                if not bot.active_piece:canMove(bot.active_piece.x, bot.active_piece.y, 1) then 
+                    game_state, _G.Winner = "over", "PLAYER"
+                end
             end
         end
     end
@@ -136,56 +91,25 @@ end
 
 function love.draw()
     love.graphics.push("all")
-    local energy = _G.TrackEnergyPunch or 0
     local pulse = _G.AudioBeatPulse or 0
-
-    -- Rebote del escenario
-    if game_state == "play" and pulse > 0 then
-        local bounce = pulse * (energy * 5 + 1.5) 
-        love.graphics.translate(0, bounce)
-    end
-
-    love.graphics.clear(0.01, 0.01, 0.04)
-
-    -- 1. CABECERA DE VERSIÓN (ENCIMA DE LOS TABLEROS)
-    love.graphics.setFont(love.graphics.newFont(9))
-    love.graphics.setColor(1, 1, 1, 0.15 + pulse * 0.2)
-    love.graphics.printf("MUTRIS v0.8.5 - ETHEREAL ENGINE", 0, 15, 800, "center")
-
-    -- 2. DIBUJAR FONDO ESPACIAL (ESTRELLAS)
+    love.graphics.clear(0.002, 0.002, 0.008)
     for _, s in ipairs(_G.Stars) do
-        local brightness = 0.15 + (energy * 0.4) + (pulse * 0.1)
-        love.graphics.setColor(0.6, 0.8, 1.0, brightness)
-        if energy > 0.5 then
-            love.graphics.setLineWidth(s.s)
-            love.graphics.line(s.x, s.y, s.x, s.y - (energy * 15))
-        else
-            love.graphics.circle("fill", s.x, s.y, s.s)
-        end
+        love.graphics.setColor(0.5, 0.7, 1.0, 0.2 + pulse * 0.2)
+        love.graphics.circle("fill", s.x, s.y, s.s)
     end
-
-    -- 3. RENDERIZADO DE JUEGO
     if game_state == "menu" then
         GameStates.drawMenu(love.timer.getTime(), selected_diff, difficulties)
     elseif game_state == "play" then
-        if player then 
-            player:draw()
-            if player.active_piece then player.active_piece:draw(player.x, player.y) end
-        end
-        if bot then 
-            bot:draw()
-            if bot.active_piece then bot.active_piece:draw(bot.x, bot.y) end
-        end
-        local HUDCenter = require "tetris.hud_center"
-        HUDCenter.draw(player, bot)
+        if player then player:draw() if player.active_piece then player.active_piece:draw(player.x, player.y) end end
+        if bot then bot:draw() if bot.active_piece then bot.active_piece:draw(bot.x, bot.y) end end
+        require("tetris.hud_center").draw(player, bot)
         local success, Telemetry = pcall(require, "tetris.telemetry")
         if success then Telemetry.draw(player, bot) end
     elseif game_state == "over" then
         GameStates.drawGameOver()
     end
-
     if _G.RestartHalo > 0 then
-        love.graphics.setColor(1, 1, 1, _G.RestartHalo)
+        love.graphics.setColor(1, 1, 1, _G.RestartHalo * 0.5)
         love.graphics.rectangle("fill", 0, 0, 800, 600)
     end
     love.graphics.pop()
@@ -193,13 +117,9 @@ end
 
 function love.keypressed(key)
     if game_state == "menu" then
-        if key == "up" or key == "kp8" then selected_diff = math.max(1, selected_diff - 1)
-        elseif key == "down" or key == "kp2" then selected_diff = math.min(#difficulties, selected_diff + 1)
-        elseif key == "return" or key == "space" then GlobalRestart() end
+        if key == "up" then selected_diff = math.max(1, selected_diff - 1)
+        elseif key == "down" then selected_diff = math.min(#difficulties, selected_diff + 1)
+        elseif key == "return" then GlobalRestart() end
     elseif game_state == "play" then Input.keypressed(key)
-    elseif game_state == "over" then
-        if key == "return" or key == "space" or key == "r" then
-            if key == "r" then GlobalRestart() else game_state = "menu" end
-        end
-    end
+    elseif game_state == "over" and key == "r" then GlobalRestart() end
 end

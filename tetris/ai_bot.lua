@@ -15,6 +15,7 @@ function AIBot.new(board, profile)
 end
 
 function AIBot:update(dt)
+    -- Seguridad: Si no hay pieza o está bloqueada, no hacer nada
     if not self.board.active_piece or self.board.active_piece.locked or self.just_locked then 
         if self.board.active_piece and not self.board.active_piece.locked then
             self.just_locked = false 
@@ -34,15 +35,28 @@ end
 
 function AIBot:think()
     local p = self.board.active_piece
-    if not p or p.locked then return end
+    -- Doble comprobación de seguridad para evitar el error 'canMove' nil
+    if not p or p.locked or type(p.canMove) ~= "function" then return end
     
     local best_score = -2000000
-    for r = 1, 4 do
+    local max_rot = #p.shape
+    
+    for r = 1, max_rot do
         for x = -2, 11 do
             if p:canMove(x, p.y, r) then
                 local gy = p.y
                 while p:canMove(x, gy + 1, r) do gy = gy + 1 end
                 local score = self:evaluate(x, gy, r)
+                
+                -- Bonus agresivo: Si es una pieza T, intentar buscar T-Spins
+                if p.id == 6 and score > -500000 then
+                    -- Simulamos la rotación para ver si activaría el T-Spin
+                    local old_x, old_y, old_r = p.x, p.y, p.rotation
+                    p.x, p.y, p.rotation = x, gy, r
+                    if p:checkTSpin() then score = score + 1500 end
+                    p.x, p.y, p.rotation = old_x, old_y, old_r
+                end
+
                 if score > best_score then
                     best_score = score
                     self.target_x, self.target_rot = x, r
@@ -86,13 +100,6 @@ function AIBot:evaluate(px, py, pr)
         if heights[i] > max_h then max_h = heights[i] end
         if i < 10 then bumpiness = bumpiness + math.abs(heights[i] - heights[i+1]) end
     end
-    
-    for c = 1, 9 do
-        local l_height = (c == 1) and 40 or heights[c-1]
-        local r_height = heights[c+1]
-        local depth = math.min(l_height, r_height) - heights[c]
-        if depth > 2 then wells_depth = wells_depth + depth end
-    end
 
     local lines_cleared = 0
     for r = 1, 40 do
@@ -110,24 +117,22 @@ function AIBot:evaluate(px, py, pr)
     end
 
     local score = 0
-    score = score - (max_h * max_h * 4.5)
-    score = score - (holes * 200.0)         
-    score = score - (bumpiness * 12.0)      
-    score = score - (wells_depth * 10.0)    
-
+    score = score - (max_h * max_h * 5.0)    -- Penalizar altura
+    score = score - (holes * 250.0)         -- Penalizar huecos (MUCHO)
+    score = score - (bumpiness * 15.0)      -- Penalizar irregularidad
+    
     if lines_cleared == 4 then
-        score = score + 800.0 
+        score = score + 1000.0              -- Prioridad a Tetris
     elseif lines_cleared > 0 then
-        score = score + (lines_cleared * 60.0)
-    else
-        if max_h < 8 and heights == 0 then score = score + 40.0 end
+        score = score + (lines_cleared * 50.0)
     end
     
     return score
 end
+
 function AIBot:executeMove()
     local p = self.board.active_piece
-    if not p or p.locked then 
+    if not p or p.locked or not self.target_x then 
         self.is_thinking = false
         return 
     end
@@ -135,24 +140,20 @@ function AIBot:executeMove()
     local max_rot = #p.shape
     local real_target_rot = ((self.target_rot - 1) % max_rot) + 1
     
-    while p.rotation ~= real_target_rot do
-        if not p:rotate(1) then break end
-    end
-    
-    if p.x < self.target_x then
-        while p.x < self.target_x and p:move(1, 0) do end
+    -- Ejecutar rotación
+    if p.rotation ~= real_target_rot then
+        p:rotate(1)
+    -- Ejecutar movimiento lateral
+    elseif p.x < self.target_x then
+        p:move(1, 0)
     elseif p.x > self.target_x then
-        while p.x > self.target_x and p:move(-1, 0) do end
-    end
-    
-    if p.x == self.target_x and p.rotation == real_target_rot then
+        p:move(-1, 0)
+    -- Si está en posición, Hard Drop
+    else
         local startY = p.y
         while p:move(0, 1, true) do end
         local endY = p.y
-        
-        -- El Bot también deja estela
         self.board:spawnTrail(p.x, startY, endY, p.id, p.shape[p.rotation])
-        
         p:lock()
         self.is_thinking = false
         self.just_locked = true 

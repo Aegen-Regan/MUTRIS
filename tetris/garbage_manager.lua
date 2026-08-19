@@ -11,6 +11,22 @@ function GarbageManager.calculateAttack(lines, is_tspin, is_mini, combo, b2b, bo
     local message = ""
     local color = {1, 1, 1}
 
+    -- HEAT SYSTEM (VISUAL)
+    local charge_boost = (lines / 4) * 0.4
+    if is_tspin or lines == 4 then 
+        charge_boost = 1.0 
+        board.eq_power = 1.0  -- Activa paleta Hyper-Attack
+        board.eq_flash = 1.0  -- Impacto visual
+    end
+
+    -- Los combos disparan pequeñas ráfagas de brillo
+    if combo > 0 then
+        charge_boost = charge_boost + (combo * 0.18)
+        board.eq_power = math.max(board.eq_power, 0.5)
+    end
+
+    board.eq_charge = math.min(1.0, board.eq_charge + charge_boost)
+
     if is_tspin then
         if lines == 1 then attack, message, color = 2, "T-SPIN SINGLE", {0.8, 0.2, 1}
         elseif lines == 2 then attack, message, color = 4, "T-SPIN DOUBLE", {0.8, 0.2, 1}
@@ -46,7 +62,9 @@ function GarbageManager.sendGarbage(sender, receiver, amount)
     end
     if rem > 0 then 
         table.insert(receiver.garbage_queue, rem)
-        receiver:triggerShake(rem * 3, 0.2)
+        receiver:triggerShake(rem * 4, 0.25)
+        -- Cuando recibimos ataque, la energía se vuelve "inestable" (Rojo Danger)
+        receiver.eq_charge = math.min(1.0, receiver.eq_charge + 0.4)
     end
 end
 
@@ -62,7 +80,7 @@ function GarbageManager.pushToGrid(board)
     end
     local AudioManager = require "audio_manager"
     AudioManager.triggerGlitch(lines * 0.08)
-    board:triggerShake(lines * 4, 0.25)
+    board:triggerShake(lines * 5, 0.3)
 end
 
 return GarbageManager

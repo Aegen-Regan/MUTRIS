@@ -12,7 +12,8 @@ function Piece.new(id, board)
     self.rotation, self.x, self.y = 1, 4, 21
     self.locked, self.gravity_timer, self.lock_timer = false, 0, 0
     self.lock_delay, self.move_count, self.max_resets = 0.5, 0, 15
-    self.spawn_timer = 0.12
+    self.spawn_timer = 0.2
+    self.last_move_was_rotate = false 
     return self
 end
 
@@ -23,7 +24,11 @@ end
 function Piece:move(dx, dy, is_gravity)
     if self.board:canMove(self.x + dx, self.y + dy, self.rotation) then
         self.x, self.y = self.x + dx, self.y + dy
-        if not is_gravity then AudioManager.playImmediateSFX("move", self.board.player_type == "bot") self:resetLock() end
+        if not is_gravity then 
+            AudioManager.playImmediateSFX("move", self.board.player_type == "bot") 
+            self:resetLock() 
+            self.last_move_was_rotate = false
+        end
         return true
     end
     return false
@@ -41,11 +46,23 @@ function Piece:rotate(dir)
                 self.x, self.y, self.rotation = self.x + kick[1], self.y - kick[2], next_rot
                 AudioManager.playImmediateSFX("rotate", self.board.player_type == "bot")
                 self:resetLock()
+                self.last_move_was_rotate = true
                 return true
             end
         end
     end
     return false
+end
+
+function Piece:checkTSpin()
+    if self.id ~= 6 or not self.last_move_was_rotate then return false end
+    local occupied = 0
+    local corners = {{x=0,y=0}, {x=2,y=0}, {x=0,y=2}, {x=2,y=2}}
+    for _, c in ipairs(corners) do
+        local tx, ty = self.x+c.x, self.y+c.y
+        if tx<1 or tx>10 or ty>40 or (ty>=1 and self.board.grid[ty][tx]~=0) then occupied = occupied+1 end
+    end
+    return occupied >= 3
 end
 
 function Piece:canMove(px, py, pr) return self.board:canMove(px, py, pr) end
@@ -68,57 +85,64 @@ end
 function Piece:lock()
     if self.locked then return end
     self.board.can_hold, self.board.lock_impact = true, 1.0
+    local is_tspin = self:checkTSpin()
     local shape = self.shape[self.rotation]
     for r = 1, #shape do
         for c = 1, #shape[r] do
             if shape[r][c] ~= 0 then
-                local tx, ty = self.x + c - 1, self.y + r - 1
-                if ty >= 1 and ty <= 40 then self.board.grid[ty][tx] = self.id end
+                local tx, ty = self.x+c-1, self.y+r-1
+                if ty>=1 and ty<=40 then self.board.grid[ty][tx] = self.id end
             end
         end
     end
     self.locked = true
     PPSCounter.register(self.board)
-    AudioManager.playImmediateSFX("drop", self.board.player_type == "bot", self.y)
-    if _G.NotifyPieceLock then _G.NotifyPieceLock() end
-    self.board:checkLines()
-end
-
-local function drawWavyRect(x, y, w, h, time, intensity)
-    local pts = {}
-    local steps = 6
-    for i=0, steps do table.insert(pts, x + (w/steps)*i) table.insert(pts, y + math.sin(time+i)*intensity) end
-    for i=0, steps do table.insert(pts, x + w + math.cos(time+i)*intensity) table.insert(pts, y + (h/steps)*i) end
-    for i=steps, 0, -1 do table.insert(pts, x + (w/steps)*i) table.insert(pts, y + h + math.sin(time+i+2)*intensity) end
-    for i=steps, 0, -1 do table.insert(pts, x + math.cos(time+i+2)*intensity) table.insert(pts, y + (h/steps)*i) end
-    love.graphics.line(pts)
+    AudioManager.playImmediateSFX("drop", self.board.player_type=="bot", self.y)
+    self.board:checkLines(is_tspin)
 end
 
 function Piece:draw(bx, by)
     local shape = self.shape[self.rotation]
     local energy, pulse = _G.TrackEnergyPunch or 0, _G.AudioBeatPulse or 0
     love.graphics.push("all")
+
+    -- SPAWN BLOOM (Animación de nacimiento)
     if self.spawn_timer > 0 then
-        love.graphics.setBlendMode("add")
-        love.graphics.setColor(1, 1, 1, (self.spawn_timer/0.12)*0.4)
-        for r=1,#shape do for c=1,#shape[r] do if shape[r][c]~=0 then love.graphics.circle("fill", bx+(self.x+c-2)*24+12, by+(self.y+r-22)*24+12, 20) end end end
-        love.graphics.setBlendMode("alpha")
-    end
-    if self.board and bx == self.board.x and by == self.board.y then
-        local gy = self.y
-        while self.board:canMove(self.x, gy+1, self.rotation) do gy = gy+1 end
-        local danger = 0
-        for r=21,40 do for c=1,10 do if self.board.grid[r][c]~=0 then danger = math.max(danger, (41-r)/20) break end end end
+        local p = self.spawn_timer / 0.2
         local clr = self.board.colors[self.id]
         love.graphics.setBlendMode("add")
-        local intensity = 0.5 + (pulse*2) + (danger*5)
         for r=1,#shape do for c=1,#shape[r] do if shape[r][c]~=0 then
-            love.graphics.setColor(clr[1], clr[2], clr[3], 0.3 + energy*0.4)
-            drawWavyRect(bx+(self.x+c-2)*24+2, by+(gy+r-22)*24+2, 20, 20, love.timer.getTime()*12, intensity)
+            local x, y = bx+(self.x+c-2)*24, by+(self.y+r-22)*24
+            love.graphics.setColor(clr[1], clr[2], clr[3], p * 0.4)
+            love.graphics.rectangle("fill", x-6*p, y-6*p, 24+12*p, 24+12*p, 4)
+            love.graphics.setColor(1,1,1, p * 0.6)
+            love.graphics.rectangle("fill", x, y, 24, 24, 2)
         end end end
         love.graphics.setBlendMode("alpha")
     end
-    for r=1,#shape do for c=1,#shape[r] do if shape[r][c]~=0 then self.board:drawBlock(bx+(self.x+c-2)*24, by+(self.y+r-22)*24, self.id) end end end
+
+    -- GHOST PIECE (Legibilidad HOLOGRÁFICA)
+    if self.board and bx == self.board.x and by == self.board.y then
+        local gy = self.y
+        while self.board:canMove(self.x, gy+1, self.rotation) do gy = gy+1 end
+        local clr = self.board.colors[self.id]
+        
+        for r=1,#shape do for c=1,#shape[r] do if shape[r][c]~=0 then
+            local gx, g_y = bx+(self.x+c-2)*24, by+(gy+r-22)*24
+            -- Relleno muy sutil
+            love.graphics.setColor(clr[1], clr[2], clr[3], 0.1)
+            love.graphics.rectangle("fill", gx+2, g_y+2, 20, 20, 2)
+            -- Borde con brillo pulsante
+            love.graphics.setLineWidth(1.5)
+            love.graphics.setColor(clr[1], clr[2], clr[3], 0.2 + pulse * 0.2)
+            love.graphics.rectangle("line", gx+2, g_y+2, 20, 20, 2)
+        end end end
+    end
+
+    -- ACTIVE PIECE (Brillante)
+    for r=1,#shape do for c=1,#shape[r] do if shape[r][c]~=0 then
+        self.board:drawBlock(bx+(self.x+c-2)*24, by+(self.y+r-22)*24, self.id)
+    end end end
     love.graphics.pop()
 end
 

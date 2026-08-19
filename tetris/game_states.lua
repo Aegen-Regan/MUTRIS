@@ -1,4 +1,4 @@
-local TrackManager = require "track_manager" -- Importación interna limpia
+local TrackManager = require "track_manager" 
 
 local GameStates = {}
 
@@ -8,10 +8,6 @@ function GameStates.drawMenu(timer, selected, diffs)
     love.graphics.setColor(1, 1, 1, 0.9)
     love.graphics.printf("TETRIS VERSUS OPT", 0, 60, 800 / title_scale, "center", 0, title_scale, title_scale)
     
-    -- 1. PANEL DE METADATOS DE AUDIO Y PLAYLIST
-    -- FIX: red de seguridad -- si por lo que sea TrackManager.tracks estuviera vacio
-    -- (init() no corrio, o corrio antes de que exista la carpeta music/), esto ya
-    -- no crashea: usa un track de relleno en vez de indexar nil.
     local current_track = TrackManager.getCurrentTrack() or {
         name = "SYSTEM EMPTY", file_path = "", bpm = 120, root_note = "C", mode = "MINOR"
     }
@@ -28,7 +24,6 @@ function GameStates.drawMenu(timer, selected, diffs)
     if current_track.file_path ~= "" then
         love.graphics.printf("BPM: " .. current_track.bpm .. "   |   KEY: " .. current_track.root_note .. " (" .. current_track.mode .. ")", 0, 215, 800, "center")
         
-        -- Botón Config Soundtrack (LAB)
         local hover_lab = (mx >= 275 and mx <= 525 and my >= 245 and my <= 280)
         love.graphics.setColor(hover_lab and {0, 0.7, 1, 0.35} or {0, 0.4, 0.6, 0.12})
         love.graphics.rectangle("fill", 275, 245, 250, 35, 4)
@@ -40,7 +35,6 @@ function GameStates.drawMenu(timer, selected, diffs)
         love.graphics.printf("SYSTEM EMPTY", 0, 215, 800, "center")
     end
 
-    -- 2. SELECCIÓN DE DIFICULTADES
     for i, d in ipairs(diffs) do
         local sel = (i == selected)
         local y_pos = 300 + (i * 42)
@@ -58,7 +52,6 @@ function GameStates.drawMenu(timer, selected, diffs)
         end
     end
 
-    -- 3. BOTÓN INTERACTIVO VERDE: START MATCH
     local hover_start = (mx >= 275 and mx <= 525 and my >= 485 and my <= 530)
     love.graphics.setColor(hover_start and {0, 0.9, 0.4, 0.45} or {0.04, 0.25, 0.1, 0.22})
     love.graphics.rectangle("fill", 275, 485, 250, 45, 4)
@@ -70,10 +63,24 @@ function GameStates.drawMenu(timer, selected, diffs)
 end
 
 function GameStates.drawGameOver()
-    love.graphics.setColor(0, 0, 0, 0.85)
+    love.graphics.setColor(0, 0, 0, 0.9)
     love.graphics.rectangle("fill", 0, 0, 800, 600)
-    love.graphics.setColor(1, 1, 1)
-    love.graphics.printf("MATCH OVER\n\nPRESS R TO RESTART", 0, 280, 800, "center")
+    
+    local winner = _G.Winner or "UNKNOWN"
+    local pulse = _G.AudioBeatPulse or 0
+    
+    love.graphics.setFont(love.graphics.newFont(32))
+    if winner == "PLAYER" then
+        love.graphics.setColor(0, 0.8, 1, 0.7 + pulse * 0.3)
+        love.graphics.printf("VICTORY", 0, 200, 800, "center")
+    else
+        love.graphics.setColor(1, 0.2, 0.2, 0.7 + pulse * 0.3)
+        love.graphics.printf("DEFEAT", 0, 200, 800, "center")
+    end
+
+    love.graphics.setFont(love.graphics.newFont(14))
+    love.graphics.setColor(1, 1, 1, 0.6)
+    love.graphics.printf("PRESS R TO RESTART", 0, 320, 800, "center")
 end
 
 return GameStates

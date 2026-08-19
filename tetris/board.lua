@@ -14,10 +14,19 @@ local ParticleSystem = require "tetris.particle_system"
 function Board.new(x, y, player_type, colors)
     local self = setmetatable({}, Board)
     self.x, self.y, self.player_type = x, y, player_type
+    
+    -- PALETA "VIBRANT CANDY" (Agradable y Clara)
     self.colors = colors or {
-        {0, 1, 1}, {0, 0.5, 1}, {1, 0.5, 0}, {1, 1, 0},
-        {0, 1, 0}, {0.8, 0, 1}, {1, 0, 0}, {0.5, 0.5, 0.5}
+        {0.1, 0.9, 1.0}, -- I: Cyan
+        {0.2, 0.4, 1.0}, -- J: Blue
+        {1.0, 0.6, 0.1}, -- L: Orange
+        {1.0, 0.9, 0.2}, -- O: Yellow
+        {0.3, 1.0, 0.5}, -- S: Green
+        {0.8, 0.3, 1.0}, -- T: Purple
+        {1.0, 0.2, 0.4}, -- Z: Red
+        {0.6, 0.6, 0.7}  -- Garbage: Grey
     }
+    
     self.grid = {}
     for i = 1, 40 do self.grid[i] = {0,0,0,0,0,0,0,0,0,0} end
     self.combo, self.b2b = -1, 0
@@ -27,12 +36,17 @@ function Board.new(x, y, player_type, colors)
     self.popup_text, self.popup_timer, self.popup_color = "", 0, {1, 1, 1}
 
     self.lock_impact = 0
-    self.trail_duration = 0.45
+    self.trail_duration = 0.5
     self.trails = {}
     for i = 1, 8 do 
-        self.trails[i] = { active = false, x = 0, y_start = 0, y_end = 0, id = 0, timer = 0, shape = nil, particles = {} }
-        for p=1, 12 do self.trails[i].particles[p] = {y = 0, speed = 0, offset = 0, size = 0} end
+        self.trails[i] = { active = false, x = 0, y_start = 0, y_end = 0, id = 0, timer = 0, shape = nil }
     end
+
+    self.eq_charge = 0 
+    self.eq_power = 0  
+    self.eq_flash = 0  
+    self.eq_bars = {} 
+    for i = 1, 10 do self.eq_bars[i] = 0 end
 
     ParticleSystem.init(self)
     PPSCounter.init(self)
@@ -45,12 +59,6 @@ function Board:spawnTrail(x, y_start, y_end, id, shape)
             local t = self.trails[i]
             t.active, t.x, t.y_start, t.y_end = true, x, y_start, y_end
             t.id, t.shape, t.timer = id, shape, self.trail_duration
-            for p=1, #t.particles do
-                t.particles[p].y = math.random(y_start * 24, y_end * 24)
-                t.particles[p].speed = math.random(100, 300)
-                t.particles[p].offset = math.random(-10, 10)
-                t.particles[p].size = math.random(1, 2)
-            end
             break
         end
     end
@@ -60,19 +68,21 @@ function Board:update(dt)
     Shaker.update(self, dt)
     ParticleSystem.update(self, dt)
     if self.popup_timer > 0 then self.popup_timer = self.popup_timer - dt end
-    if self.lock_impact > 0 then self.lock_impact = math.max(0, self.lock_impact - dt * 4) end
+    if self.lock_impact > 0 then self.lock_impact = math.max(0, self.lock_impact - dt * 4.0) end
+
+    self.eq_charge = math.max(0, self.eq_charge - dt * 0.35)
+    self.eq_power = math.max(0, self.eq_power - dt * 0.4)
+    self.eq_flash = math.max(0, self.eq_flash - dt * 2.5)
+
+    local pulse = _G.AudioBeatPulse or 0
+    for i = 1, 10 do
+        local target = (0.1 + pulse * 0.6 + math.random()*0.2) * self.eq_charge
+        self.eq_bars[i] = self.eq_bars[i] + (target - self.eq_bars[i]) * 10 * dt
+    end
 
     for i = 1, #self.trails do
         local t = self.trails[i]
-        if t.active then
-            t.timer = t.timer - dt
-            for p=1, #t.particles do t.particles[p].y = t.particles[p].y + t.particles[p].speed * dt end
-            if t.timer <= 0 then t.active = false end
-        end
-    end
-    if self.is_zone_active then
-        self.zone_meter = self.zone_meter - dt * 20
-        if self.zone_meter <= 0 then self:exitZone() end
+        if t.active then t.timer = t.timer - dt if t.timer <= 0 then t.active = false end end
     end
     PPSCounter.update(self)
 end
@@ -87,30 +97,70 @@ function Board:triggerShake(mag, dur)
     self.shake_time = dur
 end
 
--- DISEÑO DE BLOQUE DEFINIDO Y CRISTALINO
+function Board:drawEQBackground()
+    local garbage_count = 0
+    for _, lines in ipairs(self.garbage_queue) do garbage_count = garbage_count + lines end
+    if self.eq_charge <= 0.01 and garbage_count == 0 then return end
+
+    local pulse = _G.AudioBeatPulse or 0
+    local time = love.timer.getTime()
+    local is_danger = garbage_count > 0
+    local is_attacking = self.eq_power > 0.1
+
+    love.graphics.push("all")
+    love.graphics.setBlendMode("add")
+    
+    for c = 1, 10 do
+        local bar_val = self.eq_bars[c] * 19
+        if is_danger then bar_val = math.max(bar_val, math.min(garbage_count * 2.0, 18)) end
+        local bx = self.x + (c - 1) * 24 + 4
+        
+        for s = 0, 18 do
+            if s <= bar_val then
+                local sy = self.y + 480 - (s * 25) - 22
+                -- EQ más sutil para no tapar las piezas
+                local alpha = (0.15 + pulse * 0.25)
+                
+                if is_danger then
+                    local r_pulse = 0.6 + math.sin(time * 12 + c) * 0.4
+                    love.graphics.setColor(1.0, 0.1 * r_pulse, 0.1, alpha * 0.7)
+                elseif is_attacking then
+                    love.graphics.setColor(0.9, 0.2, 1.0, alpha)
+                else
+                    love.graphics.setColor(0.2, 0.6, 1.0, alpha * self.eq_charge)
+                end
+
+                love.graphics.rectangle("fill", bx, sy, 16, 8, 2)
+            end
+        end
+    end
+    love.graphics.setBlendMode("alpha")
+    love.graphics.pop()
+end
+
 function Board:drawBlock(bx, by, id, alpha)
     local clr = self.colors[id] or {1, 1, 1}
     local pulse = _G.AudioBeatPulse or 0
     local energy = _G.TrackEnergyPunch or 0
     local a = alpha or 1.0
     
-    local scale = 1 + (self.lock_impact * 0.1) + (pulse * 0.03 * energy)
+    local scale = 1 + (self.lock_impact * 0.1) + (pulse * 0.02 * energy)
     local ds = 24 * scale
     local off = (ds - 24) / 2
 
-    -- 1. Fondo del bloque (Sólido y oscuro para legibilidad)
-    love.graphics.setColor(clr[1]*0.3, clr[2]*0.3, clr[3]*0.3, a)
-    love.graphics.rectangle("fill", bx - off, by - off, ds, ds)
+    -- BLOQUE CRYSTAL (Legibilidad Máxima)
+    -- Capa 1: Relleno con el color de la pieza (suave)
+    love.graphics.setColor(clr[1], clr[2], clr[3], a * 0.35)
+    love.graphics.rectangle("fill", bx - off, by - off, ds, ds, 4)
     
-    -- 2. Brillo tipo "Cristal" (Líneas internas fijas)
-    love.graphics.setColor(1, 1, 1, a * (0.2 + pulse * 0.3))
-    love.graphics.rectangle("fill", bx + 2 - off, by + 2 - off, ds - 4, 2)
-    love.graphics.rectangle("fill", bx + 2 - off, by + 2 - off, 2, ds - 4)
+    -- Capa 2: Borde Neón fuerte
+    love.graphics.setLineWidth(2)
+    love.graphics.setColor(clr[1], clr[2], clr[3], a * (0.8 + pulse * 0.2))
+    love.graphics.rectangle("line", bx - off, by - off, ds, ds, 4)
 
-    -- 3. Borde Eléctrico (Define la pieza)
-    love.graphics.setLineWidth(1)
-    love.graphics.setColor(clr[1], clr[2], clr[3], a * (0.6 + pulse * 0.4))
-    love.graphics.rectangle("line", bx - off, by - off, ds, ds)
+    -- Capa 3: Brillo de cristal superior
+    love.graphics.setColor(1, 1, 1, a * (0.2 + pulse * 0.2))
+    love.graphics.rectangle("fill", bx + 3 - off, by + 3 - off, ds - 6, 4, 2)
 end
 
 function Board:draw()
@@ -120,39 +170,13 @@ function Board:draw()
     love.graphics.push("all")
     Shaker.apply(self)
     
-    love.graphics.setColor(0, 0, 0, 0.95)
-    love.graphics.rectangle("fill", self.x, self.y, 240, 480)
+    love.graphics.setColor(0.01, 0.01, 0.03, 0.95)
+    love.graphics.rectangle("fill", self.x, self.y, 240, 480, 4)
     
-    -- --- ESTELAS ADITIVAS ---
-    love.graphics.setBlendMode("add")
-    for i = 1, #self.trails do
-        local t = self.trails[i]
-        if t.active then
-            local clr = self.colors[t.id] or {1, 1, 1}
-            local progress = t.timer / self.trail_duration
-            local alpha = progress * progress
-            for row = 1, #t.shape do
-                for col = 1, #t.shape[row] do
-                    if t.shape[row][col] ~= 0 then
-                        local dx = self.x + (t.x + col - 2) * 24 + 12
-                        local sy = self.y + (t.y_start + row - 22) * 24
-                        local ey = self.y + (t.y_end + row - 22) * 24
-                        if ey > sy then
-                            love.graphics.setColor(clr[1], clr[2], clr[3], alpha * 0.1)
-                            love.graphics.rectangle("fill", dx-10, sy, 20, ey-sy)
-                            love.graphics.setLineWidth(1)
-                            love.graphics.setColor(1, 1, 1, alpha * 0.5)
-                            love.graphics.line(dx, sy, dx, ey)
-                        end
-                    end
-                end
-            end
-        end
-    end
-    love.graphics.setBlendMode("alpha")
+    self:drawEQBackground()
 
-    -- Grilla
-    love.graphics.setColor(0, 0.8, 1, 0.02 + energy * 0.03)
+    -- Grilla sutil
+    love.graphics.setColor(1, 1, 1, 0.03 + pulse * 0.03)
     for c = 0, 10 do love.graphics.line(self.x + c*24, self.y, self.x + c*24, self.y + 480) end
     for r = 0, 20 do love.graphics.line(self.x, self.y + r*24, self.x + 240, self.y + r*24) end
 
@@ -165,18 +189,15 @@ function Board:draw()
     end
 
     -- Marco
-    love.graphics.setLineWidth(1 + pulse * 2)
-    love.graphics.setColor(0, 0.6, 1, 0.4 + energy * 0.4)
-    love.graphics.rectangle("line", self.x - 1, self.y - 1, 242, 482)
-    love.graphics.setLineWidth(1)
+    love.graphics.setLineWidth(2)
+    love.graphics.setColor(0, 0.5, 1, 0.4 + pulse * 0.3)
+    love.graphics.rectangle("line", self.x - 2, self.y - 2, 244, 484, 4)
 
-    -- Popups
     if self.popup_timer > 0 then
         local alpha = math.min(1, self.popup_timer * 3)
         love.graphics.setColor(self.popup_color[1], self.popup_color[2], self.popup_color[3], alpha)
-        local size = (self.popup_text:find("!") or self.popup_text:find("T-SPIN")) and 24 or 18
-        love.graphics.setFont(love.graphics.newFont(size + energy * 6))
-        love.graphics.printf(self.popup_text, self.x, self.y + 200 - (1.3 - self.popup_timer) * 100, 240, "center")
+        love.graphics.setFont(love.graphics.newFont(20 + energy * 8))
+        love.graphics.printf(self.popup_text, self.x, self.y + 180, 240, "center")
     end
 
     HUDPanels.draw(self)
@@ -184,7 +205,6 @@ function Board:draw()
     love.graphics.pop()
 end
 
--- (Funciones canMove, checkLines, hold, exitZone, enterZone iguales)
 function Board:canMove(px, py, pr)
     if not self.active_piece or not self.active_piece.shape then return false end
     local shape = self.active_piece.shape[pr]
@@ -200,35 +220,25 @@ function Board:canMove(px, py, pr)
     return true
 end
 
-function Board:checkLines()
+function Board:checkLines(is_tspin)
     local lines = {}
-    local start_scan = self.is_zone_active and 1 or 21
-    for r = start_scan, 40 do
+    for r = 21, 40 do
         local full = true
         for c = 1, 10 do if self.grid[r][c] == 0 then full = false; break end end
         if full then table.insert(lines, r) end
     end
     if #lines > 0 then
-        if self.is_zone_active then
-            self.zone_lines = self.zone_lines + #lines
-            for _, r in ipairs(lines) do self.grid[r] = {8,8,8,8,8,8,8,8,8,8} end
-        else
-            self.combo = self.combo + 1
-            self.zone_meter = math.min(100, self.zone_meter + #lines * 6)
-            local attack = GarbageManager.calculateAttack(#lines, false, false, self.combo, self.b2b, self)
-            if #lines == 4 then self.b2b = self.b2b + 1 else self.b2b = 0 end
-            GarbageManager.sendGarbage(self, self.opponent, attack)
-            for _, r in ipairs(lines) do
-                local color_id = self.grid[r][1] or 1
-                ParticleSystem.spawnLineBlast(self, r, color_id)
-                table.remove(self.grid, r)
-                table.insert(self.grid, 1, {0,0,0,0,0,0,0,0,0,0})
-            end
-            self:triggerShake(#lines * 5, 0.25)
+        self.combo = self.combo + 1
+        local attack = GarbageManager.calculateAttack(#lines, is_tspin, false, self.combo, self.b2b, self)
+        if #lines == 4 or is_tspin then self.b2b = self.b2b + 1 else self.b2b = 0 end
+        GarbageManager.sendGarbage(self, self.opponent, attack)
+        for _, r in ipairs(lines) do
+            ParticleSystem.spawnLineBlast(self, r, self.grid[r][1] or 1)
+            table.remove(self.grid, r)
+            table.insert(self.grid, 1, {0,0,0,0,0,0,0,0,0,0})
         end
-    else
-        if not self.is_zone_active then self.combo = -1 end
-    end
+        self:triggerShake(#lines * 7, 0.3)
+    else self.combo = -1 end
 end
 
 function Board:hold()
@@ -243,21 +253,6 @@ function Board:hold()
         self.active_piece = Piece.new(next_id, self)
     end
     self.can_hold, self.active_piece.spawn_timer = false, 0
-end
-
-function Board:exitZone()
-    if self.zone_lines > 0 then
-        local attack = math.floor(self.zone_lines * 1.5)
-        GarbageManager.sendGarbage(self, self.opponent, attack)
-        self:triggerShake(12, 0.6)
-    end
-    self.is_zone_active, self.zone_lines, self.zone_meter = false, 0, 0
-end
-
-function Board:enterZone()
-    if self.zone_meter >= 25 and not self.is_zone_active then
-        self.is_zone_active, self.zone_lines = true, 0
-    end
 end
 
 return Board
