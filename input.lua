@@ -67,9 +67,17 @@ function Input.keypressed(key)
     elseif key == "s" or key == "c" then Input.player:hold()
     elseif key == "q" then Input.player:enterZone()
     elseif key == "space" then 
-        Input.player.drop_flash = {x = p.x, timer = 0.25}
-        while p:move(0, 1) do end
-        p:lock()
+        if Input.player then
+            local startY = p.y
+            -- Drop instantáneo
+            while p:move(0, 1, true) do end
+            local endY = p.y
+            
+            -- Disparar estela en el tablero usando la forma actual de la pieza
+            Input.player:spawnTrail(p.x, startY, endY, p.id, p.shape[p.rotation])
+            
+            p:lock()
+        end
     end
 end
 

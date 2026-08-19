@@ -132,15 +132,11 @@ function AIBot:executeMove()
         return 
     end
     
-    -- CORRECCIÓN: Modulamos el target según cuántas rotaciones reales tiene indexadas esta pieza
     local max_rot = #p.shape
     local real_target_rot = ((self.target_rot - 1) % max_rot) + 1
     
-    -- Contador de seguridad de hardware para forzar salida si la pieza se traba
-    local safety_counter = 0
-    while p.rotation ~= real_target_rot and safety_counter < 4 do
+    while p.rotation ~= real_target_rot do
         if not p:rotate(1) then break end
-        safety_counter = safety_counter + 1
     end
     
     if p.x < self.target_x then
@@ -149,16 +145,18 @@ function AIBot:executeMove()
         while p.x > self.target_x and p:move(-1, 0) do end
     end
     
-    if p.x ~= self.target_x or p.rotation ~= real_target_rot then
-        return
+    if p.x == self.target_x and p.rotation == real_target_rot then
+        local startY = p.y
+        while p:move(0, 1, true) do end
+        local endY = p.y
+        
+        -- El Bot también deja estela
+        self.board:spawnTrail(p.x, startY, endY, p.id, p.shape[p.rotation])
+        
+        p:lock()
+        self.is_thinking = false
+        self.just_locked = true 
     end
-    
-    self.board.drop_flash = {x = p.x, timer = 0.25}
-    while p:move(0, 1) do end
-    p:lock()
-    
-    self.is_thinking = false
-    self.just_locked = true 
 end
 
 return AIBot

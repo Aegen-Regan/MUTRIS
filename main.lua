@@ -41,6 +41,17 @@ function love.load()
     AudioManager.init()
     TrackManager.init()
     _G.RealMatchTimer, _G.TrackEnergyPunch, _G.AudioBeatPulse = 0, 0, 0
+
+    -- INICIALIZACIÓN DE ESTRELLAS (Fondo reactivo)
+    _G.Stars = {}
+    for i=1, 120 do
+        _G.Stars[i] = {
+            x = math.random(0, 800),
+            y = math.random(0, 600),
+            s = math.random(1, 3), -- Tamaño
+            v = math.random(20, 80) -- Velocidad base
+        }
+    end
 end
 
 function GlobalRestart()
@@ -65,6 +76,18 @@ end
 function love.update(dt)
     if _G.RestartHalo > 0 then _G.RestartHalo = math.max(0, _G.RestartHalo - dt * 2.5) end
 
+    local energy = _G.TrackEnergyPunch or 0
+
+    -- ACTUALIZAR ESTRELLAS (Velocidad proporcional a la adrenalina)
+    for _, s in ipairs(_G.Stars) do
+        -- En el Drop las estrellas se mueven hasta 6 veces más rápido
+        s.y = s.y + s.v * dt * (1 + energy * 6) 
+        if s.y > 600 then 
+            s.y = 0 
+            s.x = math.random(0, 800) 
+        end
+    end
+
     local danger = 0
     if game_state == "play" and player and player.grid then
         for r = 21, 32 do
@@ -87,7 +110,6 @@ function love.update(dt)
 
         if player and player.active_piece then
             player:update(dt)
-            -- FIX: Conexión con Soft Drop de input.lua
             local grav = Input.getSoftDropFactor()
             player.active_piece:update(dt, grav)
             
@@ -117,13 +139,32 @@ function love.draw()
     local energy = _G.TrackEnergyPunch or 0
     local pulse = _G.AudioBeatPulse or 0
 
+    -- Rebote rítmico del escenario
     if game_state == "play" and pulse > 0 then
-        local bounce = pulse * (energy * 8 + 2)
+        local bounce = pulse * (energy * 5 + 1.5) 
         love.graphics.translate(0, bounce)
     end
 
-    love.graphics.clear(0.01, 0.01, 0.03)
+    -- 1. LIMPIEZA Y FONDO ESPACIAL
+    love.graphics.clear(0.01, 0.01, 0.04)
 
+    -- Dibujar Estrellas
+    for _, s in ipairs(_G.Stars) do
+        -- Las estrellas brillan más con el Beat y la Energía
+        local brightness = 0.15 + (energy * 0.4) + (pulse * 0.1)
+        love.graphics.setColor(0.6, 0.8, 1.0, brightness)
+        
+        -- En el Drop, las estrellas se estiran (Motion Blur)
+        if energy > 0.5 then
+            local stretch = energy * 15
+            love.graphics.setLineWidth(s.s)
+            love.graphics.line(s.x, s.y, s.x, s.y - stretch)
+        else
+            love.graphics.circle("fill", s.x, s.y, s.s)
+        end
+    end
+
+    -- 2. RENDERIZADO DE ESTADOS
     if game_state == "menu" then
         GameStates.drawMenu(love.timer.getTime(), selected_diff, difficulties)
     elseif game_state == "play" then
@@ -143,6 +184,7 @@ function love.draw()
         GameStates.drawGameOver()
     end
 
+    -- 3. HALO DE REINICIO
     if _G.RestartHalo > 0 then
         love.graphics.setColor(1, 1, 1, _G.RestartHalo)
         love.graphics.rectangle("fill", 0, 0, 800, 600)
