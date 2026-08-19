@@ -213,3 +213,45 @@ Habiendo consolidado el Lab Batch interactivo por ratón, la persistencia físic
 ### ⚙️ 3. Sincronización del Rendimiento (Threading & Garbage Collector)
 *   ⏳ **Inmunidad al Stuttering por Latencia:** Al haber extraído la carga de dependencias dinámicas (`require`) y la instanciación de objetos (`Piece.new`) fuera de las funciones críticas de dibujado (paneles NEXT y HOLD), el juego se encuentra operando bajo una arquitectura *Zero-GC compliant*. La recolección de basura de Lua permanece inactiva durante la partida, eliminando micro-tirones y congelamientos frame a frame.
 *   🎮 **Bucle de Ejecución de Inputs Competitivos:** Para que los valores milimétricos del DAS y el ARR estilo *Jstris/Tetrio* se apliquen sin tirones, la lectura del teclado con `Input.update(dt)` corre de forma obligatoria al principio absoluto del frame dentro de `love.update(dt)`, procesando las banderas de movimiento de las piezas antes de que el motor gráfico calcule la gravedad de descenso vertical o el arrastre de las líneas de basura.
+
+
+
+
+
+
+
+# 🕹️ MUTRIS v0.8.5 - ETHEREAL ENGINE
+## ESTADO DE SISTEMA: FASE 6 (PULIDO AUDIOVISUAL FINAL)
+
+---
+
+## 💎 NUEVAS MECÁNICAS DE ESTA VERSIÓN
+
+### 1. Sistema de "Ethereal Trails" (Estelas de Polvo Estelar)
+Se eliminaron las estelas sólidas por un sistema de **haces de luz volumétricos** con decaimiento cuadrático.
+*   **Partículas Internas:** Cada estela genera motas de polvo que caen físicamente hacia el tablero.
+*   **Flicker Aditivo:** Las estelas parpadean aleatoriamente para simular descargas de energía.
+
+### 2. Ghost Piece "Wired" (Estructura de Alambre Eléctrica)
+La sombra ya no es un bloque; es un **contorno ondulante** reactivo.
+*   **Danger Reaction:** A medida que la pila de bloques sube hacia el límite, la ondulación del Ghost se vuelve más violenta y errática.
+*   **Beat Sync:** El esqueleto de la pieza vibra físicamente con cada pulso de bajo detectado por el hardware.
+
+### 3. Kinetic Impact (Impacto de Suelo)
+Los bloques que ya están fijos en el tablero tienen "conciencia" del aterrizaje de nuevas piezas.
+*   **Lock Impact:** Al fijar una pieza, todo el tablero experimenta un pulso de escala (se agranda un 10%) y un destello interno masivo.
+*   **Aura Disco:** Los bloques mantienen un núcleo oscuro y bordes eléctricos para garantizar legibilidad en altas velocidades.
+
+---
+
+## 🗺️ ROADMAP ACTUALIZADO (PROXIMOS PASOS)
+
+1.  **SFX Harmonization:** Implementar un motor de reverberación para los efectos de sonido que escale con el `TrackEnergyPunch`. Los sonidos deben sonar "secos" en la intro y "espaciales" en el Drop.
+2.  **Master AI Heuristics:** Calibrar el Bot para que realice T-Spins de forma intencional en dificultad Master durante el clímax musical.
+3.  **Z-Depth Layering:** Añadir una capa de "niebla de color" detrás de los tableros que cambie de tono según la escala Camelot del track actual.
+
+---
+
+## 🛠️ CONSIDERACIONES TÉCNICAS
+*   **Zero-GC Compliant:** Todo el sistema de estelas y partículas utiliza pools estáticos pre-alocados.
+*   **Hardware Sync:** El parpadeo y la ondulación están anclados al buffer de la placa de sonido, garantizando desfasaje cero.

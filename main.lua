@@ -139,32 +139,32 @@ function love.draw()
     local energy = _G.TrackEnergyPunch or 0
     local pulse = _G.AudioBeatPulse or 0
 
-    -- Rebote rítmico del escenario
+    -- Rebote del escenario
     if game_state == "play" and pulse > 0 then
         local bounce = pulse * (energy * 5 + 1.5) 
         love.graphics.translate(0, bounce)
     end
 
-    -- 1. LIMPIEZA Y FONDO ESPACIAL
     love.graphics.clear(0.01, 0.01, 0.04)
 
-    -- Dibujar Estrellas
+    -- 1. CABECERA DE VERSIÓN (ENCIMA DE LOS TABLEROS)
+    love.graphics.setFont(love.graphics.newFont(9))
+    love.graphics.setColor(1, 1, 1, 0.15 + pulse * 0.2)
+    love.graphics.printf("MUTRIS v0.8.5 - ETHEREAL ENGINE", 0, 15, 800, "center")
+
+    -- 2. DIBUJAR FONDO ESPACIAL (ESTRELLAS)
     for _, s in ipairs(_G.Stars) do
-        -- Las estrellas brillan más con el Beat y la Energía
         local brightness = 0.15 + (energy * 0.4) + (pulse * 0.1)
         love.graphics.setColor(0.6, 0.8, 1.0, brightness)
-        
-        -- En el Drop, las estrellas se estiran (Motion Blur)
         if energy > 0.5 then
-            local stretch = energy * 15
             love.graphics.setLineWidth(s.s)
-            love.graphics.line(s.x, s.y, s.x, s.y - stretch)
+            love.graphics.line(s.x, s.y, s.x, s.y - (energy * 15))
         else
             love.graphics.circle("fill", s.x, s.y, s.s)
         end
     end
 
-    -- 2. RENDERIZADO DE ESTADOS
+    -- 3. RENDERIZADO DE JUEGO
     if game_state == "menu" then
         GameStates.drawMenu(love.timer.getTime(), selected_diff, difficulties)
     elseif game_state == "play" then
@@ -184,7 +184,6 @@ function love.draw()
         GameStates.drawGameOver()
     end
 
-    -- 3. HALO DE REINICIO
     if _G.RestartHalo > 0 then
         love.graphics.setColor(1, 1, 1, _G.RestartHalo)
         love.graphics.rectangle("fill", 0, 0, 800, 600)
