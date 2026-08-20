@@ -1,4 +1,5 @@
 local HUDCenter = {}
+local FontCache = require "tetris.font_cache"
 
 function HUDCenter.draw(player, bot)
     love.graphics.push("all")
@@ -7,7 +8,7 @@ function HUDCenter.draw(player, bot)
     
     love.graphics.translate(400, 260)
     love.graphics.scale(scale, scale)
-    love.graphics.setFont(love.graphics.newFont(10))
+    love.graphics.setFont(FontCache.get(10))
 
     -- Marcador Humano (Cian / Alerta Roja)
     local p1_better = (player.current_pps_display or 0) >= (bot.current_pps_display or 0)

@@ -1,4 +1,5 @@
 local Telemetry = {}
+local FontCache = require "tetris.font_cache"
 
 function Telemetry.draw(player, bot)
     love.graphics.push("all")
@@ -10,7 +11,7 @@ function Telemetry.draw(player, bot)
     love.graphics.setColor(0, 0.6, 1, 0.2 + energy*0.3)
     love.graphics.rectangle("line", px, py, 180, 40, 4)
 
-    love.graphics.setFont(love.graphics.newFont(9))
+    love.graphics.setFont(FontCache.get(9))
     love.graphics.setColor(1, 1, 1, 0.7)
     love.graphics.print(string.format("T: %.1fs", _G.RealMatchTimer or 0), px+10, py+6)
     love.graphics.print(string.format("FPS: %d", love.timer.getFPS()), px+135, py+6)

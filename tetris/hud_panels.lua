@@ -1,5 +1,6 @@
 local HUDPanels = {}
 local SRS = require "tetris.rotation_systems.srs"
+local FontCache = require "tetris.font_cache"
 
 function HUDPanels.draw(board)
     love.graphics.push("all")
@@ -26,7 +27,7 @@ function HUDPanels.draw(board)
         love.graphics.rectangle("line", x - offset, y - offset, p_size, p_size, 4)
         
         -- Etiqueta
-        love.graphics.setFont(love.graphics.newFont(10))
+        love.graphics.setFont(FontCache.get(10))
         love.graphics.setColor(1, 1, 1, 0.6)
         love.graphics.printf(label, x, y + 4, 65, "center")
     end

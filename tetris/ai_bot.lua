@@ -11,6 +11,15 @@ function AIBot.new(board, profile)
     self.target_x, self.target_rot = nil, nil
     self.is_thinking = false
     self.just_locked = false 
+
+    -- Buffers reutilizables para evaluate() (política Zero-GC: nada de tablas
+    -- nuevas dentro del loop de búsqueda, que corre hasta ~56 veces por think()).
+    self._overlay = {}
+    for i = 1, 400 do self._overlay[i] = false end
+    self._heights = {}
+    self._top_found = {}
+    for i = 1, 10 do self._heights[i], self._top_found[i] = 0, false end
+
     return self
 end
 
@@ -67,66 +76,74 @@ function AIBot:think()
     self.is_thinking = true
 end
 
+-- Evalúa qué tan buena es la posición (px, py, pr) para la pieza activa.
+-- Produce EXACTAMENTE los mismos puntajes que la versión original (misma
+-- fórmula de altura/holes/bumpiness/líneas), pero evita:
+--   1. Recorrer la forma completa de la pieza (hasta 16 celdas) por cada una
+--      de las 400 celdas del tablero -- ahora la posición de la pieza se
+--      "estampa" una sola vez en un buffer plano reutilizable.
+--   2. Escanear el tablero dos veces (una para heights/holes, otra para
+--      líneas completas) -- ahora se hace en un único recorrido.
 function AIBot:evaluate(px, py, pr)
     local grid = self.board.grid
     local shape = self.board.active_piece.shape[pr]
-    
-    local heights = {}
-    local holes = 0
-    local wells_depth = 0
-    
-    for c = 1, 10 do
-        local h = 0
-        for r = 1, 40 do
-            local occupied = (grid[r][c] ~= 0)
-            if not occupied then
-                for sr=1, #shape do
-                    for sc=1, #shape[sr] do
-                        if shape[sr][sc] ~= 0 and (px+sc-1 == c) and (py+sr-1 == r) then occupied = true end
-                    end
+
+    local overlay = self._overlay
+    for i = 1, 400 do overlay[i] = false end
+    for sr = 1, #shape do
+        local srow = shape[sr]
+        for sc = 1, #srow do
+            if srow[sc] ~= 0 then
+                local tr, tc = py + sr - 1, px + sc - 1
+                if tr >= 1 and tr <= 40 and tc >= 1 and tc <= 10 then
+                    overlay[(tr - 1) * 10 + tc] = true
                 end
             end
-            if occupied then 
-                if h == 0 then h = 41 - r end
-            elseif h > 0 then 
-                holes = holes + 1
-            end
         end
-        heights[c] = h
-    end
-    
-    local max_h, bumpiness = 0, 0
-    for i=1, 10 do
-        if heights[i] > max_h then max_h = heights[i] end
-        if i < 10 then bumpiness = bumpiness + math.abs(heights[i] - heights[i+1]) end
     end
 
+    local heights = self._heights
+    local top_found = self._top_found
+    for c = 1, 10 do heights[c], top_found[c] = 0, false end
+
+    local holes = 0
     local lines_cleared = 0
+
     for r = 1, 40 do
         local row_full = true
+        local base = (r - 1) * 10
         for c = 1, 10 do
-            local cell_occupied = (grid[r][c] ~= 0)
-            for sr=1, #shape do
-                for sc=1, #shape[sr] do
-                    if shape[sr][sc] ~= 0 and (px+sc-1 == c) and (py+sr-1 == r) then cell_occupied = true end
+            local occupied = (grid[r][c] ~= 0) or overlay[base + c]
+            if occupied then
+                if not top_found[c] then
+                    heights[c] = 41 - r
+                    top_found[c] = true
                 end
+            else
+                row_full = false
+                if top_found[c] then holes = holes + 1 end
             end
-            if not cell_occupied then row_full = false; break end
         end
         if row_full then lines_cleared = lines_cleared + 1 end
+    end
+
+    local max_h, bumpiness = 0, 0
+    for i = 1, 10 do
+        if heights[i] > max_h then max_h = heights[i] end
+        if i < 10 then bumpiness = bumpiness + math.abs(heights[i] - heights[i + 1]) end
     end
 
     local score = 0
     score = score - (max_h * max_h * 5.0)    -- Penalizar altura
     score = score - (holes * 250.0)         -- Penalizar huecos (MUCHO)
     score = score - (bumpiness * 15.0)      -- Penalizar irregularidad
-    
+
     if lines_cleared == 4 then
         score = score + 1000.0              -- Prioridad a Tetris
     elseif lines_cleared > 0 then
         score = score + (lines_cleared * 50.0)
     end
-    
+
     return score
 end
 

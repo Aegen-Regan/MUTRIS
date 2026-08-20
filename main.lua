@@ -9,12 +9,11 @@ local GameStates = require "tetris.game_states"
 
 _G.RestartHalo = 0
 _G.Winner = nil 
+_G.GameOverPending = nil
 
 local player, bot, game_state, selected_diff = nil, nil, "menu", 1
 
 local difficulties = {
-    { name = "APPRENTICE", pps = 0.8, color = {0.2, 1, 0.5} },
-    { name = "PRO", pps = 2.5, color = {1, 0.8, 0.2} },
     { name = "MASTER", pps = 6.0, color = {1, 0.2, 0.3} }
 }
 
@@ -31,7 +30,7 @@ function love.load()
 end
 
 function GlobalRestart()
-    _G.RestartHalo, _G.Winner = 1.0, nil
+    _G.RestartHalo, _G.Winner, _G.GameOverPending = 1.0, nil, nil
     local d = difficulties[selected_diff]
     player = Board.new(80, 50, "human")
     bot = Board.new(480, 50, "bot")
@@ -62,7 +61,16 @@ function love.update(dt)
         AudioManager.update(dt, { danger_level = 0, drop_intensity = 0 })
         MusicManager.update(dt)
 
-        if player and player.active_piece then
+        -- Chequeo de Game Over disparado por Hold: si al hacer swap la pieza nueva
+        -- no entra en el tablero, board.lua deja la bandera _G.GameOverPending con
+        -- el player_type ("human"/"bot") que se topeó -- antes esto no se detectaba
+        -- y el partido podía seguir con una pieza inválida.
+        if _G.GameOverPending then
+            game_state, _G.Winner = "over", (_G.GameOverPending == "human") and "BOT" or "PLAYER"
+            _G.GameOverPending = nil
+        end
+
+        if game_state == "play" and player and player.active_piece then
             player:update(dt)
             player.active_piece:update(dt, Input.getSoftDropFactor())
             if player.active_piece.locked then
@@ -74,7 +82,7 @@ function love.update(dt)
             end
         end
 
-        if bot and bot.active_piece then
+        if game_state == "play" and bot and bot.active_piece then
             bot:update(dt)
             if bot.ai then bot.ai:update(dt) end
             bot.active_piece:update(dt, 0.8)
@@ -119,7 +127,7 @@ function love.keypressed(key)
     if game_state == "menu" then
         if key == "up" then selected_diff = math.max(1, selected_diff - 1)
         elseif key == "down" then selected_diff = math.min(#difficulties, selected_diff + 1)
-        elseif key == "return" then GlobalRestart() end
+        elseif key == "return" or key == "space" then GlobalRestart() end
     elseif game_state == "play" then Input.keypressed(key)
     elseif game_state == "over" and key == "r" then GlobalRestart() end
 end

@@ -10,6 +10,7 @@ local PPSCounter = require "tetris.pps_counter"
 local Shaker = require "tetris.shaker"
 local HUDPanels = require "tetris.hud_panels"
 local ParticleSystem = require "tetris.particle_system"
+local FontCache = require "tetris.font_cache"
 
 function Board.new(x, y, player_type, colors)
     local self = setmetatable({}, Board)
@@ -196,7 +197,7 @@ function Board:draw()
     if self.popup_timer > 0 then
         local alpha = math.min(1, self.popup_timer * 3)
         love.graphics.setColor(self.popup_color[1], self.popup_color[2], self.popup_color[3], alpha)
-        love.graphics.setFont(love.graphics.newFont(20 + energy * 8))
+        love.graphics.setFont(FontCache.get(20 + energy * 8))
         love.graphics.printf(self.popup_text, self.x, self.y + 180, 240, "center")
     end
 
@@ -253,6 +254,13 @@ function Board:hold()
         self.active_piece = Piece.new(next_id, self)
     end
     self.can_hold, self.active_piece.spawn_timer = false, 0
+
+    -- Chequeo de Game Over: si la pieza recién intercambiada no entra al
+    -- spawnear, avisamos a main.lua igual que se hace tras el spawn normal
+    -- post-lock (antes el Hold podía dejar una pieza inválida sin detectar derrota).
+    if not self.active_piece:canMove(self.active_piece.x, self.active_piece.y, 1) then
+        _G.GameOverPending = self.player_type
+    end
 end
 
 return Board
