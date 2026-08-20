@@ -9,6 +9,7 @@ Directory structure:
     ├── settings_manager.lua
     ├── track_editor.lua
     ├── track_manager.lua
+    ├── .luarc.json
     ├── music/
     │   ├── alex_morgan_trance_euphoria.json
     │   ├── base_fondo.json
@@ -37,405 +38,469 @@ Directory structure:
 ================================================
 FILE: README.md
 ================================================
-# 🕹️ TETRIS VERSUS OPT — ARCHIVO MAESTRO COMPLETO
-## COMPENDIO TÉCNICO DE ARQUITECTURA, ZERO-GC, FÍSICA SRS & INYECCIÓN ACÚSTICA POR HARDWARE
-### 🛠️ ESTADO DE SISTEMA: FASE 6 (PULIDO VISUAL) — VERSIÓN ESTABLE DESBUGUEADA AL 100%
+# 🕹️ MUTRIS: SYNTHETIC TRANSCENDENCE
+> **El Super-Hub definitivo de Puzzles Competitivos, Estación DAW & Combate Sinestésico.**  
+> *Desarrollado bajo arquitectura estricta Zero-Garbage Collection, Sincronización Acústica por Hardware y Físicas SRS/ARS Deterministas.*
 
 ---
 
-## 💾 PARTE 1: CORE ENGINE, GRAVEDAD ZERO-GC & ENTORNO DE INPUT (DAS/ARR)
-
-### 1. Estrategia Estricta Zero-Garbage Collection (Zero-GC)
-Para garantizar un rendimiento estricto de **60 FPS estables** tanto en PC como en entornos embebidos (como la arquitectura ARM de la consola Nintendo 3DS), el bucle entero se diseñó bajo una política rígida de cero recolección de basura:
-
-*   🚫 **Pre-alocación de Matrices:** Prohibido instanciar tablas vacías (`{}`) o duplicar diccionarios adentro de las funciones críticas `love.update` o `love.draw`.
-*   🔄 **Reciclaje de Vectores:** Estructuras volátiles como la previsualización del panel NEXT (HUD), el cálculo de posiciones fantasmas (*Ghost Piece*) y las coordenadas de partículas se limpian reescribiendo valores numéricos en variables primitivas o tablas estáticas de fábrica.
-*   🛡️ **Inmunidad al Linter:** Toda la manipulación de variables globales y puenteos cruzados se blindó mediante la inyección superior de directivas: 
-    `---@diagnostic disable: undefined-global, param-type-mismatch`.
+> ⚠️ **DIRECTIVA PRIMARIA PERMANENTE (REGLA DE ORO):**  
+> El identificador de versión (`_G.ENGINE_VERSION = "MUTRIS v1.0.0"`) **debe permanecer siempre visible en la esquina inferior izquierda en todas las pantallas y estados del juego** (Menú, Duelos, Editor DAW, Ajustes, Pausa y Game Over) para garantizar la trazabilidad en capturas y telemetría.
 
 ---
 
-### 2. Geometría Rígida de la Rejilla Matrix (The Grid)
-El campo de juego opera con una matriz matemática interna pura de **10 columnas de ancho por 40 filas de alto**:
+# 📑 ÍNDICE GENERAL
 
-*   👁️ **Filas Ocultas de Amortiguación (1 a 20):** Funcionan como el búfer de entrada de piezas aéreas, entorno de cálculo de Wall-Kicks pesados y la zona muerta donde el Bot Master analiza sus jugadas de forma predictiva.
-*   📺 **Filas Visibles en Pantalla (21 a 40):** La ventana gráfica corta el renderizado aplicando un desplazamiento vertical matemático:
-    `by = self.y + (r - 21) * 24 + 1`
-    De esta forma, el usuario solo visualiza el bloque clásico inferior de combate de 20 filas de alto.
-*   🔢 **Codificación Numérica Rígida de Celdas:**
-    *   `0`: Vacío absoluto (Espacio reactivo a la opacidad del pulso musical).
-    *   `1` a `7`: Segmentos fijos (*Tetrominos*) fijados con color neón nativo permanente.
-    *   `8`: Bloques sólidos de líneas de basura (*Garbage Blocks*) pintados en gris metálico.
-
----
-
-### 3. Parámetros Críticos de Competición de Entrada (`input.lua`)
-Los motores de autorepetición rítmica se calibraron de forma matemática para simular las latencias exactas del Tetris de alta gama competitiva (*Guideline/Jstris/Tetrio*):
-
-*   ⏱️ **DAS (Delayed Auto-Shift):** Clavado de forma estricta en **0.094 segundos** (~5.6 frames). Tiempo físico de espera con la tecla presionada antes de que el bloque empiece a patinar solo hacia el lateral.
-*   ⚡ **ARR (Auto-Repeat Rate):** Fijado de forma matemática en **0.008 segundos** (<0.5 frames). Una vez vencido el DAS, el consumo iterativo de tiempo (`while Input.timers.left >= DAS do`) desplaza la pieza al borde instantáneamente.
-*   🔽 **Soft Drop Factor (Caída Suave):** Reducido de forma masiva a **0.005 segundos**. Gatillado con la tecla `kp5`, genera un descenso inmediato vertical que se bloquea si el contador `spawn_timer > 0` para evitar escapes truchos de piezas o overlaps fantasma.
-*   ⌨️ **Mapeo Físico de Teclas de Combate:**
-    *   *Desplazamiento horizontal:* `kp4` (Izquierda) / `kp6` (Derecha), guiados por DAS/ARR.
-    *   *Rotaciones:* `a` (Giro horario CW), `d` (Giro antihorario CCW).
-    *   *Rotación Extrema 180°:* Mapeada en `kp8`.
-    *   *Mecánica Global de Hold:* `s` (Intercambio de pieza en espera).
-    *   *Activación Zone Mode:* `q` (Congelamiento temporal del tiempo).
-    *   *Hard Drop Instantáneo:* `space` (Fija al cuadro y reinicia el ciclo).
-    *   *Freno/Reinicio:* `r` (Dispara la rutina limpia de vaciado estructural `GlobalRestart`).
+1. [VISIÓN Y MANIFIESTO DEL PROYECTO](#-visión--manifiesto-del-proyecto)
+2. [LOS 5 MANDAMIENTOS SAGRADOS DE CÓDIGO (ZERO-GC ENGINE)](#-los-5-mandamientos-sagrados-de-código-zero-gc-engine)
+3. [DICCIONARIO DE ARQUITECTURA DEL REPOSITORIO](#-diccionario-de-arquitectura-del-repositorio)
+4. [MOTORES INTERNOS ACTIVOS (MATEMÁTICAS & FÍSICAS)](#-motores-internos-activos)
+5. [EL CRONOGRAMA MAESTRO: ROADMAP DE 26 FASES](#-el-cronograma-maestro-roadmap-de-26-fases)
+6. [ESPECIFICACIÓN TÉCNICA DE SISTEMAS FUTUROS](#-especificación-técnica-de-sistemas-futuros)
+7. [PRESUPUESTO DE RENDIMIENTO POR FRAME (144Hz / 240Hz TARGET)](#-presupuesto-de-rendimiento-por-frame)
+8. [ÁRBOL DE DIRECTORIOS MODULAR](#-árbol-de-directorios-modular)
+9. [GUÍA PASO A PASO "A PRUEBA DE TONTOS" (HOW-TOs)](#-guía-paso-a-paso-a-prueba-de-tontos)
+10. [MATRIZ DE DIAGNÓSTICO & RESOLUCIÓN DE BUGS (TROUBLESHOOTING)](#-matriz-de-diagnóstico--resolución-de-bugs)
+11. [MAPEO DE CONTROLES PREDETERMINADO](#-mapeo-de-controles-predeterminado)
 
 ---
 
-## 🔄 PARTE 2: SUPER ROTATION SYSTEM (SRS) & MECÁNICAS DE COMBATE AVANZADAS
+# 👁️ VISIÓN & MANIFIESTO DEL PROYECTO
 
-### 1. Matrices de Rotación SRS y Wall-Kicks de Gracia
-El motor implementa de forma matemática estricta la especificación del **Super Rotation System (SRS)** de competición, mapeando las colisiones a través de un búfer tridimensional precargado:
-
-*   🔄 **Giro de Gracia 180°:** Integrado nativamente. Resuelve de forma instantánea desvíos complejos en pasillos de un solo bloque y permite la ejecución limpia de setups de alta gama como el *DT Cannon*.
-*   ⏳ **Move Reset de Fijación:** El *Lock Delay* otorga un margen de **0.5 segundos** una vez que la pieza toca una superficie sólida. Cada rotación o desplazamiento horizontal exitoso (validado solo si la posición horizontal real cambia en `piece.lua`) reinicia el temporizador de fijación, con un límite máximo infranqueable de **15 movimientos consecutivos** para mitigar el estancamiento infinito.
-*   🎯 **Detección Quirúrgica de T-Spin:** Evaluada en el archivo `tetris/piece.lua`. Revisa la geometría del tetromino T chequeando la ocupación de las **4 esquinas de la matriz de la pieza de 3x3**. Si al menos 3 esquinas están bloqueadas al momento de rotar, el juego convalida un *T-Spin*, multiplicando la salida del daño de ataque.
-
-
-### 2. Tabla de Ataques y Multiplicadores Competitivos
-La distribución del daño saliente por cada borrado de líneas se procesa a través del archivo modular `tetris/garbage_manager.lua`, guiado por la siguiente escala base de impacto:
-
-*   💥 **Single / Double / Triple:** 0, 1 y 2 líneas enviadas respectivamente al oponente.
-*   🔥 **Tetris (4 líneas):** 4 líneas de basura directa.
-*   ⚡ **T-Spin Single / Double / Triple:** 2, 4 y 6 líneas enviadas respectivamente.
-*   ⭐ **B2B (Back-to-Back Bonus):** Si ejecutas dos Tetris o dos T-Spins consecutivos sin limpiezas simples intermedias, se inyecta **+1 línea de basura extra** a la cola del rival.
-*   📊 **Multiplicador de Combos:** Cada borrado consecutivo dentro de la misma ráfaga de piezas incrementa el daño de forma lineal continua (`+1, +1, +2, +2...`), premiando las jugadas de velocidad.
+**MUTRIS** fusiona cinco dimensiones de juego en un único ecosistema:
+1. **La Precisión Competitiva:** Tiempos de entrada al milisegundo (DAS/ARR/SDF estilo *Jstris/TETR.IO*), físicas SRS 180° y renderizado desacoplado a 144Hz / 240Hz.
+2. **La Estación de Audio Digital (DAW):** El tablero es un sintetizador analógico procedural y secuenciador en tiempo real con analizador de espectro, sidechaining paramétrico y modulación por escala armónica Camelot.
+3. **El Combate de Juegos de Lucha & Soulsborne:** Sistema de posturas en vivo (*Stances*), absorción de daño en ventana de 3 frames (*Kinetic Parry*), barras de postura con golpes críticos (*Riposte*) y efectos de estado (*Bleed, Frostbite, Corrupción*).
+4. **La Cacería Estratégica (Monster Hunter DNA):** Cacería de jefes cibernéticos con desmembramiento anatómico por columnas (*Part Breaking*), estados de Furia/Fatiga y el cancionero cromático del Cuerno de Caza (*Chroma-Weaver*).
+5. **Inteligencia Auto-Evolutiva:** El **ARCHON META-BALANCER**, una IA interna que analiza estadísticas globales de juego y auto-equilibra constantes matemáticas en disco de forma autónoma.
 
 ---
 
-### 3. Cancelación de Ataques (Offsetting) y Deuda de Líneas
-El sistema de defensa del juego opera con un buffer reactivo asimétrico para permitir el contraataque estratégico en tiempo real:
+# 📜 LOS 5 MANDAMIENTOS SAGRADOS DE CÓDIGO (ZERO-GC ENGINE)
 
-*   🛡️ **Offsetting Activo:** Si recibes un ataque del rival, la basura no entra inmediatamente a tu grilla. Se aloja en una cola lateral de espera (`garbage_queue`). Si en la siguiente jugada limpias líneas, estas **cancelan la basura en cola de forma matemática instantánea**, anulando el impacto del rival.
-*   🕳️ **Agujeros Alineados:** Las líneas de basura que logran superar el offset e ingresan a la grilla se generan con un agujero de escape vertical alineado mediante una ranura aleatoria fija por ráfaga, permitiendo al jugador realizar un *Downstack* fluido.
-*   🛑 **Límite de Entrada por Pieza:** Para evitar muertes súbitas injustas, se clavó un límite estricto de ingreso de un **máximo de 8 líneas de basura por cada pieza colocada**, inyectándose en el momento exacto del bloqueo de la pieza (`locked`) antes de spawnear el nuevo tetromino.
+Todo módulo, script o aporte al repositorio debe respetar estas 5 leyes de hierro:
 
----
-
-## 🎛️ PARTE 3: LAB DE INYECCIÓN EN LOTES (BATCH), MOUSE DROPDOWNS & PERMISOS FÍSICOS
-
-### 1. Automatización Completa de la Carpeta `music/`
-Se eliminó del código duro cualquier dependencia de archivos de audio por defecto. Al arrancar, el juego inicializa su lista escaneando directamente el directorio físico real `music/` dentro del Escritorio de Windows de forma automatizada mediante `TrackManager.init()`:
-
-*   📁 **Detección Inteligente de Metadatos:** El juego escanea la carpeta. Si encuentra una pista (`base.mp3`), busca de inmediato un archivo `.json` de configuración acoplado (`base.json`). Si existe, precarga sus valores reales de BPM y Camelot; de lo contrario, la expone con el valor base (120 BPM) listo para calibrar en el Lab.
+* 🚫 **1. Cero Recolección de Basura (Zero-GC Loop):** Prohibido instanciar tablas vacías (`{}`) o concatenar strings dentro de `love.update` y `love.draw`. Todo vector, matriz o estructura de partículas se pre-aloca al iniciar el motor.
+* 🔊 **2. Reloj Amarrado a la Placa de Sonido:** Ningún temporizador crítico o ventana de parry depende del `dt` de pantalla; todo pulsa según el contador de hardware de audio (`Source:tell("seconds")`).
+* 👁️ **3. Prioridad Absoluta a la Legibilidad:** Ningún shader o colapso visual puede comprometer la visibilidad milimétrica de la matriz y el *Ghost Piece* a velocidades extremas (6.0+ PPS).
+* ⚙️ **4. Determinismo en Frame-Data:** Las patadas de pared, cuadros de invulnerabilidad (I-Frames) y offsets de basura se calculan en matemática discreta sin aproximaciones de punto flotante.
+* 🎻 **5. Síntesis de Subgraves Cooperativa:** Los efectos de sonido se modulan en octavas bajas (30 Hz - 180 Hz) como instrumentos armónicos afinados a la tonalidad del tema, sin saturar la música del usuario.
 
 ---
 
-### 2. Suite Batch por Lotes e Interfaz Dinámica por Ratón
-La suite de inyección admite arrastres masivos y control absoluto mediante el puntero del mouse, eliminando las configuraciones tediosas por teclado en el menú:
-
-*   📦 **Modo Batch Continuo:** El usuario puede arrastrar y soltar múltiples canciones juntas sobre la ventana. El sistema las absorbe, limpia el búfer transitorio y las encola de forma secuencial en una lista de procesamiento masivo.
-*   🖱️ **Menús Desplegables (Dropdown Overlays):** Al hacer clic con el mouse sobre las cajas flotantes del laboratorio, se despliegan capas visuales interactivas para modificar la raíz cromática fundamental (`C`, `C#`, `F#`...) y el modo armónico Camelot (`MAJOR` o `MINOR`).
-*   🎛️ **Sliders de Regulación:** El BPM se regula manteniendo presionadas las flechas del teclado en ráfagas continuas automáticas fluidas guiadas por un entorno DAS/ARR interno en el propio editor de pistas.
-
----
-
-### 3. Inyector `io.open` de Permisos Nativos de Windows
-Para que las canciones no tengan que configurarse cada vez que se abre el videojuego, implementamos un bypass directo al sistema de archivos restringido de LÖVE2D:
-
-*   🔓 **Bypass de Sandbox:** LÖVE2D obliga a escribir dentro de la carpeta oculta de AppData. Modificamos el backend en `track_manager.lua` para que use el módulo **`io.open` de Lua puro**.
-*   💾 **Escritura Persistente al Lado del MP3:** Al darle al botón de Confirmar en el Lab, el juego inyecta el archivo `.json` de metadatos **físicamente adentro de la carpeta `music/` real de Windows, exactamente al lado de tu pista de audio**. Al iniciar el juego, este leerá la configuración acoplada de fábrica para siempre.
-
----
-
-## 📊 PARTE 4: RELOJ DE HARDWARE, MICRO-SISMOS EN VIVO & THE DROP PUNCH SYSTEM
-
-### 1. Detector Audio-Driven Sync (Reloj de Hardware)
-Los temporizadores de parpadeo visual guiados por el procesador (`dt` en `love.update`) sufren de acumulación de micro-retrasos (*frame-dropping*), lo que causaba que la grilla se desfasara de la música a los pocos minutos de partida:
-
-*   🔊 **Sincronización por Placa de Sonido:** Modificamos el reloj principal en `audio_manager.lua` para engancharlo al contador de hardware del canal de reproducción de audio activo (`MusicManager.getTime()`, que consulta `Source:tell("seconds")`).
-*   🎯 **Precisión Milimétrica Inmune:** El pulso visual neón lee en qué milisegundo real está reproduciéndose el archivo de audio, calculando la fracción exacta del tempo (`fraction = current_beat - math.floor(current_beat)`). El parpadeo y bombeo del escenario van clavados al ritmo del Kick físico de tu tema, **garantizando un desfasaje de cero absoluto a lo largo del tiempo**.
-
----
-
-### 2. Analizador de Espectrograma RMS en Vivo
-Al cargar la canción, el juego simula un analizador de energía estructural basado en el reloj de hardware para generar la vibración envolvente del ambiente al estilo de los visualizadores clásicos de Windows Media Player:
-
-*   📊 **32 Barras de Frecuencia Dinámicas:** Dibuja un ecualizador interactivo flotante en la base del laboratorio de sonido. Las barras calculan oscilaciones asimétricas de picos RMS en base al milisegundo de reproducción activa del stream.
-*   📈 **Interpolación Lineal Suave (Lerp):** El suavizado de las barras evita saltos toscos o tirones visuales (`bars[i] = bars[i] + (target - bars[i]) * 15 * dt`), logrando una estela fluida de alta fidelidad que reacciona de inmediato si el tema se pone en pausa o se detiene.
+# 🗂️ DICCIONARIO DE ARQUITECTURA DEL REPOSITORIO
+MUTRIS/
+├── conf.lua -- Configuración de ventana (800x600, VSync, V-Refresh 144/240Hz).
+├── main.lua -- Kernel central, despacho de estados, RealMatchTimer e Hitstop.
+├── input.lua -- Motor DAS/ARR milimétrico, lectura de Gamepad y remapeo.
+├── settings_manager.lua -- Serialización y lectura de ajustes persistentes en settings.json.
+├── audio_manager.lua -- Síntesis procedural senoidal, Sidechain Ducking y rampa de energía.
+├── music_manager.lua -- Reloj de hardware de audio amarrado a Source:tell("seconds").
+├── track_manager.lua -- Extracción modal Camelot, mapeo cromático de notas y metadatos.
+├── track_editor.lua -- Laboratorio DAW: Timeline con Scrubber, espectrograma y rack SFX.
+│
+└── tetris/
+├── ai_bot.lua -- IA heurística downstacker con memoria persistente (ai_profile.json).
+├── anomaly_manager.lua -- Gestor de anomalías rítmicas (Torus, Laser, Swap, Eclipse).
+├── bloom_shader.lua -- Shader GLSL con resplandor neón, aberración cromática y shockwaves.
+├── board.lua -- Grid 10x40, render 21-40, implosión poliédrica de cristal y Zone.
+├── fog_layer.lua -- Niebla volumétrica Z-Depth reactiva a la tonalidad Camelot.
+├── font_cache.lua -- Caché de fuentes tipográficas para eliminar llamadas a newFont().
+├── game_states.lua -- Pantallas de Menú Principal interactivo y Calibración de Inputs.
+├── garbage_manager.lua -- Offsetting reactivo de basura, colas y multiplicadores Zone.
+├── hud_center.lua -- Placa central flotante con PPS dual (Humano vs Bot) y pulso de beat.
+├── hud_panels.lua -- Paneles laterales NEXT y HOLD centrados por tetromino + Barra Zone.
+├── particle_system.lua -- Pool estático de 200 partículas reciclables para limpiezas de líneas.
+├── piece.lua -- Físicas SRS, patadas de pared 180°, detección T-Spin y Lock Delay.
+├── pps_counter.lua -- Buffer circular de 60 ranuras para media móvil de velocidad en 5s.
+├── shaker.lua -- Micro-sismos desacoplados por matriz gráfica push/pop aislada.
+├── telemetry.lua -- Panel de diagnóstico en vivo (FPS, Match Time, AI Base PPS).
+├── randomizers/7bag.lua -- Generador estándar Guideline con bolsa aleatoria sin repetición.
+└── rotation_systems/srs.lua -- Tablas de Wall-Kick tridimensionales para tetrominos I y JLSTZ.
 
 ---
 
-### 3. El Motor de Adrenalina Visual (The Punch System)
-El juego calcula segundo a segundo la intensidad de la canción en base a los metadatos de BPM, Nota y Modo Camelot configurados de forma permanente, desatando el caos visual de forma automatizada:
+# ⚙️ MOTORES INTERNOS ACTIVOS
 
-*   🌋 **Fase de Build-Up (Micro-Sismos Constantes):** Al ingresar a las subidas o partes tensas del tema menor, la rejilla de los bloques experimenta micro-sismos rítmicos constantes que se sacuden en `shaker.lua` al compás del bombo (`shake_x = shake_x + math.random(-4 * active_punch, 4 * active_punch)`).
-*   🌈 **Fase de THE DROP (Clímax Psicodélico):** Cuando el contador de la placa de sonido cruza el umbral de energía (`_G.TrackEnergyPunch >= 0.95`), el marco neón grueso abandona su color cian estable y empieza a mutar cíclicamente por todo el espectro cromático del arcoíris mediante ondas senoidales de tiempo, expandiendo la caja del tablero un **6% extra** en cada pulso de bajo.
-
----
-
-## 🎻 PARTE 5: SÍNTESIS ACÚSTICA COOPERATIVA & ORQUESTACIÓN DE EFECTOS DE CRISTAL
-
-### 1. Afinación Acústica Cooperativa de Sub-Bajos Senoidales
-Se erradicó por completo la música sintética procedural del pasado sobre los sonidos del juego para eliminar los choques rítmicos espantosos sobre tus pistas de audio personalizadas. Toda la síntesis analógica de LÖVE2D en `audio_manager.lua` se reenfocó estrictamente en efectos de sonido (SFX) que interactúan como **instrumentos integrados a la producción armónica de tu canción**:
-
-*   🎹 **Transposición Grave de dos Octavas:** Mudamos las frecuencias base de `_G.PLAYER_NOTES` y `_G.BOT_NOTES` hacia las octavas profundas (`C2` a `B2` y `C3` a `B3`). Al emitirse como sub-bajos limpios, se empastan *por debajo* de tu `.mp3` sin molestar ni pinchar el oído.
-*   🔗 **Afinación Simétrica Unificada:** Se eliminó la disonancia del Bot. Ahora, tanto tú como la Inteligencia Artificial comparten **estrictamente las mismas notas exactas de la escala Camelot activa** configurada en el Lab, transformando la partida entera en un remix armónico en vivo.
-*   🌌 **Efecto de Eco Espacial (Estela de Aire):** Los clicks secos se reemplazaron por ondas senoidales etéreas con desvanecimientos exponenciales suaves (`math.exp(-decay * t)`) y un colchón de ruido blanco altamente amortiguado de fondo. Esto emula una reverberación espacial tridimensional, haciendo que los SFX parezcan nacer desde adentro de la mezcla de tu música.
-
----
-
-### 2. Orquestación de Efectos Interactivos (Tetris Effect Vibe)
-Cada movimiento y colocación de piezas añade arreglos musicales coherentes al entorno sonoro:
-
-*   🎵 **Desplazamientos Melódicos:** Mover las piezas hacia los costados (`move`) ejecuta notas numéricas individuales de forma consecutiva, saltando cíclicamente entre la tónica, tercera y quinta del acorde Camelot activo. Desplazar la pieza arma una melodía fluida en tiempo real (`AudioManager.melody_step`).
-*   💎 **Giro Armónico Suave:** Rotar la pieza (`rotate`) extrae el segundo índice de la tabla Camelot y lo duplica en frecuencia, generando un destello esbelto de cristal senoidal libre de colapsos matemáticos.
-*   💨 **Hard Drop de Cristal Embozado:** Se eliminaron las ondas de sierra rústicas invasivas. Al clavar una pieza con Hard Drop, se dispara un acorde etéreo difuminado en bloque de tres notas senoidales en combinación con un sutil soplido de viento largo que decae en el fondo, modulando su afinación de tono según la fila física real (`self.y`) donde impactó la pieza.
-
-✨ Cascadas Celestiales (Tetris & T-Spins): Completar un Tetris detona un arpegio polifónico glorioso ascendente a toda velocidad a través de AudioManager.playArpeggio que recorre la escala musical entera subiendo y bajando en octavas brillantes, coronado con un remate de impacto cinemático largo que celebra la jugada masiva.
-
-
-## 🎛️ PARTE 6: AUDIO-DRIVEN ARCHITECTURE, INYECTOR DINÁMICO DE CANCIONES Y RELOJ MAESTRO
-
-### 1. Backend de Extracción y Traducción Armónica (`track_manager.lua`)
-La música de fondo (`BGM`) no es un elemento pasivo, sino el **núcleo modular que altera los parámetros físicos y la afinación armónica** de todo el juego:
-
-*   📂 **Aislamiento de Archivos Nativos:** El juego inicializa su playlist escaneando el directorio físico real `music/`. Detecta archivos `.mp3` u `.ogg` y busca de forma binaria su contraparte `.json` acoplada de metadatos.
-*   🎹 **Mapeo de Frecuencias Camelot:** Al cargar una pista, el inyector extrae los metadatos de Nota Raíz y Modo (`MAJOR` o `MINOR`). El motor traduce esa nota en hercios puros usando la tabla de intervalos estáticos `TrackManager.MODES` cruzados con la nota fundamental de `TrackManager.NOTE_FREQS` (ej: `["A"] = 440.00`).
-*   ⚡ **Inyección Renglón por Renglón (Anti-Collision):** Para evitar que el recolector de basura de Lua colapse o que se multipliquen tablas enteras, la escala musical se desestructura de forma escalar estricta directo a las variables globales:
-    `_G.PLAYER_NOTES = { base_octave * (scale_intervals or 1.0), base_octave * (scale_intervals or 1.189), ... }`
-    Esto alimenta al sintetizador procedimental de `audio_manager.lua`, garantizando que cada sonido del juego esté perfectamente afinado con el acorde de la canción de fondo actual.
+### 1. Geometría Rígida de la Matriz (The Grid)
+* **Dimensiones Totales:** `10 columnas x 40 filas`.
+* **Filas 1 a 20 (Zona Oculta de Amortiguación):** Búfer aéreo de spawn, cálculo de patadas pesadas y evaluación predictiva de la IA.
+* **Filas 21 a 40 (Zona Visible de Combate):** Renderizada en pantalla con traslación matemática:
+  `Render_Y = Board.y + (row - 21) * 24`
+* **Codificación Numérica de Celdas:**
+  - `0`: Vacío absoluto.
+  - `1`: Tetromino **I** (Cian).
+  - `2`: Tetromino **J** (Azul).
+  - `3`: Tetromino **L** (Naranja).
+  - `4`: Tetromino **O** (Amarillo).
+  - `5`: Tetromino **S** (Verde).
+  - `6`: Tetromino **T** (Púrpura).
+  - `7`: Tetromino **Z** (Rojo).
+  - `8`: Bloque sólido de basura (*Garbage Block* gris metálico).
 
 ---
 
-### 2. El Reloj Maestro por Hardware de la Placa de Sonido
-Se eliminaron por completo los contadores basados en el delta time del frame (`dt`), ya que producían micro-desfasajes acumulativos inevitables (*audio-drift*):
+### 2. Motor de Entrada Competitivo DAS / ARR (`input.lua`)
+* **DAS (Delayed Auto-Shift):** Clavado en `0.094 s` (~5.6 frames). Tiempo físico de espera antes de que la pieza se desplace automáticamente.
+* **ARR (Auto-Repeat Rate):** Fijado en `0.008 s` (<0.5 frames). Intervalo de desplazamiento continuo tras vencer el DAS.
+* **SDF (Soft Drop Factor):** Reducido a `0.001 s` para descenso vertical prácticamente instantáneo.
+* **Lock Delay:** Margen de `0.5 s` con un límite estricto de **15 reinicios de movimiento** por rotación o traslación horizontal validada.
 
-*   🔊 **Anclaje al Stream de Audio:** El temporizador principal del juego se amarra directamente al contador interno de hardware de la placa de sonido mediante la función `MusicManager.getTime()`, la cual consulta directamente el búfer de reproducción del motor a través de `Source:tell("seconds")`.
-*   🔢 **Matemática de Compás Pura (Inmunidad al Lag):** El cálculo del parpadeo del escenario se procesa frame a frame midiendo la fracción exacta del tempo de la canción según el BPM actual:
-    `local beat_duration = (60 / AudioManager.current_bpm)`
-    `local current_beat = play_time / beat_duration`
-    `local fraction = current_beat - math.floor(current_beat)`
-    Si `fraction < 0.09`, el flag `_G.AudioBeatPulse` se clava en `1.0`, logrando que el bombeo visual neón vaya perfectamente clavado al *Kick* físico de tu tema musical de forma de bucle infinita.
+```lua
+-- Algoritmo de consumo DAS/ARR Zero-GC
+if move_left_held then
+    if not Input.das_active.left then
+        p:move(-1, 0) -- Tap inicial
+        Input.das_active.left = true
+        Input.timers.left = 0
+    else
+        Input.timers.left = Input.timers.left + dt
+        while Input.timers.left >= das do
+            if not p:move(-1, 0) then
+                Input.timers.left = 0
+                break
+            end
+            Input.timers.left = Input.timers.left - arr
+        end
+    end
+else
+    Input.das_active.left = false
+end
 
----
 
-### 3. Rampa Maestra de Adrenalina (`The Punch System`)
-La intensidad visual del escenario y las acciones de la Inteligencia Artificial se rigen de forma matemática lineal y cúbica a través de las variables globales de energía, calculadas de forma fotométrica según el punto exacto de la canción:
 
-*   📈 **Procesamiento de Rampa Cúbica Progresiva:** En base a los segundos configurados para el Drop (`drop_second`) y la subida (`build_duration`), el juego procesa fotograma a fotograma el factor de adrenalina utilizando una progresión de suavizado cúbico:
-    `local progress = (song_time - build_start) / build_len`
-    `_G.TrackEnergyPunch = progress * progress * progress`
-*   🤖 **Modulación de PPS del Bot Master:** La velocidad del rival es directamente proporcional a la adrenalina de la música. En la intro se mantiene frío en su base (`self.base_pps`), pero a medida que el tema sube, la rampa inyecta velocidad pura: `self.pps = self.base_pps + (_G.TrackEnergyPunch * 8.0)`, forzando al Bot Master a jugar a su clímax de 12.0 PPS en pleno Drop musical.
-*   💾 **Bypass de Persistencia Física:** Al confirmar las ediciones en el Lab de Soundtrack, el módulo `io.open` rompe el sandbox restringido de LÖVE2D y genera el archivo `.json` de metadatos **directamente en el disco duro de Windows al lado de tu tema musical**, automatizando las cargas futuras de fábrica para siempre.
+3. Sincronización Acústica y The Punch System
 
----
+    Reloj de Hardware de Audio: El temporizador principal del juego se amarra al contador interno de hardware de la placa de sonido mediante MusicManager.getTime() (que consulta Source:tell("seconds")), eliminando el desfasaje acumulativo (audio-drift:
 
-## 📈 PARTE 7: ROADMAP INMEDIATO DE DESARROLLO (FUTURO CERCANO)
 
-Habiendo consolidado el Lab Batch interactivo por ratón, la persistencia física en disco de Windows, el motor acústico de sub-bajos etéreos, la barra de alerta de peligro roja interna estilo Jstris y la consola de diagnóstico en tiempo real de `telemetry.lua`, la agenda estricta del proyecto marca las siguientes prioridades:
 
-1.  🎯 **Contador de PPS Flotantes en el Pasillo Central:** Diseñar e inyectar el cálculo matemático de piezas colocadas por segundo (Humano vs Bot) analizando los últimos 5 segundos de combate móvil a través del buffer circular de 60 ranuras. El indicador flotará con estética neón en medio del pasillo central (el espacio vacío entre ambos tableros) y encenderá alertas rojas si el Bot te supera en velocidad, o destellos cian si mantienes el liderazgo de carrera.
-2.  🤖 **Calibración Heurística de la IA Master:** Pulir los pesos evaluadores de la Inteligencia Artificial en base a los combos del nuevo motor, impidiendo atascos algorítmicos en piezas simétricas (como la barra I o el cuadrado O) y optimizando su rendimiento en la ráfaga máxima de 12.0 PPS en dificultad Master durante el Drop.
 
+local beat_duration = 60 / AudioManager.current_bpm
+local current_beat = song_time / beat_duration
+local fraction = current_beat - math.floor(current_beat)
+if fraction < 0.08 and _G.AudioBeatPulse <= 0.1 then
+    _G.AudioBeatPulse = 1.0
+end
 
----
+The Punch System (Rampa Maestra de Adrenalina): Calcula la intensidad energética fotograma a fotograma según el punto exacto de la canción:
 
-## 🔍 CONSIDERACIONES TÉCNICAS FINALES & COMPORTAMIENTO DEL ENTORNO
+local drop_point = current_track.drop_second or (bar_duration * 32)
+local build_len  = current_track.build_duration or (bar_duration * 16)
+local build_start = math.max(0, drop_point - build_len)
 
-### 1. Gestión de Estados Globales (`game_states.lua` & `main.lua`)
-*   🎛️ **Menú de Selección de Dificultades:** Opera de forma estática leyendo la tabla `difficulties`. El cambio de nivel altera directamente el parámetro de velocidad base de la Inteligencia Artificial (`pps`) previo a la llamada limpia de `GlobalRestart()`.
-*   💀 **Rutina de Game Over:** Se gatilla de forma simétrica si la pieza humana recién spawneada en el búfer de entrada (fila 21) da colisión negativa con `canMove`. Al presionar `space` o `return`, el estado limpia el tablero y regresa al menú de selección principal de forma segura.
+if song_time >= drop_point then
+    _G.TrackEnergyPunch = 1.0
+elseif song_time >= build_start then
+    local progress = (song_time - build_start) / build_len
+    _G.TrackEnergyPunch = progress * progress * progress -- Curva cúbica
+else
+    _G.TrackEnergyPunch = 0.0
+end
 
----
+Dynamic Sidechain Ducking: Atenúa automáticamente la música de fondo ante eventos de alto impacto para dar peso cinemático a la partida.
 
-### 🖼️ 2. Jerarquía de Renderizado y Máscaras Gráficas
-*   📈 **Aislamiento de Matrices Gráficas:** Cada tablero encapsula sus efectos de sacudida llamando a `Shaker.apply(self)` e inyectando un bloque cerrado de `love.graphics.push()` y `love.graphics.pop()` de forma simétrica. Esto evita que el temblor de la grilla de un jugador contamine las coordenadas de renderizado del rival o desplace el marcador central del HUD.
-*   🎭 **Recorte Visual de la Grilla (Fila 21 a 40):** El motor gráfico dibuja únicamente los bloques cuyos índices de fila estén por encima de 20. Los tetrominos que se deslicen o roten en el espacio de amortiguación aéreo (filas 1 a 20) se procesan matemáticamente en la lógica, pero permanecen completamente invisibles para el usuario humano para simular la interfaz oficial competitiva.
+4. Físicas SRS y Detección Quirúrgica de T-Spin (3-Corners Rule)
 
----
+    Super Rotation System (SRS): Soporte nativo para rotaciones horarias, antihorarias y giros completos de 180° mediante tablas de Wall-Kick tridimensionales.
 
-### ⚙️ 3. Sincronización del Rendimiento (Threading & Garbage Collector)
-*   ⏳ **Inmunidad al Stuttering por Latencia:** Al haber extraído la carga de dependencias dinámicas (`require`) y la instanciación de objetos (`Piece.new`) fuera de las funciones críticas de dibujado (paneles NEXT y HOLD), el juego se encuentra operando bajo una arquitectura *Zero-GC compliant*. La recolección de basura de Lua permanece inactiva durante la partida, eliminando micro-tirones y congelamientos frame a frame.
-*   🎮 **Bucle de Ejecución de Inputs Competitivos:** Para que los valores milimétricos del DAS y el ARR estilo *Jstris/Tetrio* se apliquen sin tirones, la lectura del teclado con `Input.update(dt)` corre de forma obligatoria al principio absoluto del frame dentro de `love.update(dt)`, procesando las banderas de movimiento de las piezas antes de que el motor gráfico calcule la gravedad de descenso vertical o el arrastre de las líneas de basura.
+    Detección T-Spin: Evaluada en tetris/piece.lua:
 
+        La pieza activa debe ser id == 6 (Tetromino T).
 
+        El último movimiento validado debe haber sido una rotación.
 
+        Al menos 3 de las 4 esquinas de su matriz de 3x3 {(x, y), (x+2, y), (x, y+2), (x+2, y+2)} deben estar ocupadas por bloques fijos o bordes de la grilla.
 
+5. Tabla de Ataques, Offsetting y Zone Mode
 
+    Tabla Base de Daño: Single (0), Double (1), Triple (2), Tetris (4), T-Spin Single (2), T-Spin Double (4), T-Spin Triple (6), Back-to-Back (+1 línea), Combos (+0, +0, +1, +1, +1, +2, +2, +3, +3, +4, +4, +4, +5).
 
+    Offsetting Activo: Si el jugador recibe un ataque, la basura se aloja en garbage_queue. Al limpiar líneas en la siguiente jugada, el ataque saliente cancela primero la deuda pendiente de su propia cola antes de enviar basura al oponente.
 
-# 🕹️ MUTRIS v0.8.5 - ETHEREAL ENGINE
-## ESTADO DE SISTEMA: FASE 6 (PULIDO AUDIOVISUAL FINAL)
+    Límite de Entrada: Máximo 8 líneas de basura transferidas a la grilla por pieza colocada.
 
----
+    Zone Mode: Inmunidad total a la basura entrante y almacenamiento acumulado para un estallido único (Zone Burst):
 
-## 💎 NUEVAS MECÁNICAS DE ESTA VERSIÓN
+        Tier 1 (25% - 99%): Holo-Cyan Matrix.
 
-### 1. Sistema de "Ethereal Trails" (Estelas de Polvo Estelar)
-Se eliminaron las estelas sólidas por un sistema de **haces de luz volumétricos** con decaimiento cuadrático.
-*   **Partículas Internas:** Cada estela genera motas de polvo que caen físicamente hacia el tablero.
-*   **Flicker Aditivo:** Las estelas parpadean aleatoriamente para simular descargas de energía.
+        Tier 2 (100%): Hyper Gold-Diamond Prism.
 
-### 2. Ghost Piece "Wired" (Estructura de Alambre Eléctrica)
-La sombra ya no es un bloque; es un **contorno ondulante** reactivo.
-*   **Danger Reaction:** A medida que la pila de bloques sube hacia el límite, la ondulación del Ghost se vuelve más violenta y errática.
-*   **Beat Sync:** El esqueleto de la pieza vibra físicamente con cada pulso de bajo detectado por el hardware.
+6. IA Heurística y DDA Persistente (ai_bot.lua, ai_profile.json)
 
-### 3. Kinetic Impact (Impacto de Suelo)
-Los bloques que ya están fijos en el tablero tienen "conciencia" del aterrizaje de nuevas piezas.
-*   **Lock Impact:** Al fijar una pieza, todo el tablero experimenta un pulso de escala (se agranda un 10%) y un destello interno masivo.
-*   **Aura Disco:** Los bloques mantienen un núcleo oscuro y bordes eléctricos para garantizar legibilidad en altas velocidades.
+    Registra el desempeño del usuario tras cada combate evaluando la Media Móvil Exponencial (EMA):
+    PlayerAvgPPS = (PlayerAvgPPS * 0.70) + (PlayerLastMatchPPS * 0.30)
 
----
+    Calibra la velocidad base del bot para situarse entre un 8% y 15% por encima del ritmo real del jugador.
 
-## 🗺️ ROADMAP ACTUALIZADO (PROXIMOS PASOS)
+    Radar de Agujeros (Hole-Seeking): Identifica la columna del agujero de escape en las líneas de basura para realizar un Downstacking quirúrgico sin tapar pozos.
 
-1.  **SFX Harmonization:** Implementar un motor de reverberación para los efectos de sonido que escale con el `TrackEnergyPunch`. Los sonidos deben sonar "secos" en la intro y "espaciales" en el Drop.
-2.  **Master AI Heuristics:** Calibrar el Bot para que realice T-Spins de forma intencional en dificultad Master durante el clímax musical.
-3.  **Z-Depth Layering:** Añadir una capa de "niebla de color" detrás de los tableros que cambie de tono según la escala Camelot del track actual.
+👑 EL CRONOGRAMA MAESTRO: ROADMAP DE 26 FASES
+code Code
 
----
+========================================================================================================
+                        MUTRIS ENGINE: CRONOGRAMA MAESTRO DE PRODUCCIÓN
+========================================================================================================
+ ESTADO:  [✔️] COMPLETO     [🚧] EN DESARROLLO     [⏳] PLANIFICADO
+========================================================================================================
 
-## 🛠️ CONSIDERACIONES TÉCNICAS
-*   **Zero-GC Compliant:** Todo el sistema de estelas y partículas utiliza pools estáticos pre-alocados.
-*   **Hardware Sync:** El parpadeo y la ondulación están anclados al buffer de la placa de sonido, garantizando desfasaje cero.
+ ── ÉPOCA I: NÚCLEO ZERO-GC, HARDWARE AUDIO & ESTACIÓN DAW ─────────────────────────────────────────────
+ [✔️] FASE 1  │ Core Engine Zero-GC, SRS 180°, Offsetting & DAS/ARR Competitivo
+ [✔️] FASE 2  │ Reloj de Hardware por Placa de Sonido & Sync de Beat Puro (0.0 ms Desfasaje)
+ [✔️] FASE 3  │ Síntesis Acústica Cooperativa & Afinación Modal Camelot (Sub-Bajos 30Hz)
+ [✔️] FASE 4  │ Mapeo Universal de Teclado/Mandos con Persistencia JSON (settings.json)
+ [✔️] FASE 5  │ Timeline DAW Interactivo con Scrubber, Marcador de Drop y Curvas de Energía
+ [✔️] FASE 6  │ Dynamic Sidechain Ducking, Rack de Saturación Tanh y Audición de SFX en Vivo
 
+ ── ÉPOCA II: COMBATE RÍTMICO, SINESTESIA & MECÁNICAS DE JUEGO DE LUCHA ────────────────────────────────
+ [🚧] FASE 7  │ Beat-Lock Timing: Ventana de ±35ms, Groove Strikes y Multiplicadores de Tempo
+ [⏳] FASE 8  │ Stance Switching System: Rush, Bastion y Resonance con físicas dinámicas
+ [⏳] FASE 9  │ Kinetic Parry: Ventana de 3 Frames para Absorción y Contraataque de Basura (Spikes)
+ [✔️] FASE 10 │ Zone Mode 3-Tiers: Tier 1 Holo-Cyan, Tier 2 Hyper Gold, Tier 3 Supernova Overdrive
+ [✔️] FASE 11 │ Gestor de Anomalías V2: Torus Belt, Quantum Laser, Sudden Matrix Swap y Eclipse
 
+ ── ÉPOCA III: INTELIGENCIA ARTIFICIAL, AUTO-BALANCE & ENTRENAMIENTO ───────────────────────────────────
+ [🚧] FASE 12 │ ARCHON META-BALANCER: IA Interna de Auto-Equilibrio Estadístico y Auto-Patches
+ [✔️] FASE 13 │ DDA Heurística 2.0 & Ghost AI Profiler: Clonación de Estilo de Juego del Usuario
+ [⏳] FASE 14 │ Trainer Lab & Asistente Holográfico de Aperturas (T-Spins, DT Cannon, PC con Undo)
+ [✔️] FASE 15 │ Telemetría Centralizada en Vivo (PPS Dual, FPS, Adrenalina Musical y Récords)
 
-PARTE 8: PULIDO DE RENDIMIENTO (FASE 6.5) — CACHÉ DE FUENTES, IA OPTIMIZADA & CORRECCIONES
-1. Sistema de Caché de Fuentes (tetris/font_cache.lua)
+ ── ÉPOCA IV: SISTEMAS SOULSBORNE & MONSTER HUNTING ────────────────────────────────────────────────────
+ [⏳] FASE 16 │ Souls Dynamics: Barra de Postura, Aturdimiento de Jefes, I-Frames & Visceral Clears
+ [⏳] FASE 17 │ Status Blights: Hemorragia por T-Spins, Congelación de DAS/ARR y Corrupción de Matriz
+ [⏳] FASE 18 │ Anatomía por Columnas & Part Breaking: Corte de Colas y Rotura de Cuernos en Jefes
+ [⏳] FASE 19 │ Chroma-Weaver Engine: Pentagrama HUD, Fusión de Colores y Melodías Activas
+ [⏳] FASE 20 │ The Hunter's Forge & Cyber-Palico: Sets de Armadura, Joyas Pasivas y Dron de Soporte
 
-Se detectó que love.graphics.newFont() se estaba llamando dentro del propio love.draw(), en cinco módulos distintos (tablero, paneles HOLD/NEXT, marcador central, telemetría y menús), generando una fuente rasterizada nueva 60 veces por segundo — la causa principal de presión sobre el recolector de basura, contradiciendo la propia filosofía Zero-GC del proyecto.
+ ── ÉPOCA V: MULTI-RULESET UNIVERSAL, FÍSICAS & CREATIVIDAD ───────────────────────────────────────────
+ [⏳] FASE 21 │ Multi-Ruleset Engine: Guideline Moderno, TGM 20G Shirase, NES 1989, Pentomino 18
+ [⏳] FASE 22 │ Modos Híbridos: Push 1v1 Tug-of-War, Sandtrix Granular y Waveform Dynamic Grid
+ [⏳] FASE 23 │ Mutris Architect Studio: Grid Painter, Timeline Tracker y Lógica por Nodos
+ [⏳] FASE 24 │ Lua Scripting API con Sandbox _ENV Seguro & Paquetes Todo-en-Uno (.mutrispack)
+
+ ── ÉPOCA VI: INFRAESTRUCTURA DEPORTIVA, RED & TRANSCENDENCIA ──────────────────────────────────────────
+ [⏳] FASE 25 │ Rollback Netcode P2P (GGPO), Replays Binarios (.mutrisrec) y Broadcast Esports HUD
+ [⏳] FASE 26 │ Modo Historia "Synthetic Transcendence", Shaders 3D Voxel y Lanzamiento Multiplataforma
+========================================================================================================
+
+🚀 ESPECIFICACIÓN TÉCNICA DE SISTEMAS FUTUROS
+1. Beat-Lock Timing (Fase 7)
+
+    Algoritmo: Evalúa si el Hard Drop aterriza en una ventana de
+
+            
+    ±35 ms
+    ±35 ms
+
+          
+
+    respecto al tiempo fuerte del compás musical.
+
+    Recompensa:
+
+            
+    +1
+    +1
+
+          
+
+    línea de ataque enviada, pulso dorado en la grilla y disparo de transitorio percusivo de subgraves.
+
+2. Stances & Kinetic Parry (Fases 8 y 9)
+
+    Posturas Conmutables (Tab / L3):
+
+        Rush: Ataque x1.5, Lock Delay 0.12s, ARR 0.001s.
+
+        Bastion: Ataque x0.5, activa la ventana de Parry de 3 frames.
+
+        Resonance: Carga de Zone x2, gravedad 20G instantánea.
+
+    Kinetic Parry: Bloquear una pieza en los 3 frames previos a la entrada de basura anula el 100% del daño y devuelve un Counter-Spike del 50%.
+
+3. Archon Meta-Balancer (Fase 12)
+
+    Módulo: core/meta_balancer.lua y saves/game_balance.json.
+
+    Función: Monitorea el Win Rate y la tasa de letalidad de cada modo/anomalía. Si un valor se desvía del equilibrio, auto-ajusta constantes en disco mediante descenso de gradiente e imprime notas de parche automáticas en el menú.
+
+4. Sistemas Souls & Monster Hunting (Fases 16 a 20)
+
+    Barra de Postura & Riposte: Llenar la postura del jefe causa un aturdimiento de 6s donde cada línea hace daño x3 (Visceral Clears).
+
+    Part Breaking por Columnas: Columnas 1-3 (Cuernos), 4-7 (Núcleo), 8-10 (Cola). Romper partes desactiva ataques del monstruo y suelta materiales raros (Carves).
+
+    Chroma-Weaver (Cuerno de Caza): Pentagrama HUD con 4 ranuras. Limpiar colores específicos completa recetas (ej. Cian+Violeta+Naranja = Attack Up [XL]) activables con el botón de Recital.
+
+5. Mutris Architect & Lua Sandbox (Fases 23 y 24)
+
+    Editor Integrado: Grid Painter de bloques elementales + Timeline Tracker DAW + Editor de Nodos visuales.
+
+    Sandbox Seguro: Entorno cerrado con _ENV que expone solo funciones seguras de juego (GameAPI.*), bloqueando accesos peligrosos al sistema operativo.
+
+⚡ PRESUPUESTO DE RENDIMIENTO POR FRAME
+Subsistema / Módulo	Tiempo Asignado	Estrategia de Optimización
+Input & DAS/ARR Sampling	0.15 ms	Consulta directa sin llamadas intermedias ni polling pesado.
+Físicas SRS / Matriz de Bloques	0.60 ms	Tablas pre-indexadas y operaciones matemáticas escalares.
+IA Heurística (Bot & DDA)	0.45 ms	Buffer plano reutilizable _overlay de 400 posiciones en 1 solo barrido.
+Síntesis de Audio & Sidechain	0.30 ms	SoundData estático y modulación mediante curvas analógicas tanh.
+Renderizado & Shaders (GPU)	2.50 ms	Dibujado por lotes, FontCache centralizado y postprocesado en Canvas.
+TOTAL FRAME BUDGET CONSUMIDO	~4.00 ms	Margen libre superior al 60% en 144Hz (6.94ms) y 240Hz (4.16ms).
+📂 ÁRBOL DE DIRECTORIOS MODULAR
+code Code
 
-🗂️ Caché por Tamaño: FontCache.get(size) crea cada tamaño de fuente una única vez y lo reutiliza para siempre, redondeando tamaños dinámicos (como el popup de combos, que escala con TrackEnergyPunch) sin alterar ni un píxel del resultado visual.
-2. Motor Heurístico de la IA Master, Recalculado (tetris/ai_bot.lua)
-
-AIBot:evaluate() escaneaba el tablero completo dos veces por cada candidato de colocación (hasta 56 por pieza), recorriendo además la forma entera de la pieza por cada una de las 400 celdas del grid — hasta ~12.800 operaciones por candidato.
-
-⚡ Un Solo Recorrido con Overlay Reutilizable: La posición de la pieza se estampa una única vez sobre un buffer plano pre-alocado (self._overlay), y un solo barrido del tablero calcula alturas, huecos y líneas completas en simultáneo. Los puntajes resultantes son matemáticamente idénticos a la versión anterior — la IA toma exactamente las mismas decisiones, sólo que con una fracción del costo de CPU.
-3. Correcciones de Estabilidad Visual y de Partida
-🎨 Fix de Color en el Menú: GameStates.drawMenu pasaba la tabla de color de cada dificultad tres veces como argumentos sueltos a setColor en vez de sus tres componentes, lo que anulaba el alpha de atenuación/hover. Corregido para restaurar el efecto de parpadeo/dimming original.
-💀 Game Over por Hold: Board:hold() no verificaba si la pieza intercambiada entraba al tablero al spawnear. Ahora expone _G.GameOverPending, escuchado en main.lua, para que un topout vía Hold termine la partida igual que un topout normal.
-4. Simplificación del Menú
-🎯 Dificultad Única: Se eliminaron APPRENTICE y PRO. Sólo queda MASTER, y la partida arranca directamente con ENTER o SPACE.
-
-
-
-
-
-# 🕹️ MUTRIS v0.9.0 — ETHEREAL CHROMA ENGINE
-## COMPENDIO TÉCNICO DE ARQUITECTURA, ZERO-GC, FÍSICA SRS & INYECCIÓN ACÚSTICA POR HARDWARE
-### 🛠️ ESTADO DE SISTEMA: FASE 7 (INMERSIÓN AUDIOVISUAL, GAMEPAD & ESPACIALIDAD) — VERSIÓN ESTABLE
-
----
-
-> ⚠️ **REGLA DE ORO DE DESARROLLO PERMANENTE:**
-> **EL TÍTULO DEL JUEGO Y EL NÚMERO DE VERSIÓN (`MUTRIS v0.9.0`) DEBEN PERMANECER SIEMPRE VISIBLES EN PANTALLA EN TODOS LOS ESTADOS (MENÚ, GAMEPLAY, EDITOR Y GAME OVER).** Esta directiva es obligatoria para garantizar la trazabilidad visual en capturas de pantalla, pruebas de telemetría y reportes de rendimiento.
-
----
-
-## 💎 NOVEDADES Y ARQUITECTURA DE LA VERSIÓN v0.9.0
-
-### 1. Watermark Global y Trazabilidad Visual
-* **Identificador de Versión Persistente:** Se implementó `_G.ENGINE_VERSION = "MUTRIS v0.9.0"` renderizado en la esquina inferior izquierda con tipografía optimizada por `FontCache`. Visible tanto en el menú principal como en gameplay activo, Game Over y Lab.
-* **Integración en Telemetría y Menú:** El encabezado del menú y el panel de diagnóstico de combate exponen la versión activa del motor.
-
-### 2. Motor de Reverb y Espacialidad Dinámica (`audio_manager.lua`)
-* **Procesamiento de Audio Escalar en el Drop:** Los efectos procedurales de sonido (SFX) modulan su respuesta temporal según la rampa `_G.TrackEnergyPunch`.
-* **Sonido Seco vs. Espacial:** En la intro (energía baja) los golpes y giros suenan secos, nítidos y directos. Al desatarse el Drop (`TrackEnergyPunch > 0.8`), se inyecta un buffer de realimentación de retardo (*delay feedback*) y saturación suave `tanh` que genera una cola de reverberación espacial etérea sin generar objetos nuevos en memoria (*Zero-GC*).
-* **Pitch Shifting por Altura:** El impacto de caída (*Hard Drop*) modula armónicamente su frecuencia en función de la fila vertical (`row_y`) de aterrizaje.
-
-### 3. Capa de Niebla Cromática Z-Depth (`tetris/fog_layer.lua`)
-* **Atmósfera Reactiva Camelot:** Módulo independiente que genera 12 nodos de luz volumétrica flotante en el fondo del escenario.
-* **Mapeo Cromático Armónico:** Los nodos leen la tonalidad de la pista activa (`track.root_note`) mapeada en `TrackManager.NOTE_COLORS` (C = Cian, D = Púrpura, F# = Naranja, A = Verde Neón, etc.).
-* **Pulsación Rítmica:** El radio y la opacidad de los orbes respiran al compás exacto de la placa de sonido (`_G.AudioBeatPulse`) y se expanden en una aurora perimetral durante el clímax musical.
-
-### 4. Soporte Integral para Mandos / Gamepads (`input.lua`)
-* **Mapeo Plug & Play:** Compatibilidad nativa con mandos de Xbox, PlayStation y genéricos vía `love.joystick`.
-* **Integración DAS/ARR Híbrida:** El D-Pad y el Stick Analógico izquierdo alimentan exactamente el mismo motor de autorepetición milimétrica (DAS 0.094s / ARR 0.008s).
-* **Configuración de Botones:**
-  * **Rotaciones:** Botones frontales (`A`/`B` = Horario, `X`/`Y` = Antihorario, `DPad Arriba` = 180°).
-  * **Hold:** Gatillos y bumpers izquierdos (`LB` / `LT`).
-  * **Hard Drop:** Gatillos y bumpers derechos (`RB` / `RT`).
-  * **Soft Drop:** Stick analógico abajo o `DPad Abajo`.
-  * **Reinicio:** Botones `Start` o `Back`.
-
-### 5. Estelas Volumétricas Láser ("Ethereal Trails") (`board.lua`)
-* **Caída Cuadrática:** Al ejecutar un *Hard Drop*, la pieza proyecta haces de luz verticales aditivos con degradado exponencial y núcleo blanco brillante.
-* **Pool Estático:** Gestión mediante 8 estructuras reciclables de tiempo finito sin asignación de memoria dinámica.
-
----
-
-## 🗂️ REGISTRO DE ARCHIVOS MODIFICADOS Y CREADOS
-
-| Archivo | Estado | Descripción del Cambio |
-| :--- | :--- | :--- |
-| `main.lua` | **Modificado** | Integración de watermark global, FogLayer, callbacks de Gamepad y mouse/drag drops. |
-| `audio_manager.lua` | **Modificado** | Reverb dinámico, delay feedback en Drop, saturación y escalado de duración. |
-| `tetris/fog_layer.lua` | **Nuevo** | Renderizador de niebla cromática Z-Depth con modulación armónica Camelot. |
-| `input.lua` | **Modificado** | Soporte para mandos físicos (D-Pad, Sticks, triggers) unificado con DAS/ARR. |
-| `track_manager.lua` | **Modificado** | Tabla `NOTE_COLORS` cromática para sincronía visual entre audio y gráficos. |
-| `tetris/board.lua` | **Modificado** | Haces de luz Ethereal Trails, marco reactivo al Drop y pulso lock impact. |
-| `tetris/game_states.lua` | **Modificado** | Ajuste de tipografía, badge de versión visible e interactividad refinada. |
-| `tetris/telemetry.txt` | **Modificado** | Exposición del identificador de versión en el HUD de combate. |
-
-
-
-
-
-
-# 🕹️ MUTRIS v0.9.5 — ETHEREAL TRANSCENDENCE & COMBAT ENGINE
-## COMPENDIO TÉCNICO DE ARQUITECTURA, ZERO-GC, FÍSICA SRS & INYECCIÓN ACÚSTICA POR HARDWARE
-### 🛠️ ESTADO DE SISTEMA: FASE 8 (DESTRUCCIÓN CINEMÁTICA, DANGER GLITCH & HYPER ZONE) — VERSIÓN ESTABLE
-
----
-
-> ⚠️ **REGLA DE ORO DE DESARROLLO PERMANENTE:**
-> **EL TÍTULO DEL JUEGO Y EL NÚMERO DE VERSIÓN (`MUTRIS v0.9.5`) DEBEN PERMANECER SIEMPRE VISIBLES EN PANTALLA EN TODOS LOS ESTADOS (MENÚ, GAMEPLAY, EDITOR, SETTINGS Y GAME OVER).** Esta directiva es obligatoria para garantizar la trazabilidad visual en capturas de pantalla, pruebas de telemetría y reportes de rendimiento.
-
----
-
-## 💎 NOVEDADES Y ARQUITECTURA DE LA VERSIÓN v0.9.5
-
-### 1. Sistema de Muerte e Implosión en Cristal Poliédrico (`board.lua`, `audio_manager.lua`)
-* **Secuencia Cinemática de Derrota:** Al perder por top-out, la matriz no desaparece abruptamente:
-  1. **Fisuras de Energía:** Se genera una red de 40 grietas luminosas interconectadas que parpadean sobre los bloques.
-  2. **Micro-Hitstop (0.35s):** Congelamiento de impacto cinemático que da peso físico a la derrota.
-  3. **Desintegración en 350 Fragmentos:** Cada bloque se divide en esquirlas poliédricas con 4 geometrías distintas (triángulos afilados, rombos facetados, bloques biselados y agujas láser) con física de rotación y gravedad pesada (*Zero-GC Pool*).
-  4. **Audio Sub-Bass Crunch:** Caída tonal senoidal profunda combinada con distorsión analógica destructiva.
-
-### 2. HUD de Tensión Crítica & Micro-Glitches Horizontales (`board.lua`)
-* **Láser de Alarma en el Techo:** Línea neón roja de advertencia en la fila 21 que se activa cuando la pila supera los 13 bloques, parpadeando con el compás de la música.
-* **Scanline Tearing (Desplazamiento RGB):** Al acercarse a 3 bloques del límite superior, el marco del tablero sufre micro-cortes y saltos horizontales aleatorios modulados por la intensidad del peligro (`danger_level`).
-* **Audio Glitch Clicks:** Micro-stutters periódicos en el audio al estar en peligro extremo.
-
-### 3. Mecánica Zone Mode de 2 Niveles & Almacenamiento Estricto (`board.lua`, `garbage_manager.lua`)
-* **Invulnerabilidad Total en Zone:** Inmunidad absoluta contra Game Over al spawnear piezas y bloqueo total de basura entrante mientras la Zona esté activa.
-* **Carga Balanceada del Medidor:** Acumulación calibrada a `0.038` por línea para premiar jugadas estratégicas.
-* **Almacenamiento de Ataque Estricto:** Durante Zone Mode **no se fuga daño al rival**; el 100% del ataque se acumula en el contador y detona en un único estallido al expirar la Zona.
-* **Doble Nivel Visual (2 Skins de Zone):**
-  * **Tier 1 (25% - 99%):** *Holo-Cyan Matrix* con ondas diagonales continuas `sin((c + r) * 0.55 - time * 8.0)`.
-  * **Tier 2 (100% Clavado - Hyper Zone):** Solo se activa con el medidor al máximo (`zone_meter >= 1.0`). Transforma los bloques en una piel *Gold-Diamond Prism* con rejilla láser en cruz, bordes iridiscentes arcoíris y SFX de activación con acorde ascendente extendido.
-
-### 4. IA Master con Radar de Downstacking Quirúrgico (`ai_bot.lua`)
-* **Hole-Seeking Algorithm:** La IA detecta la columna exacta de los pozos de basura (`col 1..10`).
-* **Anti-Obstruction Penalty:** Si la IA está bajo peligro, castiga severamente (`-1500 pts`) colocar piezas que tapen la salida de basura sin limpiar líneas.
-* **Aplanamiento Forzado de Grilla:** Máxima prioridad a limpiezas continuas de líneas simples/dobles para reducir la altura de la torre y contraatacar.
-
-### 5. Laboratorio de Configuración DAS/ARR & Audio (`settings_manager.lua`, `game_states.lua`)
-* **Calibración Competitiva en Vivo:** Sliders interactivos para calibrar DAS (50 a 200 ms), ARR (0 a 25 ms), volumen SFX y BGM.
-* **Persistencia JSON Local:** Guardado y carga automática en `settings.json`.
-
----
-
-## 🗂️ REGISTRO DE ARCHIVOS MODIFICADOS Y CREADOS
-
-| Archivo | Estado | Descripción del Cambio |
-| :--- | :--- | :--- |
-| `main.lua` | **Modificado** | Control de Hitstop, enlace de muerte cinemática, ruteo de settings y watermark persistente. |
-| `tetris/board.lua` | **Modificado** | Shards de cristal poliédrico, fisuras, 2 skins de Zone (Tier 1 y Tier 2), láser de alarma y scanline tearing. |
-| `tetris/ai_bot.lua` | **Modificado** | Heurística de Downstacking con radar de pozos de basura y anti-obstrucción. |
-| `tetris/garbage_manager.lua` | **Modificado** | Almacenamiento 100% estricto de ataques Zone, cálculo de Hyper Zone y ganancia balanceada. |
-| `audio_manager.lua` | **Modificado** | SFX de muerte digital destructiva y activación Hyper Zone 100%. |
-| `tetris/hud_panels.lua` | **Modificado** | Centrado milimétrico por Tetromino (`PREVIEW_CONFIG`) y badge dorado `[Q] 100%`. |
-| `tetris/bloom_shader.lua` | **Modificado** | Calibración anti-burnout con aberración cromática nítida. |
-| `settings_manager.lua` | **Nuevo** | Módulo de guardado y lectura de parámetros competitivos (`settings.json`). |
-| `tetris/game_states.lua` | **Modificado** | Pantalla interactiva de ajustes DAS/ARR con sliders en tiempo real. |
+MUTRIS/
+├── main.lua                     -- Kernel maestro, despacho de estados e Hitstop
+├── conf.lua                     -- Configuración de ventana LÖVE2D a 144/240Hz
+├── input.lua                    -- Motor DAS/ARR/SDF y remapeo universal
+├── audio_manager.lua            -- Síntesis procedural, Sidechain y Ducking
+├── music_manager.lua            -- Reloj de hardware y streaming de audio
+├── settings_manager.lua         -- Persistencia de controles y volumen (settings.json)
+├── track_manager.lua            -- Extracción modal armónica y tablas Camelot
+├── track_editor.lua             -- DAW Studio, Scrubber y colocación de Cues
+│
+├── core/                        -- Librerías base del motor
+│   ├── meta_balancer.lua        -- [F12] ARCHON AI: Auto-tuning y balance interno
+│   ├── ruleset_manager.lua      -- [F21] Selector Guideline, TGM 20G, NES, Push
+│   ├── mod_loader.lua           -- [F24] Intérprete Sandbox Lua (_ENV) y .mutrispack
+│   └── netcode_ggpo.lua         -- [F25] Rollback P2P y sincronización determinista
+│
+├── combat/                      -- Módulos de combate y sistemas de juego
+│   ├── combat_stances.lua       -- [F8] Stances: Rush, Bastion, Resonance
+│   ├── kinetic_parry.lua        -- [F9] Ventana de 3 frames y Counter-Spikes
+│   ├── poise_system.lua         -- [F16] Postura, aturdimiento y golpes críticos
+│   ├── part_breaking.lua        -- [F18] Anatomía por columnas y desmembramiento
+│   ├── chroma_weaver.lua        -- [F19] Cancionero de acordes y buffs melódicos
+│   └── hunting_forge.lua        -- [F20] Taller de forja, builds y dron Palico
+│
+├── tetris/                      -- Lógica pura de la grilla y físicas
+│   ├── board.lua                -- Grid 10x40, animaciones y muerte en cristal
+│   ├── piece.lua                -- Físicas SRS/ARS, 180° kicks y detección T-Spin
+│   ├── garbage_manager.lua      -- Offsetting reactivo, colas y Zone Storage
+│   ├── anomaly_manager.lua      -- Gestor de anomalías rítmicas e invasiones
+│   ├── particle_system.lua      -- Pool estático de 200 partículas Zero-GC
+│   ├── pps_counter.lua          -- Buffer circular de 60 ranuras para cálculo móvil
+│   ├── font_cache.lua           -- Caché de fuentes tipográficas rasterizadas
+│   ├── fog_layer.lua            -- Niebla cromática Z-Depth reactiva a Camelot
+│   ├── bloom_shader.lua         -- Shaders de resplandor neón y ondas expansivas
+│   ├── hud_panels.lua           -- Paneles NEXT/HOLD con centrado milimétrico
+│   ├── hud_center.lua           -- Marcador VS central y medidor de compás
+│   ├── telemetry.lua            -- Consola de diagnóstico y métricas en vivo
+│   └── ai_bot.lua               -- Bot heurístico con DDA adaptativo 2.0
+│
+├── architect/                   -- Herramientas de creación
+│   ├── grid_painter.lua         -- [F23] Diseñador visual de puzzles y metas
+│   ├── timeline_sequencer.lua   -- [F23] Secuenciador de eventos musicales DAW
+│   └── node_editor.lua          -- [F23] Lógica visual por cajas conectables
+│
+├── music/                       -- Pistas de audio (.mp3/.ogg) y metadatos (.json)
+├── sfx/                         -- Soundpacks y voces del presentador
+└── saves/                       -- Perfiles DDA, repeticiones .mutrisrec y niveles
+
+🛠️ GUÍA PASO A PASO "A PRUEBA DE TONTOS"
+1. ¿Cómo agregar una Nueva Anomalía Rítmica?
+
+    Abre tetris/anomaly_manager.lua.
+
+    En la tabla ANOMALY_POOL, añade una nueva entrada con su identificador, nombre y duración:
+    code Lua
+
+    { id = "mi_anomalia", name = "NOMBRE VISUAL EN PANTALLA", dur = 10.0 }
+
+    En la tabla ANOMALY_THEMES, define sus colores neón y su etiqueta:
+    code Lua
+
+    mi_anomalia = { c1 = {1.0, 0.2, 0.5}, c2 = {1.0, 0.6, 0.8}, label = "MI ANOMALIA" }
+
+    En AnomalyManager.update(dt, player, bot), programa la lógica matemática sin crear tablas {} en memoria.
+
+2. ¿Cómo agregar una Canción Nueva Manualmente?
+
+    Coloca tu archivo cancion.mp3 o cancion.ogg en la carpeta music/.
+
+    Crea un archivo con el mismo nombre exacto pero extensión .json: music/cancion.json.
+
+    Completa los metadatos:
+    code JSON
+
+    {
+      "name": "MI CANCION",
+      "bpm": 135,
+      "root_note": "F#",
+      "mode": "MINOR",
+      "drop_second": 85.0,
+      "build_duration": 30.0
+    }
+
+    Opcional: Abre el juego, ve a SOUNDTRACK & FX LAB, arrastra el archivo y calíbralo con el timeline.
+
+3. ¿Cómo agregar un nuevo SFX sin romper el Zero-GC?
+
+    Abre audio_manager.lua.
+
+    En AudioManager.playImmediateSFX(type, is_bot, row_y), agrega tu nuevo elseif:
+    code Lua
+
+    elseif type == "mi_sonido" then
+        AudioManager.playToneEx(freq, duration, volume, "sine", drive, decay, pitch_bend)
+    end
+
+    Dispara el sonido desde cualquier archivo con:
+    code Lua
+
+    local AudioManager = require "audio_manager"
+    AudioManager.playImmediateSFX("mi_sonido", false)
+
+4. ¿Cómo garantizar que tu nuevo código cumpla con Zero-GC?
+
+Coloca temporalmente al final de love.update:
+code Lua
+
+local count = collectgarbage("count")
+print(string.format("MEMORIA LUA EN VIVO: %.2f KB", count))
+
+    Correcto: La memoria permanece fija en un número constante frame a frame durante el combate.
+
+    Incorrecto: El número sube de forma continua. Revisa si dejaste tablas {} o llamadas a newFont() dentro de funciones de actualización o dibujado.
+
+🔍 MATRIZ DE DIAGNÓSTICO & RESOLUCIÓN DE BUGS
+code Code
+
+┌──────────────────────────────────────┬────────────────────────────────┬────────────────────────────────────────────┐
+│ SÍNTOMA / ERROR EN CONSOLA           │ CAUSA RAÍZ TÉCNICA             │ SOLUCIÓN INGENIERIL INMEDIATA              │
+├──────────────────────────────────────┼────────────────────────────────┼────────────────────────────────────────────┤
+│ Micro-congelamientos cada 4 segundos │ Asignación de tablas {} en     │ Mover variables a buffers pre-alocados en  │
+│ (Garbage Collection Stutter)         │ love.update o love.draw.       │ el init() del módulo correspondiente.      │
+├──────────────────────────────────────┼────────────────────────────────┼────────────────────────────────────────────┤
+│ Desfase entre el bombo de la canción │ Se usó dt acumulado para medir │ Reemplazar por MusicManager.getTime() que  │
+│ y el parpadeo neón tras 3 minutos    │ el compás en vez del hardware. │ consulta directamente Source:tell().       │
+├──────────────────────────────────────┼────────────────────────────────┼────────────────────────────────────────────┤
+│ Error 'attempt to index a nil value' │ La pieza intenta consultar     │ Validar siempre índices con:               │
+│ al evaluar colisiones cerca del techo│ grid[y][x] con fila y < 1.     │ if y >= 1 and y <= 40 and x >= 1 and x <= 10│
+├──────────────────────────────────────┼────────────────────────────────┼────────────────────────────────────────────┤
+│ El temblor (Shaker) de un jugador    │ Falta de aislamiento de matriz │ Encapsular el bloque de dibujado entre:    │
+│ sacude también el HUD del rival      │ gráfica en love.graphics.      │ love.graphics.push() y love.graphics.pop() │
+├──────────────────────────────────────┼────────────────────────────────┼────────────────────────────────────────────┤
+│ Crash por 'out of memory' en fuentes │ love.graphics.newFont() dentro │ Utilizar estrictamente FontCache.get(size).│
+│ tipográficas al escalar textos       │ del ciclo de dibujado draw().  │                                            │
+└──────────────────────────────────────┴────────────────────────────────┴────────────────────────────────────────────┘
+
+🎮 MAPEO DE CONTROLES PREDETERMINADO
+Acción	Teclado Primario	Teclado Secundario	Gamepad / Mando
+Mover Izquierda / Derecha	Left / Right	KP 4 / KP 6	D-Pad L/R o Stick Izq
+Soft Drop (Caída Suave)	Down	KP 5	D-Pad Down o Stick Abajo
+Hard Drop (Fijación Instantánea)	Space	—	RB / RT
+Rotación Horaria (CW)	A	Z	Botón A / Botón B
+Rotación Antihoraria (CCW)	D	X	Botón X / Botón Y
+Rotación 180°	Up	KP 8	D-Pad Up
+Hold (Reserva)	S	C	LB / LT
+Zone Mode / Recital Melódico	Q	E	Gatillo L2 / R2
+Cambio de Postura (Stance)	Tab	Shift	L3 / R3 (Stick Click)
+Reinicio Rápido	R	—	Start / Back
+Menú de Ajustes / Salir	Escape	—	—
+🏁 CERTIFICACIÓN TÉCNICA FINAL
+
+Este compendio técnico unifica la totalidad del código vigente y las especificaciones completas para las Fases 7 a 26 de MUTRIS. Cualquier sesión de desarrollo futura puede ejecutarse tomando este archivo como referencia definitiva y absoluta.
 
 
 ================================================
@@ -445,52 +510,39 @@ FILE: audio_manager.lua
 local AudioManager = {}
 local SettingsManager = require "settings_manager"
 
--- ╔══════════════════════════════════════════════════════════════════════╗
--- ║  🎛️  PANEL DE CONTROL DE SFX HARMONIZATION MUTRIS v0.9.5         ║
--- ╚══════════════════════════════════════════════════════════════════════╝
 AUDIO_CONFIG = {
     SFX_DURATION_BASE_BOOST_MIN = 1.0,
-    SFX_DURATION_BASE_BOOST_MAX = 2.4,
-    DELAY_TAP1_MS_MIN = 0.030,
-    DELAY_TAP1_MS_MAX = 0.180,
-    DELAY_TAP2_MS_MIN = 0.055,
-    DELAY_TAP2_MS_MAX = 0.310,
-    DELAY_FEEDBACK_TAP1_MIN = 0.02,
-    DELAY_FEEDBACK_TAP1_MAX = 0.42,
-    DELAY_FEEDBACK_TAP2_MIN = 0.01,
-    DELAY_FEEDBACK_TAP2_MAX = 0.28,
+    SFX_DURATION_BASE_BOOST_MAX = 1.5,
+    DELAY_TAP1_MS_MIN = 0.020,
+    DELAY_TAP1_MS_MAX = 0.050,
+    DELAY_FEEDBACK_TAP1_MIN = 0.01,
+    DELAY_FEEDBACK_TAP1_MAX = 0.10,
     DRIVE_BOOST_MIN = 0.0,
-    DRIVE_BOOST_MAX = 4.2,
+    DRIVE_BOOST_MAX = 1.2,
     DECAY_DIVISOR_MIN = 1.0,
-    DECAY_DIVISOR_MAX = 4.8,
-    ZONE_EXTRA_DURATION = 1.35,
-    ZONE_EXTRA_DRIVE  = 3.0,
-    ZONE_PITCH_SHIFT  = 0.97,
-    DANGER_GLITCH_CHANCE = 0.30,
+    DECAY_DIVISOR_MAX = 2.0,
+    ZONE_EXTRA_DURATION = 1.10,
+    ZONE_EXTRA_DRIVE  = 1.0,
+    ZONE_PITCH_SHIFT  = 0.95,
+    DANGER_GLITCH_CHANCE = 0.15,
 }
-
-local SCALE = {
-    C2=65.41, C3=130.81, G2=98.00, F2=87.31,
-    Eb2=77.78, Bb2=116.54,
-    C4=261.63, E4=329.63, G4=392.00, B4=493.88
-}
-
-_G.PLAYER_NOTES = { SCALE.C2, SCALE.Eb2, SCALE.G2, SCALE.Bb2 }
-_G.BOT_NOTES    = { SCALE.C2, SCALE.Eb2, SCALE.G2, SCALE.Bb2 }
-_G.BG_SCALE      = { SCALE.C2 * 0.5, SCALE.Eb2 * 0.5, SCALE.G2 * 0.5 }
 
 AudioManager.beat_timer = 0
 AudioManager.base_bpm = 120
 AudioManager.current_bpm = 120
 AudioManager.step = 0
-
 AudioManager.zone_active = false
 AudioManager.glitch_timer = 0
 _G.AudioBeatPulse = 0
 AudioManager.melody_step = 1
 _G.TrackEnergyPunch = 0
 
-local function lerp(a, b, t) return a + (b - a) * t end
+-- 🎚️ ENSORDECIMIENTO TOTAL POR VACÍO (MUTE 100%)
+AudioManager.duck_intensity = 0.0
+AudioManager.duck_duration = 0.60
+
+-- 🗣️ CACHÉ DE ARCHIVOS DE AUDIO DEL PRESENTADOR
+AudioManager.voice_cache = {}
 
 local function tanh(x)
     local e2x = math.exp(2 * x)
@@ -503,125 +555,182 @@ function AudioManager.init()
     AudioManager.melody_step = 1
     _G.TrackEnergyPunch = 0
     AudioManager.glitch_timer = 0
+    AudioManager.duck_intensity = 0.0
+    AudioManager.loadVoiceFiles()
 end
 
--- ╔══════════════════════════════════════════════════════════════════════╗
--- ║  🔊  NUEVOS SFX: Menú, Hover, Slider, Back, Mute                  ║
--- ╚══════════════════════════════════════════════════════════════════════╝
+-- 📂 Escaneo y Carga de Voces Reales (.mp3 / .ogg / .wav)
+function AudioManager.loadVoiceFiles()
+    AudioManager.voice_cache = {}
+    local files = {"tetris", "tspin", "double", "triple", "b2b", "hyper", "victory", "danger", "ready", "go"}
+    local exts = {".mp3", ".ogg", ".wav"}
+    
+    for _, name in ipairs(files) do
+        for _, ext in ipairs(exts) do
+            local path = "sfx/announcer/" .. name .. ext
+            if love.filesystem.getInfo(path) then
+                local success, src = pcall(love.audio.newSource, path, "static")
+                if success then
+                    AudioManager.voice_cache[name] = src
+                    break
+                end
+            end
+        end
+    end
+end
+
+-- ⚡ Disparo de Ensordecimiento (Apaga la música al 100%)
+function AudioManager.triggerSidechain(amount, duration)
+    AudioManager.duck_intensity = math.max(AudioManager.duck_intensity, amount or 1.0)
+    AudioManager.duck_duration = duration or 0.60
+end
+
+-- 🗣️ Reproducción de la Voz del Presentador
+function AudioManager.playVoiceAnnounce(voice_type)
+    local sfx_vol = SettingsManager.getSFX()
+    if sfx_vol <= 0.01 then return end
+    
+    -- Ensordecimiento absoluto de la música de fondo
+    AudioManager.triggerSidechain(1.0, 0.75)
+
+    local key = voice_type:lower()
+    local src = AudioManager.voice_cache[key]
+    if src then
+        src:setVolume(math.min(1.0, sfx_vol * 1.35))
+        src:stop()
+        src:play()
+    else
+        -- Impacto de reemplazo si no colocó archivo todavía
+        AudioManager.playSubBassThud(3)
+    end
+end
+
 function AudioManager.playMenuClick()
-    AudioManager.playTone(1800, 0.11, 0.28, "sine", false, 0.0, 38, true)
+    AudioManager.playTone(380, 0.04, 0.20, "sine", false, 0.0, 70, true)
 end
 
 function AudioManager.playMenuHover()
-    AudioManager.playTone(620, 0.06, 0.18, "triangle", false, 0.0, 60, true)
+    AudioManager.playTone(240, 0.03, 0.12, "triangle", false, 0.0, 100, true)
 end
 
 function AudioManager.playSliderTick()
-    AudioManager.playTone(1400, 0.03, 0.22, "sine", false, 0.0, 90, true)
+    AudioManager.playTone(320, 0.02, 0.15, "sine", false, 0.0, 140, true)
 end
 
 function AudioManager.playMenuBack()
     local sfx_vol = SettingsManager.getSFX()
     local sample_rate = 44100
-    local length = math.floor(sample_rate * 0.2)
+    local length = math.floor(sample_rate * 0.12)
     if length <= 0 then return end
     local data = love.sound.newSoundData(length, sample_rate, 16, 1)
     for i = 0, length - 1 do
         local t = i / sample_rate
-        local f = 980 - (420 * (t / 0.2))
-        local val = math.sin(2 * math.pi * f * t)
-        val = val * math.exp(-14 * t)
-        data:setSample(i, val * 0.32 * sfx_vol)
+        local f = 280 - (120 * (t / 0.12))
+        local val = math.sin(2 * math.pi * f * t) * math.exp(-25 * t)
+        data:setSample(i, val * 0.25 * sfx_vol)
     end
     love.audio.play(love.audio.newSource(data, "static"))
 end
 
 function AudioManager.playMuteToggle(is_muted)
     if is_muted then
-        AudioManager.playTone(600, 0.16, 0.3, "triangle", false, 0.5, 28, true)
+        AudioManager.playTone(180, 0.10, 0.22, "triangle", false, 0.2, 45, true)
     else
         local sfx_vol = SettingsManager.getSFX()
         local sample_rate = 44100
-        local length = math.floor(sample_rate * 0.18)
+        local length = math.floor(sample_rate * 0.10)
         if length <= 0 then return end
         local data = love.sound.newSoundData(length, sample_rate, 16, 1)
         for i = 0, length - 1 do
             local t = i / sample_rate
-            local f = 1600 + (600 * (t / 0.18))
-            local val = math.sin(2 * math.pi * f * t)
-            val = val * math.exp(-11 * t)
-            data:setSample(i, val * 0.3 * sfx_vol)
+            local f = 200 + (180 * (t / 0.10))
+            local val = math.sin(2 * math.pi * f * t) * math.exp(-20 * t)
+            data:setSample(i, val * 0.25 * sfx_vol)
         end
         love.audio.play(love.audio.newSource(data, "static"))
     end
 end
 
+-- 💥 IMPACTO DE SUBGRAVES ATERRADOR (30 Hz Cinematic Drop)
+function AudioManager.playSubBassThud(power)
+    local sfx_vol = SettingsManager.getSFX()
+    if sfx_vol <= 0.01 then return end
+
+    AudioManager.triggerSidechain(1.0, 0.65)
+    local sample_rate = 44100
+    local dur = 0.55
+    local length = math.floor(sample_rate * dur)
+    if length <= 0 then return end
+
+    local data = love.sound.newSoundData(length, sample_rate, 16, 1)
+    local start_f = 60 + (power or 1) * 6
+    local end_f = 24
+
+    for i = 0, length - 1 do
+        local t = i / sample_rate
+        local prog = t / dur
+        local f = start_f + (end_f - start_f) * (prog * prog)
+        local sub = math.sin(2 * math.pi * f * t)
+        local rumble = math.sin(2 * math.pi * (f * 0.5) * t) * 0.6
+        local thud = (t < 0.008) and (math.random() * 2 - 1) * (1.0 - t / 0.008) * 0.4 or 0
+
+        local val = tanh((sub + rumble + thud) * 3.0) * math.exp(-5.0 * t)
+        data:setSample(i, val * 0.98 * sfx_vol)
+    end
+
+    local src = love.audio.newSource(data, "static")
+    src:setVolume(1.0)
+    love.audio.play(src)
+end
+
+-- 💎 IMPACTO MECÁNICO TÁCTIL (Limpieza de líneas sin bloops)
+function AudioManager.playMechanicalClear(lines_count)
+    local sfx_vol = SettingsManager.getSFX()
+    if sfx_vol <= 0.01 then return end
+
+    -- Ensordecimiento breve
+    AudioManager.triggerSidechain(0.75 + lines_count * 0.08, 0.40)
+
+    local sample_rate = 44100
+    local dur = 0.28
+    local length = math.floor(sample_rate * dur)
+    if length <= 0 then return end
+
+    local data = love.sound.newSoundData(length, sample_rate, 16, 1)
+    local base_f = 110 + (lines_count * 20)
+
+    for i = 0, length - 1 do
+        local t = i / sample_rate
+        local snap = (t < 0.006) and (math.random() * 2 - 1) * (1.0 - t / 0.006) * 0.5 or 0
+        local body = math.sin(2 * math.pi * (base_f * math.exp(-15 * t)) * t) * 0.7
+        local deep = math.sin(2 * math.pi * 48 * t) * 0.45 * math.exp(-8 * t)
+
+        local val = tanh((snap + body + deep) * 2.0) * math.exp(-8.0 * t)
+        data:setSample(i, val * 0.85 * sfx_vol)
+    end
+
+    local src = love.audio.newSource(data, "static")
+    src:setVolume(1.0)
+    love.audio.play(src)
+end
+
 function AudioManager.playTone(freq, duration, volume, wave_type, is_kick, drive, decay, no_lfo)
-    if AudioManager.glitch_timer > 0 and math.random() < AUDIO_CONFIG.DANGER_GLITCH_CHANCE then return end
+    if freq > 400 and not is_kick then freq = 280 end
 
-    local energy = _G.TrackEnergyPunch or 0
-    local e2 = energy * energy
     local sample_rate = 44100
-
-    local dur_boost    = lerp(AUDIO_CONFIG.SFX_DURATION_BASE_BOOST_MIN, AUDIO_CONFIG.SFX_DURATION_BASE_BOOST_MAX, energy)
-    local zone_dur     = (AudioManager.zone_active and not is_kick) and AUDIO_CONFIG.ZONE_EXTRA_DURATION or 1.0
-    local effective_duration = duration * dur_boost * zone_dur
-    local length = math.floor(sample_rate * effective_duration)
+    local length = math.floor(sample_rate * duration)
     if length <= 0 then return end
-
-    local drive_boost = lerp(AUDIO_CONFIG.DRIVE_BOOST_MIN, AUDIO_CONFIG.DRIVE_BOOST_MAX, energy)
-    drive = (drive or 0) + drive_boost
-    if AudioManager.zone_active and not is_kick then drive = drive + AUDIO_CONFIG.ZONE_EXTRA_DRIVE end
-
-    local decay_div = lerp(AUDIO_CONFIG.DECAY_DIVISOR_MIN, AUDIO_CONFIG.DECAY_DIVISOR_MAX, energy)
-    decay = (decay or 22) / decay_div
-
-    if AudioManager.zone_active and not is_kick then freq = freq * AUDIO_CONFIG.ZONE_PITCH_SHIFT end
-
-    local tap1_ms   = lerp(AUDIO_CONFIG.DELAY_TAP1_MS_MIN,   AUDIO_CONFIG.DELAY_TAP1_MS_MAX,   energy)
-    local tap2_ms   = lerp(AUDIO_CONFIG.DELAY_TAP2_MS_MIN,   AUDIO_CONFIG.DELAY_TAP2_MS_MAX,   energy)
-    local fb_tap1   = lerp(AUDIO_CONFIG.DELAY_FEEDBACK_TAP1_MIN, AUDIO_CONFIG.DELAY_FEEDBACK_TAP1_MAX, energy)
-    local fb_tap2   = lerp(AUDIO_CONFIG.DELAY_FEEDBACK_TAP2_MIN, AUDIO_CONFIG.DELAY_FEEDBACK_TAP2_MAX, energy)
-    local delay1_samples = math.floor(sample_rate * tap1_ms)
-    local delay2_samples = math.floor(sample_rate * tap2_ms)
+    decay = decay or 26
 
     local data = love.sound.newSoundData(length, sample_rate, 16, 1)
     for i = 0, length - 1 do
         local t = i / sample_rate
-        local current_f = freq
-        local f = is_kick and (current_f * math.exp(-24 * t)) or current_f
-        local val = 0
-
-        if wave_type == "square" then
-            val = math.sin(2 * math.pi * f * t) >= 0 and 0.4 or -0.4
-        elseif wave_type == "triangle" then
-            local sv = math.sin(2 * math.pi * f * t)
-            val = (2 / math.pi) * math.asin(math.max(-1, math.min(1, sv)))
-        elseif wave_type == "saw" then
-            local ft = f * t
-            val = 1.4 * (ft - math.floor(ft + 0.5))
-            val = val * (1 - math.min(0.7, t * 15))
-        else
-            val = math.sin(2 * math.pi * f * t)
+        local f = is_kick and (freq * math.exp(-24 * t)) or freq
+        local val = math.sin(2 * math.pi * f * t)
+        if wave_type == "triangle" then
+            val = (2 / math.pi) * math.asin(math.max(-1, math.min(1, val)))
         end
-
-        if not is_kick and not no_lfo then
-            local lfo_rate = 6 + energy * 4
-            local lfo = (1.0 - energy * 0.2) + (0.2 + energy * 0.2) * math.sin(2 * math.pi * lfo_rate * t)
-            val = val * lfo
-        end
-
-        if energy > 0.05 and i >= delay1_samples then
-            local prev = data:getSample(i - delay1_samples)
-            val = val + prev * fb_tap1
-        end
-
-        if energy > 0.35 and i >= delay2_samples then
-            local prev = data:getSample(i - delay2_samples)
-            val = val + prev * fb_tap2
-        end
-
-        if drive > 0 then val = tanh(val * drive) / tanh(drive) end
+        if drive and drive > 0 then val = tanh(val * drive) end
         data:setSample(i, val * math.exp(-decay * t) * volume)
     end
 
@@ -629,67 +738,10 @@ function AudioManager.playTone(freq, duration, volume, wave_type, is_kick, drive
     local src = love.audio.newSource(data, "static")
     src:setVolume(src:getVolume() * sfx_norm)
     love.audio.play(src)
-end
-
-function AudioManager.playNoise(duration, volume, decay, drive)
-    if AudioManager.zone_active then volume = volume * 0.2 end
-    if AudioManager.glitch_timer > 0 and math.random() < 0.3 then return end
-
-    local energy = _G.TrackEnergyPunch or 0
-    local sample_rate = 44100
-
-    local dur_boost = lerp(AUDIO_CONFIG.SFX_DURATION_BASE_BOOST_MIN, AUDIO_CONFIG.SFX_DURATION_BASE_BOOST_MAX, energy)
-    local effective_duration = duration * dur_boost
-    local length = math.floor(sample_rate * effective_duration)
-    if length <= 0 then return end
-
-    local decay_div = lerp(AUDIO_CONFIG.DECAY_DIVISOR_MIN, AUDIO_CONFIG.DECAY_DIVISOR_MAX, energy)
-    decay = (decay or 45) / decay_div
-
-    local drive_boost = lerp(AUDIO_CONFIG.DRIVE_BOOST_MIN, AUDIO_CONFIG.DRIVE_BOOST_MAX, energy) * 0.7
-    drive = (drive or 0) + drive_boost
-
-    local tap1_ms   = lerp(AUDIO_CONFIG.DELAY_TAP1_MS_MIN,   AUDIO_CONFIG.DELAY_TAP1_MS_MAX,   energy)
-    local fb_tap1   = lerp(AUDIO_CONFIG.DELAY_FEEDBACK_TAP1_MIN, AUDIO_CONFIG.DELAY_FEEDBACK_TAP1_MAX, energy)
-    local delay1_samples = math.floor(sample_rate * tap1_ms)
-
-    local data = love.sound.newSoundData(length, sample_rate, 16, 1)
-    for i = 0, length - 1 do
-        local t = i / sample_rate
-        local val = (math.random() * 2 - 1)
-        val = val * math.sin(2 * math.pi * (3200 + energy * 800) * t)
-
-        if energy > 0.05 and i >= delay1_samples then
-            local prev = data:getSample(i - delay1_samples)
-            val = val + prev * fb_tap1
-        end
-
-        if drive > 0 then val = tanh(val * drive) / tanh(drive) end
-        data:setSample(i, val * math.exp(-decay * t) * volume)
-    end
-
-    local sfx_norm = SettingsManager.getSFX()
-    local src = love.audio.newSource(data, "static")
-    src:setVolume(src:getVolume() * sfx_norm)
-    love.audio.play(src)
-end
-
-function AudioManager.playArpeggio(notes, wave_type, volume, drive, speed, scale_factor)
-    speed = speed or 0.045
-    scale_factor = scale_factor or 1
-    local energy = _G.TrackEnergyPunch or 0
-
-    local speed_mult = lerp(1.0, 0.72, energy)
-    speed = speed * speed_mult
-
-    for i, base_f in ipairs(notes) do
-        local note_dur = 0.2 + (i * 0.03) + (energy * 0.35)
-        AudioManager.playTone(base_f * scale_factor, note_dur, volume * 0.75, wave_type, false, drive, 18 - i, true)
-    end
 end
 
 function AudioManager.playHatClosed(volume)
-    AudioManager.playNoise(0.032, volume or 0.12, 110)
+    AudioManager.playTone(180, 0.025, volume or 0.08, "triangle", true, 0, 90, true)
 end
 
 function AudioManager.triggerGlitch(duration)
@@ -697,95 +749,53 @@ function AudioManager.triggerGlitch(duration)
 end
 
 function AudioManager.playImmediateSFX(type, is_bot, row_y)
-    local notes = is_bot and _G.BOT_NOTES or _G.PLAYER_NOTES
-    local vol = is_bot and 0.45 or 0.38
-    local energy = _G.TrackEnergyPunch or 0
+    local vol = is_bot and 0.35 or 0.30
 
     if type == "move" then
-        local idx = AudioManager.melody_step
-        local current_note = notes[idx] or notes[1] or 130.81
-        AudioManager.playTone(current_note, 0.06 + energy * 0.02, vol * 0.45, "triangle", false, 0, 65, true)
-        AudioManager.melody_step = (AudioManager.melody_step % #notes) + 1
+        -- Chasquido táctil grave de baja frecuencia
+        AudioManager.playTone(140, 0.035, vol * 0.30, "sine", false, 0, 95, true)
 
     elseif type == "rotate" then
-        local rotate_note = notes[2] or notes[1] or 155.56
-        AudioManager.playTone(rotate_note * 2, 0.08 + energy * 0.03, vol * 0.5, "sine", false, 0, 50, true)
+        AudioManager.playTone(180, 0.045, vol * 0.35, "sine", false, 0, 80, true)
 
     elseif type == "hold" then
-        local n1 = notes[1] or 130.81
-        local n4 = notes[4] or notes[3] or 233.08
-        AudioManager.playTone(n1, 0.07, vol * 0.5, "sine", false, 0, 40, true)
-        AudioManager.playTone(n4 * 2, 0.09 + energy * 0.04, vol * 0.45, "sine", false, 1, 30, true)
+        AudioManager.playTone(120, 0.05, vol * 0.38, "sine", false, 0, 60, true)
+        AudioManager.playTone(160, 0.06, vol * 0.32, "sine", false, 0, 50, true)
 
     elseif type == "drop" then
         local target_row = tonumber(row_y) or 40
         local height_factor = (41 - target_row) / 20
-        local root = notes[1] or 130.81
-        local third = notes[2] or 164.81
-        local fifth = notes[3] or 196.00
-        local pitch_mod = 1 + (height_factor * 0.3)
-        local drop_vol_boost = 1 + (energy * 0.6)
-
-        AudioManager.playTone(root * pitch_mod, 0.4, vol * 0.35 * drop_vol_boost, "sine", false, 0, 12, true)
-        AudioManager.playTone(third * pitch_mod, 0.42, vol * 0.3 * drop_vol_boost, "sine", false, 0, 11, true)
-        AudioManager.playTone(fifth * pitch_mod, 0.45, vol * 0.28 * drop_vol_boost, "sine", false, 0, 10, true)
-        AudioManager.playNoise(0.28, vol * 0.25 * drop_vol_boost, 24, 0)
+        local f = 90 + height_factor * 15
+        AudioManager.playTone(f, 0.22, vol * 0.32, "sine", true, 0.4, 24, true)
 
     elseif type == "line_clear" then
-        local n1 = notes[1] or 130.81
-        local n2 = notes[2] or 164.81
-        local n3 = notes[3] or 196.00
-        AudioManager.playArpeggio({n1, n2, n3}, "sine", vol * 0.85, energy * 2, 0.04, 2)
-        AudioManager.playNoise(0.45 + energy * 0.1, vol * 0.45, 15, 1)
+        AudioManager.playMechanicalClear(1)
 
     elseif type == "t_spin" then
-        local n1 = notes[1] or 130.81
-        local n2 = notes[2] or 164.81
-        local n3 = notes[3] or 196.00
-        local n4 = notes[4] or 233.08
-        AudioManager.playArpeggio({n1 * 2, n3 * 2, n4 * 2, n2 * 4}, "triangle", vol * 0.98, 1 + energy * 3, 0.035, 1)
-        AudioManager.playNoise(0.55, vol * 0.35, 12, 0)
+        AudioManager.playSubBassThud(3)
+        AudioManager.playVoiceAnnounce("tspin")
 
     elseif type == "phantom_attack" then
-        local root = notes[1] or 130.81
-        AudioManager.playTone(root * 4.5, 0.45, 0.85, "saw", true, 4, 10, false)
-        AudioManager.playTone(root * 2.2, 0.65, 0.75, "triangle", false, 2, 6, false)
-        AudioManager.playTone(root * 0.75, 0.8, 0.9, "sine", true, 5, 4, true)
-        AudioManager.playNoise(0.4, 0.65, 18, 3)
+        AudioManager.playTone(65, 0.35, 0.65, "sine", true, 1.2, 14, true)
 
     elseif type == "zone_enter" then
-        local low_note = _G.BG_SCALE and _G.BG_SCALE[1] or 32.70
-        AudioManager.playTone(low_note, 1.8, 0.95, "sine", false, 2, 1.2, true)
-        AudioManager.playNoise(0.9, vol * 0.45, 6, 0)
+        AudioManager.playTone(40, 1.4, 0.85, "sine", true, 1.0, 1.8, true)
 
     elseif type == "zone_enter_hyper" then
-        local low_note = _G.BG_SCALE and _G.BG_SCALE[1] or 32.70
-        AudioManager.playTone(low_note * 0.5, 2.2, 1.1, "sine", false, 3, 0.9, true)
-        AudioManager.playArpeggio({130.81, 164.81, 196.00, 261.63, 329.63, 523.25}, "triangle", 1.2, 2, 0.025, 1)
-        AudioManager.playNoise(1.1, 0.6, 4, 1)
+        AudioManager.playSubBassThud(4)
+        AudioManager.playVoiceAnnounce("hyper")
 
     elseif type == "tetris" then
-        local n1 = notes[1] or 130.81
-        local n2 = notes[2] or 164.81
-        local n3 = notes[3] or 196.00
-        local n4 = notes[4] or 233.08
-        AudioManager.playArpeggio({n1, n2, n3 * 2, n4 * 2, n1 * 4}, "sine", vol * 1.35, energy * 3, 0.028, 1)
-        AudioManager.playNoise(0.9, vol * 0.55, 5, 0)
+        AudioManager.playSubBassThud(3)
+        AudioManager.playVoiceAnnounce("tetris")
 
     elseif type == "ultimatris" or type == "perfect_clear" then
-        local root = notes[1] or 130.81
-        local third = notes[2] or 164.81
-        local fifth = notes[3] or 196.00
-        AudioManager.playArpeggio({
-            root * 2, third * 2, fifth * 2,
-            root * 4, third * 4, fifth * 4, root * 8
-        }, "sine", 1.6, 4, 0.032, 1)
-        AudioManager.playNoise(1.2, 0.65, 4, 2)
+        AudioManager.playSubBassThud(5)
+        AudioManager.playVoiceAnnounce("victory")
 
     elseif type == "death" then
-        AudioManager.playTone(55.0, 1.6, 1.2, "saw", true, 5, 1.8, true)
-        AudioManager.playNoise(1.4, 0.85, 3, 4)
-        AudioManager.playTone(32.7, 2.0, 1.0, "sine", false, 6, 1.1, true)
+        AudioManager.triggerSidechain(1.0, 1.2)
+        AudioManager.playTone(36.0, 1.6, 1.0, "sine", true, 3, 2.0, true)
     end
 end
 
@@ -794,13 +804,16 @@ function AudioManager.update(dt, stats)
         AudioManager.glitch_timer = AudioManager.glitch_timer - dt
     end
 
+    if AudioManager.duck_intensity > 0 then
+        local decay_rate = 1.0 / math.max(0.1, AudioManager.duck_duration or 0.60)
+        AudioManager.duck_intensity = math.max(0, AudioManager.duck_intensity - dt * decay_rate)
+    end
+
     local TrackManager = require "track_manager"
     local MusicManager = require "music_manager"
     local current_track = TrackManager.getCurrentTrack()
 
-    if current_track then
-        AudioManager.base_bpm = current_track.bpm
-    end
+    if current_track then AudioManager.base_bpm = current_track.bpm end
 
     local song_time = MusicManager.getTime()
     if song_time <= 0.01 then song_time = _G.RealMatchTimer or 0 end
@@ -1111,67 +1124,13 @@ return Input
 ================================================
 FILE: main.lua
 ================================================
-Error reading file with 'cp1252': 'charmap' codec can't decode byte 0x8f in position 9852: character maps to <undefined>
+Error reading file with 'cp1252': 'charmap' codec can't decode byte 0x8f in position 1293: character maps to <undefined>
 
 
 ================================================
 FILE: music_manager.lua
 ================================================
----@diagnostic disable: undefined-global
-local MusicManager = {}
-local love = love
-
-MusicManager.layers = {}
-MusicManager.custom_source = nil
-
-function MusicManager.loadLayers(file_paths)
-    MusicManager.layers = {}
-end
-
-function MusicManager.setIntensity(value) end
-
-function MusicManager.stop()
-    if MusicManager.custom_source and MusicManager.custom_source:isPlaying() then
-        MusicManager.custom_source:stop()
-    end
-end
-
-function MusicManager.start()
-    local TrackManager = require "track_manager"
-    local SettingsManager = require "settings_manager"
-    local current_track = TrackManager.getCurrentTrack()
-
-    if not current_track.is_embedded then
-        if MusicManager.custom_source then MusicManager.custom_source:stop() end
-        MusicManager.custom_source = love.audio.newSource(current_track.file_path, "stream")
-        MusicManager.custom_source:setLooping(true)
-
-        local bgm_norm = SettingsManager.getBGM()
-        MusicManager.custom_source:setVolume(bgm_norm * 0.85)
-
-        MusicManager.custom_source:play()
-    end
-end
-
-function MusicManager.getTime()
-    if MusicManager.custom_source and MusicManager.custom_source:isPlaying() then
-        return MusicManager.custom_source:tell("seconds")
-    end
-    return 0
-end
-
-function MusicManager.update(dt)
-    local SettingsManager = require "settings_manager"
-    local AudioManager = require "audio_manager"
-    if MusicManager.custom_source and MusicManager.custom_source:isPlaying() then
-        local bgm_norm = SettingsManager.getBGM()
-        local target_base = (AudioManager.zone_active and 1.15 or 0.85) * bgm_norm
-        local cur_vol = MusicManager.custom_source:getVolume()
-        MusicManager.custom_source:setVolume(cur_vol + (target_base - cur_vol) * 4 * dt)
-    end
-end
-
-return MusicManager
+Error reading file with 'cp1252': 'charmap' codec can't decode byte 0x8f in position 1753: character maps to <undefined>
 
 
 ================================================
@@ -1885,6 +1844,20 @@ return TrackManager
 
 
 ================================================
+FILE: .luarc.json
+================================================
+{
+  "$schema": "https://raw.githubusercontent.com/sumneko/vscode-lua/master/setting/schema.json",
+  "runtime.version": "LuaJIT",
+  "workspace.checkThirdParty": false,
+  "diagnostics.disable": [
+    "undefined-doc-name",
+    "undefined-global"
+  ]
+}
+
+
+================================================
 FILE: music/alex_morgan_trance_euphoria.json
 ================================================
 {
@@ -1926,533 +1899,7 @@ FILE: music/eliveta_uplifting_trance.json
 ================================================
 FILE: tetris/ai_bot.lua
 ================================================
----@diagnostic disable: undefined-global
-local AIBot = {}
-AIBot.__index = AIBot
-
--- ╔══════════════════════════════════════════════════════════════════════╗
--- ║  🎛️  PANEL DE CONTROL DE IA MASTER MUTRIS v0.9.5                 ║
--- ║  NUEVO: SISTEMA DE ANTICIPACIÓN DE AMENAZA DEL OPONENTE          ║
--- ║  Si el HUMANO está armando un setup (pila alta + superficie      ║
--- ║  limpia, como DT Cannon), la IA entra en MODO DEFENSIVO PROACTIVO║
--- ║  y carga ZONE ANTES de que le llegue la basura.                  ║
--- ╚══════════════════════════════════════════════════════════════════════╝
-AI_CONFIG = {
-    -- ⚠️ Niveles de activación (altura en bloques)
-    PANIC_LIGHT_HEIGHT = 8,
-    PANIC_EXTREME_HEIGHT = 11,
-    PANIC_ANY_GARBAGE_LINES = 1,
-
-    -- 👁️ SISTEMA DE ANTICIPACIÓN (mirada al tablero del HUMANO)
-    OPPONENT_THREAT_HEIGHT_LIGHT = 9,     -- Humano tiene ≥9 bloques → alerta
-    OPPONENT_THREAT_HEIGHT_EXTREME = 12,  -- Humano tiene ≥12 bloques → DEFENSA TOTAL (DT Cannon)
-    OPPONENT_CLEAN_SURFACE_BUMP = 45,     -- Si oponente tiene bumpiness ≤45 → está armando un setup clean
-    THREAT_ZONE_MIN_METER = 0.22,         -- En amenaza EXTREMA, activa Zone con 22% (antes 35%)
-    THREAT_BUILD_ZONE_PRIORITY = 900,     -- Bonus por limpiezas chicas que cargan Zone cuando hay amenaza
-    THREAT_SAVE_LINE_FOR_OFFSET = 1300,   -- Premio GIGANTE por limpiar líneas que cancelen garbage incoming
-
-    -- 🛡️ Offsetting: cancelar basura que ya está en la cola
-    GARBAGE_OFFSET_LINE_BONUS = 1600,     -- Cada línea limpiada que cancela garbage incoming
-    GARBAGE_OFFSET_BIG_QUEUE_BONUS = 600, -- Bonus extra si la cola tiene ≥3 líneas
-
-    -- 💥 PESOS: MODO CALM (ofensivo / armar tetris)
-    CALM_HEIGHT_PENALTY   = 4.5,
-    CALM_HOLES_PENALTY    = 320.0,
-    CALM_COVERED_PENALTY  = 250.0,
-    CALM_BUMP_PENALTY     = 14.0,
-    CALM_WELL_BONUS       = 90.0,
-    CALM_SINGLE_DOUBLE_BONUS = 30.0,
-    CALM_TETRIS_BONUS     = 1300.0,
-
-    -- 🚨 PESOS: MODO PÁNICO LEVE (prioriza limpiar sin morir)
-    PANIC_HEIGHT_PENALTY  = 16.0,
-    PANIC_HOLES_PENALTY   = 900.0,
-    PANIC_COVERED_PENALTY = 1400.0,
-    PANIC_BUMP_PENALTY    = 36.0,
-    PANIC_HOLE_BLOCK_PENALTY = 4500,
-    PANIC_LINE_BONUS      = 1400.0,
-    PANIC_TETRIS_BONUS    = 1900.0,
-
-    -- 🔥 PESOS: MODO PÁNICO EXTREMO (sobrevivir A TODA COSTA)
-    EXTREME_HEIGHT_PENALTY  = 42.0,
-    EXTREME_HOLES_PENALTY   = 2600.0,
-    EXTREME_COVERED_PENALTY = 4200.0,
-    EXTREME_BUMP_PENALTY    = 72.0,
-    EXTREME_HOLE_BLOCK_PENALTY = 9500,
-    EXTREME_LINE_BONUS      = 2400.0,
-    EXTREME_TETRIS_BONUS    = 2800.0,
-
-    -- 🎯 Regla adicional: priorizar limpiezas ENCIMA del pozo de basura
-    HOLE_CLEAR_ALIGNMENT_BONUS = 700,
-
-    -- ⚡ PPS dinámico en pánico
-    PANIC_EXTRA_PPS = 4.0,
-
-    -- 🛡️ Zone Mode normal (sin amenaza externa)
-    ZONE_MIN_METER = 0.35,
-    ZONE_GARBAGE_TRIGGER = 1,
-}
-
-function AIBot.new(board, profile)
-    local self = setmetatable({}, AIBot)
-    self.board = board
-    self.base_pps = profile.pps == 6.0 and 12.0 or (profile.pps or 3.0)
-    self.pps = self.base_pps
-    self.move_timer = 0
-    self.target_x, self.target_rot = nil, nil
-    self.is_thinking = false
-    self.just_locked = false
-
-    -- Buffers planos pre-alocados para evaluación Zero-GC
-    self._overlay = {}
-    for i = 1, 400 do self._overlay[i] = false end
-
-    self._heights = {}
-    self._top_found = {}
-    self._hole_depths = {}
-    for i = 1, 10 do
-        self._heights[i] = 0
-        self._top_found[i] = false
-        self._hole_depths[i] = 0
-    end
-
-    return self
-end
-
--- ╔══════════════════════════════════════════════════════════════════════╗
--- ║  👁️  scanOpponentThreat — MIRA LO QUE HACE EL JUGADOR HUMANO    ║
--- ║  Detecta si te está armando un DT Cannon / setup ofensivo.       ║
--- ║  Devuelve: threat_level (0=ok, 1=alerta, 2=KO INMINENTE)        ║
--- ║            op_bumpiness (para saber si su setup está limpio)     ║
--- ╚══════════════════════════════════════════════════════════════════════╝
-function AIBot:scanOpponentThreat()
-    local opp = self.board.opponent
-    if not opp then return 0, 0 end
-
-    -- 1) Altura máxima del oponente
-    local opp_max_h = 0
-    local opp_heights = {0,0,0,0,0,0,0,0,0,0}
-    for c = 1, 10 do
-        for r = 21, 40 do
-            if opp.grid[r][c] ~= 0 then
-                local h = 41 - r
-                opp_heights[c] = h
-                if h > opp_max_h then opp_max_h = h end
-                break
-            end
-        end
-    end
-
-    -- 2) Bumpiness del oponente: si es MUY BAJO, está armando un setup clean (DT Cannon)
-    local opp_bump = 0
-    for i = 1, 9 do
-        opp_bump = opp_bump + math.abs(opp_heights[i] - opp_heights[i+1])
-    end
-
-    -- 3) Nivel de amenaza
-    local is_clean_setup = (opp_bump <= AI_CONFIG.OPPONENT_CLEAN_SURFACE_BUMP)
-    local threat = 0
-    if opp_max_h >= AI_CONFIG.OPPONENT_THREAT_HEIGHT_EXTREME then
-        threat = 2  -- KO inminente (DT Cannon casi listo)
-    elseif opp_max_h >= AI_CONFIG.OPPONENT_THREAT_HEIGHT_LIGHT then
-        threat = 1  -- Alerta (va armando algo)
-    end
-
-    -- Si es un setup clean + altura alta → SUBIMOS el nivel
-    if is_clean_setup and opp_max_h >= 7 then
-        threat = math.min(2, threat + 1)
-    end
-
-    return threat, opp_bump
-end
-
-function AIBot:update(dt)
-    if not self.board.active_piece or self.board.active_piece.locked or self.just_locked then
-        if self.board.active_piece and not self.board.active_piece.locked then
-            self.just_locked = false
-        end
-        return
-    end
-
-    local active_punch = _G.TrackEnergyPunch or 0
-    local pps_punch = active_punch * 8.0
-
-    -- ⚠️ Bonus PPS EXTRA en pánico extremo
-    local max_h = 0
-    for c = 1, 10 do
-        for r = 21, 40 do
-            if self.board.grid[r][c] ~= 0 then
-                local h = 41 - r
-                if h > max_h then max_h = h end
-                break
-            end
-        end
-    end
-    local panic_pps = 0
-    if max_h >= AI_CONFIG.PANIC_EXTREME_HEIGHT then
-        panic_pps = AI_CONFIG.PANIC_EXTRA_PPS
-    elseif max_h >= AI_CONFIG.PANIC_LIGHT_HEIGHT then
-        panic_pps = AI_CONFIG.PANIC_EXTRA_PPS * 0.55
-    end
-
-    self.pps = self.base_pps + pps_punch + panic_pps
-
-    -- 👁️ Escaneamos AMENAZA DEL OPONENTE para decidir Zone proactivo
-    local opp_threat = 0
-    opp_threat = self:scanOpponentThreat()
-
-    -- 🛡️ ACTIVACIÓN ZONE MODE — MÁS AGRESIVA SI HAY AMENAZA
-    local zone_meter_min = AI_CONFIG.ZONE_MIN_METER
-    if opp_threat >= 2 then
-        zone_meter_min = AI_CONFIG.THREAT_ZONE_MIN_METER  -- Activa Zone a los 22% si ve DT Cannon
-    elseif opp_threat == 1 then
-        zone_meter_min = 0.28
-    end
-
-    if not self.board.is_zone_active and self.board.zone_meter >= zone_meter_min then
-        local in_danger = #self.board.garbage_queue >= AI_CONFIG.ZONE_GARBAGE_TRIGGER
-        local high_stack = false
-        local extreme_stack = false
-        for c = 1, 10 do
-            if self.board.grid[26][c] ~= 0 then high_stack = true end
-            if self.board.grid[24][c] ~= 0 then extreme_stack = true break end
-        end
-        -- Amenaza del oponente ≥2 = activa Zone de forma PREVENTIVA sin importar nada
-        if (in_danger or high_stack or extreme_stack or active_punch >= 0.85 or opp_threat >= 2) then
-            self.board:enterZone()
-        end
-    end
-
-    self.move_timer = self.move_timer + dt
-    if self.move_timer >= (1 / self.pps) then
-        if not self.is_thinking then
-            self:think()
-        else
-            self:executeMove()
-        end
-        self.move_timer = 0
-    end
-end
-
-function AIBot:findGarbageHoleColumn()
-    local grid = self.board.grid
-    for r = 40, 21, -1 do
-        local hole_col = nil
-        local garbage_count = 0
-        for c = 1, 10 do
-            if grid[r][c] == 8 or grid[r][c] ~= 0 then
-                garbage_count = garbage_count + 1
-            elseif grid[r][c] == 0 then
-                hole_col = c
-            end
-        end
-        if garbage_count >= 8 and hole_col then
-            return hole_col, r
-        end
-    end
-    return nil, nil
-end
-
-function AIBot:think()
-    local p = self.board.active_piece
-    if not p or p.locked or type(p.canMove) ~= "function" then return end
-
-    local best_score = -20000000
-    local max_rot = #p.shape
-
-    -- Detección de peligro (3 niveles)
-    local max_board_h = 0
-    for r = 21, 40 do
-        for c = 1, 10 do
-            if self.board.grid[r][c] ~= 0 then
-                local h = 41 - r
-                if h > max_board_h then max_board_h = h end
-            end
-        end
-    end
-
-    local has_garbage_queue = #self.board.garbage_queue >= AI_CONFIG.PANIC_ANY_GARBAGE_LINES
-    local panic_level = 0
-    if max_board_h >= AI_CONFIG.PANIC_EXTREME_HEIGHT then
-        panic_level = 2
-    elseif max_board_h >= AI_CONFIG.PANIC_LIGHT_HEIGHT or has_garbage_queue then
-        panic_level = 1
-    end
-
-    -- 👁️ NUEVO: Escaneamos la amenaza del oponente 1 vez por think
-    local opp_threat_level = 0
-    opp_threat_level = self:scanOpponentThreat()
-
-    -- Tamaño de la cola de basura incoming (para offsetting proactivo)
-    local garbage_queue_size = #self.board.garbage_queue
-    local total_garbage_incoming = 0
-    for i = 1, garbage_queue_size do
-        total_garbage_incoming = total_garbage_incoming + self.board.garbage_queue[i]
-    end
-
-    local target_hole_col, target_hole_row = self:findGarbageHoleColumn()
-
-    for r = 1, max_rot do
-        for x = -2, 11 do
-            if p:canMove(x, p.y, r) then
-                local gy = p.y
-                while p:canMove(x, gy + 1, r) do gy = gy + 1 end
-
-                local score = self:evaluate(
-                    x, gy, r,
-                    panic_level,
-                    target_hole_col, target_hole_row,
-                    opp_threat_level,
-                    garbage_queue_size, total_garbage_incoming
-                )
-
-                -- Si es pieza T y NO estamos en pánico extremo, buscar T-Spins
-                if p.id == 6 and panic_level < 2 and opp_threat_level < 2 and score > -500000 then
-                    local old_x, old_y, old_r = p.x, p.y, p.rotation
-                    p.x, p.y, p.rotation = x, gy, r
-                    if p:checkTSpin() then
-                        score = score + 3500
-                    end
-                    p.x, p.y, p.rotation = old_x, old_y, old_r
-                end
-
-                if score > best_score then
-                    best_score = score
-                    self.target_x, self.target_rot = x, r
-                end
-            end
-        end
-    end
-    self.is_thinking = true
-end
-
-function AIBot:evaluate(px, py, pr, panic_level, target_hole_col, target_hole_row, opp_threat_level, garbage_queue_size, total_garbage_incoming)
-    local grid = self.board.grid
-    local shape = self.board.active_piece.shape[pr]
-
-    local overlay = self._overlay
-    for i = 1, 400 do overlay[i] = false end
-    for sr = 1, #shape do
-        local srow = shape[sr]
-        for sc = 1, #srow do
-            if srow[sc] ~= 0 then
-                local tr, tc = py + sr - 1, px + sc - 1
-                if tr >= 1 and tr <= 40 and tc >= 1 and tc <= 10 then
-                    overlay[(tr - 1) * 10 + tc] = true
-                end
-            end
-        end
-    end
-
-    local heights = self._heights
-    local top_found = self._top_found
-    local hole_depths = self._hole_depths
-    for c = 1, 10 do
-        heights[c] = 0
-        top_found[c] = false
-        hole_depths[c] = 0
-    end
-
-    local holes = 0
-    local covered_holes = 0
-    local lines_cleared = 0
-
-    -- Bonus: ¿reduce altura del pozo de basura?
-    local hole_col_covered_before = 0
-    local hole_col_covered_after = 0
-    if target_hole_col and target_hole_row then
-        for r = 21, target_hole_row do
-            if grid[r][target_hole_col] ~= 0 then
-                hole_col_covered_before = hole_col_covered_before + 1
-            end
-        end
-        for r = 21, target_hole_row do
-            local occ = (grid[r][target_hole_col] ~= 0) or overlay[(r - 1) * 10 + target_hole_col]
-            if occ then
-                hole_col_covered_after = hole_col_covered_after + 1
-            end
-        end
-    end
-
-    for r = 1, 40 do
-        local row_full = true
-        local base = (r - 1) * 10
-        for c = 1, 10 do
-            local occupied = (grid[r][c] ~= 0) or overlay[base + c]
-            if occupied then
-                if not top_found[c] then
-                    heights[c] = 41 - r
-                    top_found[c] = true
-                end
-            else
-                row_full = false
-                if top_found[c] then
-                    holes = holes + 1
-                    hole_depths[c] = hole_depths[c] + 1
-                    if hole_depths[c] > 1 then
-                        covered_holes = covered_holes + 1
-                    end
-                end
-            end
-        end
-        if row_full then lines_cleared = lines_cleared + 1 end
-    end
-
-    local max_h, bumpiness = 0, 0
-    for i = 1, 10 do
-        if heights[i] > max_h then max_h = heights[i] end
-        if i < 10 then bumpiness = bumpiness + math.abs(heights[i] - heights[i + 1]) end
-    end
-
-    local score = 0
-
-    -- ================================================================
-    -- 🛡️ SISTEMA DEFENSIVO NUEVO: OFFSETTING + ANTICIPO DE AMENAZA
-    -- ================================================================
-
-    -- 1) Offsetting: líneas limpiadas CANCELAN basura en la cola → PREMIO MÁXIMO
-    if lines_cleared > 0 and total_garbage_incoming > 0 then
-        local offset_effect = math.min(lines_cleared, total_garbage_incoming)
-        score = score + (offset_effect * AI_CONFIG.GARBAGE_OFFSET_LINE_BONUS)
-        if garbage_queue_size >= 3 then
-            score = score + AI_CONFIG.GARBAGE_OFFSET_BIG_QUEUE_BONUS
-        end
-    end
-
-    -- 2) Si hay amenaza del oponente (DT Cannon): priorizar limpiezas CHICAS que carguen Zone
-    if opp_threat_level >= 1 and not self.board.is_zone_active then
-        if lines_cleared == 1 or lines_cleared == 2 then
-            score = score + (lines_cleared * AI_CONFIG.THREAT_BUILD_ZONE_PRIORITY)
-        end
-        -- En amenaza EXTREMA (DT Cannon): NO intentar buildear tetris de 4 si no compensa
-        if opp_threat_level >= 2 and lines_cleared == 0 then
-            score = score - 2500
-        end
-    end
-
-    -- 3) Offsetting proactivo: Si basura incoming ≥4, limpiar 2 es MEJOR que limpiar 0 aunque buildee peor
-    if total_garbage_incoming >= 4 and lines_cleared >= 2 and lines_cleared < 4 then
-        score = score + AI_CONFIG.THREAT_SAVE_LINE_FOR_OFFSET
-    end
-
-    -- ================================================================
-    -- PESOS ESTÁNDARES POR NIVEL DE PÁNICO
-    -- ================================================================
-
-    if panic_level == 2 then
-        score = score - (max_h * max_h * AI_CONFIG.EXTREME_HEIGHT_PENALTY)
-        score = score - (holes * AI_CONFIG.EXTREME_HOLES_PENALTY)
-        score = score - (covered_holes * AI_CONFIG.EXTREME_COVERED_PENALTY)
-        score = score - (bumpiness * AI_CONFIG.EXTREME_BUMP_PENALTY)
-
-        if target_hole_col and lines_cleared == 0 then
-            local shape_occupies_hole_col = false
-            for sr = 1, #shape do
-                for sc = 1, #shape[sr] do
-                    if shape[sr][sc] ~= 0 and (px + sc - 1) == target_hole_col then
-                        shape_occupies_hole_col = true
-                        break
-                    end
-                end
-            end
-            if shape_occupies_hole_col then
-                score = score - AI_CONFIG.EXTREME_HOLE_BLOCK_PENALTY
-            end
-        end
-
-        if target_hole_col and lines_cleared > 0 then
-            local delta = hole_col_covered_before - hole_col_covered_after
-            if delta > 0 then
-                score = score + (delta * AI_CONFIG.HOLE_CLEAR_ALIGNMENT_BONUS)
-            end
-        end
-
-        if lines_cleared > 0 then
-            score = score + (lines_cleared * AI_CONFIG.EXTREME_LINE_BONUS)
-            if lines_cleared == 4 then score = score + AI_CONFIG.EXTREME_TETRIS_BONUS end
-        end
-
-    elseif panic_level == 1 then
-        score = score - (max_h * max_h * AI_CONFIG.PANIC_HEIGHT_PENALTY)
-        score = score - (holes * AI_CONFIG.PANIC_HOLES_PENALTY)
-        score = score - (covered_holes * AI_CONFIG.PANIC_COVERED_PENALTY)
-        score = score - (bumpiness * AI_CONFIG.PANIC_BUMP_PENALTY)
-
-        if target_hole_col and lines_cleared == 0 then
-            local shape_occupies_hole_col = false
-            for sr = 1, #shape do
-                for sc = 1, #shape[sr] do
-                    if shape[sr][sc] ~= 0 and (px + sc - 1) == target_hole_col then
-                        shape_occupies_hole_col = true
-                        break
-                    end
-                end
-            end
-            if shape_occupies_hole_col then
-                score = score - AI_CONFIG.PANIC_HOLE_BLOCK_PENALTY
-            end
-        end
-
-        if target_hole_col and lines_cleared > 0 then
-            local delta = hole_col_covered_before - hole_col_covered_after
-            if delta > 0 then
-                score = score + (delta * AI_CONFIG.HOLE_CLEAR_ALIGNMENT_BONUS)
-            end
-        end
-
-        if lines_cleared > 0 then
-            score = score + (lines_cleared * AI_CONFIG.PANIC_LINE_BONUS)
-            if lines_cleared == 4 then score = score + AI_CONFIG.PANIC_TETRIS_BONUS end
-        end
-
-    else
-        score = score - (max_h * max_h * AI_CONFIG.CALM_HEIGHT_PENALTY)
-        score = score - (holes * AI_CONFIG.CALM_HOLES_PENALTY)
-        score = score - (covered_holes * AI_CONFIG.CALM_COVERED_PENALTY)
-        score = score - (bumpiness * AI_CONFIG.CALM_BUMP_PENALTY)
-
-        if heights[10] < heights[9] - 1 then
-            score = score + AI_CONFIG.CALM_WELL_BONUS
-        end
-
-        if lines_cleared == 4 then
-            score = score + AI_CONFIG.CALM_TETRIS_BONUS
-        elseif lines_cleared > 0 then
-            score = score + (lines_cleared * AI_CONFIG.CALM_SINGLE_DOUBLE_BONUS)
-        end
-    end
-
-    return score
-end
-
-function AIBot:executeMove()
-    local p = self.board.active_piece
-    if not p or p.locked or not self.target_x then
-        self.is_thinking = false
-        return
-    end
-
-    local max_rot = #p.shape
-    local real_target_rot = ((self.target_rot - 1) % max_rot) + 1
-
-    if p.rotation ~= real_target_rot then
-        p:rotate(1)
-    elseif p.x < self.target_x then
-        p:move(1, 0)
-    elseif p.x > self.target_x then
-        p:move(-1, 0)
-    else
-        local startY = p.y
-        while p:move(0, 1, true) do end
-        local endY = p.y
-        self.board:spawnTrail(p.x, startY, endY, p.id, p.shape[p.rotation])
-        p:lock()
-        self.is_thinking = false
-        self.just_locked = true
-    end
-end
-
-return AIBot
+Error reading file with 'cp1252': 'charmap' codec can't decode byte 0x8f in position 6780: character maps to <undefined>
 
 
 ================================================
@@ -2467,16 +1914,17 @@ AnomalyManager.current_anomaly = nil
 AnomalyManager.timer = 0
 AnomalyManager.duration = 0
 AnomalyManager.warning_timer = 0
-AnomalyManager.cooldown = 45.0
-AnomalyManager.time_until_next = 35.0
+AnomalyManager.cooldown = 32.0
+AnomalyManager.time_until_next = 20.0
 
 AnomalyManager.step_timer = 0
-AnomalyManager.laser_x = 0
+AnomalyManager.laser_x = 80
 AnomalyManager.laser_dir = 1
+AnomalyManager.swapped = false
+AnomalyManager.lock_drain_active = false
+AnomalyManager.hyper_speed_active = false
+AnomalyManager.blackout_flash = 0.0
 
--- ╔══════════════════════════════════════════════════════════════════════╗
--- ║  🎨  PANEL DE CONTROL: COLORES Y ESTILOS DE ANOMALÍAS            ║
--- ╚══════════════════════════════════════════════════════════════════════╝
 ANOMALY_THEMES = {
     torus_belt       = { c1 = {0.55, 0.20, 1.0}, c2 = {0.80, 0.45, 1.0}, label = "TORUS" },
     global_wormhole  = { c1 = {0.95, 0.15, 0.85}, c2 = {1.00, 0.55, 0.90}, label = "WORM" },
@@ -2484,18 +1932,20 @@ ANOMALY_THEMES = {
     matrix_swap      = { c1 = {1.00, 0.08, 0.15}, c2 = {1.00, 0.55, 0.35}, label = "SWAP!" },
     gravity_flip     = { c1 = {0.85, 0.15, 0.25}, c2 = {0.95, 0.45, 0.75}, label = "ANTIG" },
     lock_drain       = { c1 = {1.00, 0.45, 0.05}, c2 = {1.00, 0.75, 0.20}, label = "DRAIN" },
-    hyper_speed      = { c1 = {0.10, 0.85, 0.95}, c2 = {0.55, 1.00, 0.95}, label = "SPEED" }
+    hyper_speed      = { c1 = {0.10, 0.85, 0.95}, c2 = {0.55, 1.00, 0.95}, label = "SPEED" },
+    blackout_strobe  = { c1 = {0.05, 0.05, 0.12}, c2 = {0.20, 0.85, 1.00}, label = "ECLIPSE" }
 }
 DEFAULT_THEME = { c1 = {1.0, 0.85, 0.2}, c2 = {1.0, 1.0, 0.5}, label = "ANOM" }
 
 local ANOMALY_POOL = {
-    { id = "torus_belt",      name = "TORUS CONVEYOR (LOCAL)",         dur = 12.0 },
-    { id = "global_wormhole", name = "GLOBAL WORMHOLE (CROSS-MATRIX)",  dur = 10.0 },
-    { id = "laser_scan",     name = "QUANTUM LASER SCANNER",          dur = 12.0 },
+    { id = "blackout_strobe", name = "ECLIPSE BLACKOUT (2-BAR STROBE)", dur = 12.0 },
+    { id = "torus_belt",      name = "TORUS CONVEYOR (LOCAL)",         dur = 10.0 },
+    { id = "global_wormhole", name = "GLOBAL WORMHOLE (CROSS-MATRIX)", dur = 10.0 },
+    { id = "laser_scan",     name = "QUANTUM LASER SCANNER",          dur = 10.0 },
     { id = "matrix_swap",    name = "SUDDEN MATRIX SWAP",             dur =  3.0 },
     { id = "gravity_flip",   name = "ANTI-GRAVITY REVERSE",           dur = 10.0 },
-    { id = "lock_drain",     name = "LOCK DRAIN OVERLOAD",             dur = 12.0 },
-    { id = "hyper_speed",    name = "HYPER SPEED RUN BOOST",         dur = 15.0 }
+    { id = "lock_drain",     name = "LOCK DRAIN OVERLOAD",             dur = 10.0 },
+    { id = "hyper_speed",    name = "HYPER SPEED RUN BOOST",         dur = 12.0 }
 }
 
 function AnomalyManager.init()
@@ -2503,13 +1953,17 @@ function AnomalyManager.init()
     AnomalyManager.timer = 0
     AnomalyManager.duration = 0
     AnomalyManager.warning_timer = 0
-    AnomalyManager.time_until_next = 35.0
+    -- âš¡ En Demo o Gauntlet: Eventos constantes cada 8-10 segundos
+    AnomalyManager.time_until_next = (_G.IS_DEMO_MODE or _G.CURRENT_GAME_MODE == "gauntlet") and 8.0 or 25.0
     AnomalyManager.step_timer = 0
     AnomalyManager.laser_x = 80
     AnomalyManager.laser_dir = 1
     AnomalyManager.swapped = false
     AnomalyManager.lock_drain_active = false
     AnomalyManager.hyper_speed_active = false
+    AnomalyManager.blackout_flash = 0.0
+    _G.IsBlackoutActive = false
+    _G.BlackoutStrobeVisibility = 1.0
 end
 
 function AnomalyManager.triggerRandomAnomaly(track_bpm)
@@ -2525,24 +1979,28 @@ function AnomalyManager.triggerRandomAnomaly(track_bpm)
     AnomalyManager.lock_drain_active = false
     AnomalyManager.hyper_speed_active = false
 
-    AudioManager.playImmediateSFX("phantom_attack", false)
-    if selected.id == "gravity_flip" or selected.id == "matrix_swap" or selected.id == "hyper_speed" then
-        AudioManager.triggerGlitch(0.6)
+    if selected.id == "blackout_strobe" then
+        _G.IsBlackoutActive = true
+        AudioManager.playVoiceAnnounce("danger")
     else
-        AudioManager.triggerGlitch(0.4)
+        _G.IsBlackoutActive = false
     end
+
+    AudioManager.playImmediateSFX("phantom_attack", false)
+    AudioManager.triggerGlitch(0.35)
 end
 
 function AnomalyManager.update(dt, player, bot)
     local bpm = AudioManager.current_bpm or 120
     local beat_duration = 60 / bpm
+    local two_bars_duration = beat_duration * 8
 
     if not AnomalyManager.current_anomaly then
         AnomalyManager.time_until_next = AnomalyManager.time_until_next - dt
 
-        if AnomalyManager.time_until_next <= 3.0 and AnomalyManager.warning_timer <= 0 then
-            AnomalyManager.warning_timer = 3.0
-            AudioManager.triggerGlitch(0.2)
+        if AnomalyManager.time_until_next <= 2.5 and AnomalyManager.warning_timer <= 0 then
+            AnomalyManager.warning_timer = 2.5
+            AudioManager.triggerGlitch(0.20)
         end
 
         if AnomalyManager.warning_timer > 0 then
@@ -2558,9 +2016,21 @@ function AnomalyManager.update(dt, player, bot)
     AnomalyManager.timer = AnomalyManager.timer - dt
     local id = AnomalyManager.current_anomaly
 
-    if id == "torus_belt" then
+    if id == "blackout_strobe" then
+        _G.IsBlackoutActive = true
+        AnomalyManager.step_timer = (AnomalyManager.step_timer + dt) % two_bars_duration
+        local strobe_fraction = AnomalyManager.step_timer / two_bars_duration
+        
+        if strobe_fraction < 0.12 then
+            local flash_p = 1.0 - (strobe_fraction / 0.12)
+            _G.BlackoutStrobeVisibility = flash_p * flash_p
+        else
+            _G.BlackoutStrobeVisibility = 0.0
+        end
+
+    elseif id == "torus_belt" then
         AnomalyManager.step_timer = AnomalyManager.step_timer + dt
-        if AnomalyManager.step_timer >= (beat_duration * 1.5) then
+        if AnomalyManager.step_timer >= (beat_duration * 1.2) then
             AnomalyManager.step_timer = 0
             if player and not player.is_dying then player:shiftColumnsLocal(1) end
             if bot and not bot.is_dying then bot:shiftColumnsLocal(1) end
@@ -2569,7 +2039,7 @@ function AnomalyManager.update(dt, player, bot)
 
     elseif id == "global_wormhole" then
         AnomalyManager.step_timer = AnomalyManager.step_timer + dt
-        if AnomalyManager.step_timer >= (beat_duration * 0.8) then
+        if AnomalyManager.step_timer >= (beat_duration * 0.7) then
             AnomalyManager.step_timer = 0
             if player and bot and not player.is_dying and not bot.is_dying then
                 player:shiftColumnsGlobal(bot, 1)
@@ -2578,7 +2048,7 @@ function AnomalyManager.update(dt, player, bot)
         end
 
     elseif id == "laser_scan" then
-        AnomalyManager.laser_x = AnomalyManager.laser_x + AnomalyManager.laser_dir * 180 * dt
+        AnomalyManager.laser_x = AnomalyManager.laser_x + AnomalyManager.laser_dir * 220 * dt
         if AnomalyManager.laser_x > 720 then
             AnomalyManager.laser_x = 720
             AnomalyManager.laser_dir = -1
@@ -2599,22 +2069,18 @@ function AnomalyManager.update(dt, player, bot)
 
     elseif id == "gravity_flip" then
         AnomalyManager.step_timer = AnomalyManager.step_timer + dt
-        if AnomalyManager.step_timer >= (beat_duration * 0.5) then
+        if AnomalyManager.step_timer >= (beat_duration * 0.4) then
             AnomalyManager.step_timer = 0
             if player and not player.is_dying then
                 local pp = player.active_piece
                 if pp and not pp.locked then
-                    while pp:canMove(pp.x, pp.y - 1, pp.rotation) do
-                        pp.y = pp.y - 1
-                    end
+                    while pp:canMove(pp.x, pp.y - 1, pp.rotation) do pp.y = pp.y - 1 end
                 end
             end
             if bot and not bot.is_dying then
                 local bp = bot.active_piece
                 if bp and not bp.locked then
-                    while bp:canMove(bp.x, bp.y - 1, bp.rotation) do
-                        bp.y = bp.y - 1
-                    end
+                    while bp:canMove(bp.x, bp.y - 1, bp.rotation) do bp.y = bp.y - 1 end
                 end
             end
             AudioManager.playImmediateSFX("rotate", false)
@@ -2622,12 +2088,8 @@ function AnomalyManager.update(dt, player, bot)
 
     elseif id == "lock_drain" then
         AnomalyManager.lock_drain_active = true
-        if player and player.active_piece and not player.is_dying then
-            player.active_piece.lock_delay = 0.08
-        end
-        if bot and bot.active_piece and not bot.is_dying then
-            bot.active_piece.lock_delay = 0.08
-        end
+        if player and player.active_piece and not player.is_dying then player.active_piece.lock_delay = 0.08 end
+        if bot and bot.active_piece and not bot.is_dying then bot.active_piece.lock_delay = 0.08 end
 
     elseif id == "hyper_speed" then
         AnomalyManager.hyper_speed_active = true
@@ -2636,10 +2098,9 @@ function AnomalyManager.update(dt, player, bot)
             if pp and not pp.locked then pp.spawn_timer = 0 end
         end
         if bot and bot.ai and not bot.is_dying then
-            local active_punch = _G.TrackEnergyPunch or 0
-            bot.ai.pps = bot.ai.base_pps + (active_punch * 8.0) + 5.2
+            bot.ai.pps = bot.ai.base_pps + 3.0
         end
-        AudioManager.playHatClosed(0.25)
+        AudioManager.playHatClosed(0.20)
     end
 
     if AnomalyManager.timer <= 0 then
@@ -2649,268 +2110,87 @@ function AnomalyManager.update(dt, player, bot)
         end
         AnomalyManager.lock_drain_active = false
         AnomalyManager.hyper_speed_active = false
+        _G.IsBlackoutActive = false
+        _G.BlackoutStrobeVisibility = 1.0
 
         AnomalyManager.current_anomaly = nil
         AnomalyManager.swapped = false
-        AnomalyManager.time_until_next = AnomalyManager.cooldown
+        AnomalyManager.time_until_next = (_G.IS_DEMO_MODE or _G.CURRENT_GAME_MODE == "gauntlet") and 9.0 or AnomalyManager.cooldown
         AnomalyManager.warning_timer = 0
-        AudioManager.triggerGlitch(0.2)
+        AudioManager.triggerGlitch(0.15)
     end
 end
 
--- ╔══════════════════════════════════════════════════════════════════════╗
--- ║  🎨  DRAW: HUD REDISEÑADO — PELIGRO VISUAL EXTREMO               ║
--- ╚══════════════════════════════════════════════════════════════════════╝
 function AnomalyManager.draw(player, bot)
     love.graphics.push("all")
     local time = love.timer.getTime()
     local pulse = _G.AudioBeatPulse or 0
-    local energy = _G.TrackEnergyPunch or 0
 
-    -- ─────────────────────────────────────────────────────────────────
-    -- 1) ⚠️ WARNING INMINENTE (3 segundos antes) — PELIGRO EXTREMO
-    -- ─────────────────────────────────────────────────────────────────
     if AnomalyManager.warning_timer > 0 and not AnomalyManager.current_anomaly then
         local wt = AnomalyManager.warning_timer
-        local urgency = 1.0 - (wt / 3.0)  -- 0 al principio → 1 al final
-        local flash = 0.45 + math.sin(time * (14 + urgency * 32)) * 0.55
+        local urgency = 1.0 - (wt / 2.5)
+        local flash = 0.45 + math.sin(time * (16 + urgency * 32)) * 0.55
         local count_sec = math.max(0, math.ceil(wt))
 
         love.graphics.setBlendMode("add")
-
-        -- A) Gradiente radial oscuro de tensión (más oscuro en los bordes)
-        local steps = 24
-        for i = steps, 1, -1 do
-            local p = i / steps
-            local alpha = (1.0 - p) * urgency * 0.32
-            love.graphics.setColor(0.9, 0.05, 0.1, alpha)
-            local pad = p * 240
-            love.graphics.rectangle("line", pad, pad, 800 - pad * 2, 600 - pad * 2, 16)
-        end
-
-        -- B) MARCO GIGANTE PARPADEANTE (8px) en los bordes de la pantalla completa
         local frame_w = 8 + pulse * 8
         love.graphics.setColor(1.0, 0.10, 0.12, flash * (0.65 + urgency * 0.35))
-        love.graphics.rectangle("fill", 0, 0, 800, frame_w)                                   -- top
-        love.graphics.rectangle("fill", 0, 600 - frame_w, 800, frame_w)                       -- bottom
-        love.graphics.rectangle("fill", 0, 0, frame_w, 600)                                   -- left
-        love.graphics.rectangle("fill", 800 - frame_w, 0, frame_w, 600)                       -- right
-
-        -- Esquinas afiladas más gruesas
-        love.graphics.setColor(1.0, 0.5, 0.2, flash * 0.9)
-        local cor = 38 + pulse * 8
-        love.graphics.line(0, cor, cor, 0)                            -- top-left
-        love.graphics.line(800, cor, 800 - cor, 0)                    -- top-right
-        love.graphics.line(0, 600 - cor, cor, 600)                    -- bottom-left
-        love.graphics.line(800, 600 - cor, 800 - cor, 600)            -- bottom-right
-
-        -- C) SCANLINES HORIZONTALES ROJAS
-        love.graphics.setColor(1.0, 0.15, 0.15, urgency * 0.28)
-        for y = 0, 599, 4 do
-            local scan_alpha = urgency * (0.18 + ((math.sin(time * 60 + y * 0.1) + 1) * 0.5) * 0.35)
-            love.graphics.setColor(1.0, 0.08, 0.12, scan_alpha)
-            love.graphics.rectangle("fill", 0, y, 800, 2)
-        end
-
-        -- D) RAYOS DIAGONALES que salen de las 4 esquinas
-        love.graphics.setColor(1.0, 0.25, 0.2, flash * (0.35 + urgency * 0.5))
-        love.graphics.setLineWidth(1 + pulse * 3)
-        for i = 1, 7 do
-            local len = 120 + i * 45 + pulse * 60
-            local ang = (i * 0.13) + math.sin(time * 8 + i) * 0.2
-            -- Top-left
-            love.graphics.line(0, 0, math.cos(ang) * len, math.sin(ang) * len)
-            -- Top-right
-            love.graphics.line(800, 0, 800 - math.cos(ang) * len, math.sin(ang) * len)
-            -- Bot-left
-            love.graphics.line(0, 600, math.cos(ang) * len, 600 - math.sin(ang) * len)
-            -- Bot-right
-            love.graphics.line(800, 600, 800 - math.cos(ang) * len, 600 - math.sin(ang) * len)
-        end
+        love.graphics.rectangle("fill", 0, 0, 800, frame_w)
+        love.graphics.rectangle("fill", 0, 600 - frame_w, 800, frame_w)
+        love.graphics.rectangle("fill", 0, 0, frame_w, 600)
+        love.graphics.rectangle("fill", 800 - frame_w, 0, frame_w, 600)
 
         love.graphics.setBlendMode("alpha")
-
-        -- E) TÍTULO: "⚠ ANOMALY INCOMING ⚠" con glitch RGB
-        local title_txt = "⚠  ANOMALY INCOMING  ⚠"
+        local title_txt = "âš   ANOMALY INCOMING  âš "
         love.graphics.setFont(FontCache.get(18))
         local tw = FontCache.get(18):getWidth(title_txt)
-        local tx = 400 - tw / 2
-
-        -- Glitch de color rojo/azul
-        local gx_off = (math.random() - 0.5) * (3 + urgency * 10)
-        local gy_off = (math.random() - 0.5) * 2
-        love.graphics.setColor(1.0, 0.1, 0.1, flash * 0.7)
-        love.graphics.print(title_txt, tx - 4 + gx_off, 140 + gy_off)
-        love.graphics.setColor(0.1, 0.2, 1.0, flash * 0.7)
-        love.graphics.print(title_txt, tx + 4 - gx_off, 140 - gy_off)
-        -- Texto central blanco opaco
         love.graphics.setColor(1.0, 1.0, 1.0, flash * (0.8 + urgency * 0.2))
-        love.graphics.print(title_txt, tx, 140)
+        love.graphics.print(title_txt, 400 - tw / 2, 140)
 
-        -- F) CONTADOR GIGANTE 3-2-1 (tamaño 52)
         love.graphics.setFont(FontCache.get(52))
         local cstr = tostring(count_sec)
         local cw = FontCache.get(52):getWidth(cstr)
-        local cx = 400 - cw / 2
-        local cy = 230
-
-        -- Halo creciente del número
-        local halo = (urgency * 18) + pulse * 16
-        love.graphics.setColor(1.0, 0.2, 0.25, urgency * 0.35)
-        love.graphics.print(cstr, cx - halo / 2, cy - halo / 4, 0, 1 + halo / 200, 1 + halo / 200)
-        -- Número central con glitch
-        love.graphics.setColor(1.0, 0.2, 0.2, 0.7)
-        love.graphics.print(cstr, cx - 3, cy + 2)
-        love.graphics.setColor(0.3, 0.4, 1.0, 0.7)
-        love.graphics.print(cstr, cx + 3, cy - 2)
-        love.graphics.setColor(1.0, 1.0, 1.0, 0.95)
-        love.graphics.print(cstr, cx, cy)
-
-        -- G) Tiempo exacto debajo con fuente pequeña
-        love.graphics.setFont(FontCache.get(11))
-        local tstr = string.format("%.2fs", wt)
-        local w2 = FontCache.get(11):getWidth(tstr)
-        love.graphics.setColor(1.0, 0.7, 0.3, flash * 0.85)
-        love.graphics.print(tstr, 400 - w2 / 2, 345)
-
-        -- H) Barra de progreso de advertencia (se llena hacia 0)
-        local bw = 480
-        local bx = 400 - bw / 2
-        local by = 370
-        love.graphics.setColor(0.2, 0.05, 0.05, 0.85)
-        love.graphics.rectangle("fill", bx, by, bw, 14, 8)
-        love.graphics.setColor(1.0, 0.25, 0.2, 0.9)
-        love.graphics.rectangle("fill", bx, by, bw * (1.0 - urgency), 14, 8)
-        love.graphics.setColor(1, 1, 1, 0.6)
-        love.graphics.rectangle("line", bx, by, bw, 14, 8)
+        love.graphics.setColor(1.0, 0.25, 0.2, 0.95)
+        love.graphics.print(cstr, 400 - cw / 2, 230)
     end
 
-    -- ─────────────────────────────────────────────────────────────────
-    -- 2) ⚡ ANOMALÍA ACTIVA — Barras laterales + barra superior/inferior
-    -- ─────────────────────────────────────────────────────────────────
     if AnomalyManager.current_anomaly then
         local id = AnomalyManager.current_anomaly
         local theme = ANOMALY_THEMES[id] or DEFAULT_THEME
         local c1, c2 = theme.c1, theme.c2
         local t = AnomalyManager.timer
         local dur = AnomalyManager.duration
-        local progress = math.max(0, math.min(1, t / dur))  -- 1 = recién empieza, 0 = termina
-        local flash2 = 0.65 + math.sin(time * 10 + energy * 14) * 0.35
+        local progress = math.max(0, math.min(1, t / dur))
+
+        love.graphics.setBlendMode("add")
+        local top_h = 30
+        love.graphics.setColor(c1[1], c1[2], c1[3], 0.7 + pulse * 0.3)
+        love.graphics.rectangle("fill", 0, 0, 800, top_h)
+        love.graphics.setColor(c2[1], c2[2], c2[3], 0.9)
+        love.graphics.rectangle("fill", 0, top_h - 2, 800, 2)
+
+        love.graphics.setBlendMode("alpha")
+        love.graphics.setFont(FontCache.get(11))
+        love.graphics.setColor(1, 1, 1, 0.9)
+        love.graphics.print("ANOMALY: " .. theme.label, 10, 8)
+
+        local tstr2 = string.format("%.1fs", t)
+        local tw2 = FontCache.get(11):getWidth(tstr2)
+        love.graphics.print(tstr2, 800 - tw2 - 10, 8)
 
         local name = "ACTIVE ANOMALY"
         for _, a in ipairs(ANOMALY_POOL) do
             if a.id == id then name = a.name break end
         end
+        love.graphics.setFont(FontCache.get(12))
+        local nw = FontCache.get(12):getWidth(name)
+        love.graphics.print(name, 400 - nw / 2, 8)
 
-        love.graphics.setBlendMode("add")
-
-        -- A) BARRAS LATERALES DE COLOR (22px de ancho) — gradiente vertical
-        local barw = 22
-        for y = 0, 599, 6 do
-            local p = y / 600
-            local r = c1[1] + (c2[1] - c1[1]) * p
-            local g = c1[2] + (c2[2] - c1[2]) * p
-            local b = c1[3] + (c2[3] - c1[3]) * p
-            local a2 = (0.55 + pulse * 0.35 + math.sin(time * 2 + y * 0.05) * 0.1) * flash2
-            love.graphics.setColor(r, g, b, a2 * 0.85)
-            -- Left bar
-            love.graphics.rectangle("fill", 0, y, barw, 7)
-            -- Right bar
-            love.graphics.rectangle("fill", 800 - barw, y, barw, 7)
-        end
-
-        -- B) BARRA SUPERIOR con nombre de la anomalía
-        local top_h = 32
-        love.graphics.setColor(c1[1], c1[2], c1[3], 0.7 + pulse * 0.3)
-        love.graphics.rectangle("fill", 0, 0, 800, top_h)
-        love.graphics.setColor(c2[1], c2[2], c2[3], 0.9)
-        love.graphics.rectangle("fill", 0, top_h - 3, 800, 3)
-
-        -- C) BARRA INFERIOR con BARRA DE PROGRESO de la anomalía
-        local bot_h = 26
-        love.graphics.setColor(c1[1], c1[2], c1[3], 0.55 + pulse * 0.25)
-        love.graphics.rectangle("fill", 0, 600 - bot_h, 800, bot_h)
-        love.graphics.setColor(c2[1], c2[2], c2[3], 0.85)
-        love.graphics.rectangle("fill", 0, 600 - bot_h, 800, 2)
-
-        -- Barra de progreso que se reduce
-        local pbx = 60
-        local pbw = 800 - pbx * 2
-        local pby = 600 - bot_h + 11
-        love.graphics.setColor(0, 0, 0, 0.45)
-        love.graphics.rectangle("fill", pbx, pby, pbw, 8, 6)
-        love.graphics.setColor(c2[1], c2[2], c2[3], 0.95)
-        love.graphics.rectangle("fill", pbx, pby, pbw * progress, 8, 6)
-
-        -- Etiqueta SHORT arriba a la izquierda
-        love.graphics.setBlendMode("alpha")
-        love.graphics.setFont(FontCache.get(11))
-        love.graphics.setColor(1, 1, 1, 0.9)
-        love.graphics.print("ANOMALY: " .. theme.label, 10, 9)
-
-        -- Tiempo numérico arriba derecha
-        local tstr2 = string.format("%.1fs", t)
-        love.graphics.setFont(FontCache.get(11))
-        local tw2 = FontCache.get(11):getWidth(tstr2)
-        love.graphics.setColor(1, 1, 1, 0.9)
-        love.graphics.print(tstr2, 800 - tw2 - 10, 9)
-
-        -- Nombre completo CENTRO ARRIBA
-        love.graphics.setFont(FontCache.get(13))
-        local nw = FontCache.get(13):getWidth(name)
-        love.graphics.setColor(1, 1, 1, 0.95)
-        love.graphics.print(name, 400 - nw / 2, 7)
-
-        love.graphics.setBlendMode("add")
-
-        -- ── RENDER ESPECÍFICO DE CADA ANOMALÍA (mantenido intacto) ──
-
-        if id == "global_wormhole" then
-            love.graphics.setLineWidth(2 + pulse * 2)
-            love.graphics.setColor(0.9, 0.2, 1.0, 0.6 + pulse * 0.3)
-            for r = 0, 10 do
-                local line_y = 50 + 240 + (r * 24)
-                love.graphics.line(320, line_y, 480, line_y)
-            end
-            love.graphics.setBlendMode("alpha")
-
-        elseif id == "laser_scan" then
-            love.graphics.setLineWidth(3 + pulse * 3)
-            love.graphics.setColor(0.2, 0.95, 1.0, 0.85 + pulse * 0.15)
-            love.graphics.line(AnomalyManager.laser_x, 40, AnomalyManager.laser_x, 540)
-            love.graphics.setColor(1, 1, 1, 0.9)
-            love.graphics.line(AnomalyManager.laser_x, 40, AnomalyManager.laser_x, 540)
-            love.graphics.setBlendMode("alpha")
-
-        elseif id == "gravity_flip" then
-            love.graphics.setColor(0.8, 0.3, 1.0, 0.55 + pulse * 0.35)
+        if id == "blackout_strobe" then
             love.graphics.setFont(FontCache.get(14))
-            local arrow_y = 260 + math.sin(time * 6) * 6
-            love.graphics.printf("▲ ▲ ▲  ANTI-GRAV ACTIVE  ▲ ▲ ▲", 0, arrow_y, 800, "center")
-            love.graphics.setBlendMode("alpha")
-
-        elseif id == "lock_drain" then
-            love.graphics.setColor(1.0, 0.35, 0.2, 0.7 + pulse * 0.3)
-            love.graphics.setFont(FontCache.get(11))
-            love.graphics.printf("⏱ LOCK DELAY = 0.08s OVERLOAD", 0, 560, 800, "center")
-            for i = 1, 6 do
-                local bar_y = 55 + (i * 72)
-                love.graphics.rectangle("fill", 310, bar_y, 180, 2)
-            end
-            love.graphics.setBlendMode("alpha")
-
-        elseif id == "hyper_speed" then
-            love.graphics.setColor(0.2, 0.9, 1.0, 0.6 + pulse * 0.4)
-            love.graphics.setLineWidth(2)
-            local offset = (time * 600) % 60
-            for i = -2, 16 do
-                local bx = (i * 60) + offset
-                love.graphics.line(bx, 50, bx + 80, 530)
-            end
-            love.graphics.setFont(FontCache.get(12))
-            love.graphics.setColor(1.0, 1.0, 1.0, 0.95)
-            love.graphics.printf("⚡ HYPER SPEED RUN x2.6", 0, 30, 800, "center")
-            love.graphics.setBlendMode("alpha")
+            local vis_alpha = _G.BlackoutStrobeVisibility or 0
+            love.graphics.setColor(0, 0.9, 1.0, 0.4 + vis_alpha * 0.6)
+            love.graphics.printf("âš¡ 2-BAR STROBE ACTIVE âš¡", 0, 545, 800, "center")
         end
     end
 
@@ -2930,37 +2210,49 @@ local shader_code = [[
     extern number u_energy;
     extern number u_pulse;
     extern number u_zone;
+    extern number u_shock_time;
+    extern vec2 u_shock_center;
 
     vec4 effect(vec4 color, Image texture, vec2 texture_coords, vec2 screen_coords) {
-        vec4 base = Texel(texture, texture_coords);
-        
-        // AberraciÃ³n cromÃ¡tica sutil y limpia (sin destruir la nitidez del texto)
-        if (u_energy > 0.4 || u_zone > 0.05) {
-            number shift = 0.0006 * (u_energy * 0.4 + u_zone * 0.6);
-            base.r = Texel(texture, texture_coords + vec2(shift, 0.0)).r;
-            base.b = Texel(texture, texture_coords - vec2(shift, 0.0)).b;
+        vec2 uv = texture_coords;
+
+        // Onda expansiva de distorsiÃ³n (Shockwave)
+        if (u_shock_time > 0.0 && u_shock_time < 1.0) {
+            number dist = distance(screen_coords, u_shock_center);
+            number wave_radius = u_shock_time * 650.0;
+            number diff = dist - wave_radius;
+            if (abs(diff) < 40.0) {
+                number factor = (1.0 - abs(diff) / 40.0) * (1.0 - u_shock_time) * 0.025;
+                vec2 dir = normalize(screen_coords - u_shock_center);
+                uv += dir * factor;
+            }
         }
 
-        // Muestreo gaussiano suave de bajo costo
+        vec4 base = Texel(texture, uv);
+        
+        if (u_energy > 0.4 || u_zone > 0.05) {
+            number shift = 0.0007 * (u_energy * 0.4 + u_zone * 0.6);
+            base.r = Texel(texture, uv + vec2(shift, 0.0)).r;
+            base.b = Texel(texture, uv - vec2(shift, 0.0)).b;
+        }
+
         number blur = 0.0010 + (u_energy * 0.0006) + (u_zone * 0.0008);
         vec4 glow = vec4(0.0);
-        glow += Texel(texture, texture_coords + vec2(-blur, -blur)) * 0.12;
-        glow += Texel(texture, texture_coords + vec2( blur, -blur)) * 0.12;
-        glow += Texel(texture, texture_coords + vec2(-blur,  blur)) * 0.12;
-        glow += Texel(texture, texture_coords + vec2( blur,  blur)) * 0.12;
-        glow += Texel(texture, texture_coords + vec2( 0.0,   blur)) * 0.13;
-        glow += Texel(texture, texture_coords + vec2( 0.0,  -blur)) * 0.13;
-        glow += Texel(texture, texture_coords + vec2( blur,   0.0)) * 0.13;
-        glow += Texel(texture, texture_coords + vec2(-blur,   0.0)) * 0.13;
+        glow += Texel(texture, uv + vec2(-blur, -blur)) * 0.12;
+        glow += Texel(texture, uv + vec2( blur, -blur)) * 0.12;
+        glow += Texel(texture, uv + vec2(-blur,  blur)) * 0.12;
+        glow += Texel(texture, uv + vec2( blur,  blur)) * 0.12;
+        glow += Texel(texture, uv + vec2( 0.0,   blur)) * 0.13;
+        glow += Texel(texture, uv + vec2( 0.0,  -blur)) * 0.13;
+        glow += Texel(texture, uv + vec2( blur,   0.0)) * 0.13;
+        glow += Texel(texture, uv + vec2(-blur,   0.0)) * 0.13;
 
-        // Solo resaltar picos de luz muy altos para evitar quemar los bloques
         number lum = dot(glow.rgb, vec3(0.299, 0.587, 0.114));
         vec4 highlights = glow * smoothstep(0.60, 0.98, lum);
 
         number bloom_amount = 0.20 + (u_energy * 0.20) + (u_pulse * 0.10) + (u_zone * 0.20);
         vec4 result = base + highlights * bloom_amount;
 
-        // Tinte frÃ­o etÃ©reo en Zone sin sobreexposiciÃ³n
         if (u_zone > 0.01) {
             result.rgb = mix(result.rgb, vec3(result.r * 0.85, result.g * 1.05, result.b * 1.25), u_zone * 0.25);
         }
@@ -2971,6 +2263,9 @@ local shader_code = [[
 
 function BloomShader.init()
     BloomShader.supported = false
+    BloomShader.shock_timer = 0
+    BloomShader.shock_x = 400
+    BloomShader.shock_y = 300
     local status_canvas, canvas = pcall(love.graphics.newCanvas, 800, 600)
     local status_shader, shader = pcall(love.graphics.newShader, shader_code)
     
@@ -2978,6 +2273,19 @@ function BloomShader.init()
         BloomShader.canvas = canvas
         BloomShader.shader = shader
         BloomShader.supported = true
+    end
+end
+
+function BloomShader.triggerShockwave(x, y)
+    BloomShader.shock_timer = 0.01
+    BloomShader.shock_x = x or 400
+    BloomShader.shock_y = y or 300
+end
+
+function BloomShader.update(dt)
+    if BloomShader.shock_timer > 0 then
+        BloomShader.shock_timer = BloomShader.shock_timer + dt * 1.8
+        if BloomShader.shock_timer >= 1.0 then BloomShader.shock_timer = 0 end
     end
 end
 
@@ -3001,6 +2309,8 @@ function BloomShader.endDraw(is_zone)
         BloomShader.shader:send("u_energy", energy)
         BloomShader.shader:send("u_pulse", pulse)
         BloomShader.shader:send("u_zone", zone)
+        BloomShader.shader:send("u_shock_time", BloomShader.shock_timer)
+        BloomShader.shader:send("u_shock_center", {BloomShader.shock_x, BloomShader.shock_y})
 
         love.graphics.setShader(BloomShader.shader)
         love.graphics.draw(BloomShader.canvas, 0, 0)
@@ -3015,7 +2325,7 @@ return BloomShader
 ================================================
 FILE: tetris/board.lua
 ================================================
-Error reading file with 'cp1252': 'charmap' codec can't decode byte 0x81 in position 1843: character maps to <undefined>
+Error reading file with 'cp1252': 'charmap' codec can't decode byte 0x81 in position 37205: character maps to <undefined>
 
 
 ================================================
@@ -3116,186 +2426,7 @@ return FontCache
 ================================================
 FILE: tetris/game_states.lua
 ================================================
----@diagnostic disable: undefined-global
-local TrackManager = require "track_manager" 
-local FontCache = require "tetris.font_cache"
-local SettingsManager = require "settings_manager"
-
-local GameStates = {}
-
-function GameStates.drawMenu(timer, selected, diffs)
-    local mx, my = love.mouse.getPosition()
-    local title_scale = 2 + math.sin(timer * 12) * 0.05
-    love.graphics.setColor(1, 1, 1, 0.9)
-    love.graphics.printf("MUTRIS", 0, 42, 800 / title_scale, "center", 0, title_scale, title_scale)
-    
-    love.graphics.setFont(FontCache.get(11))
-    love.graphics.setColor(0, 0.8, 1, 0.7)
-    love.graphics.printf(_G.ENGINE_VERSION or "ETHEREAL ENGINE", 0, 105, 800, "center")
-
-    local current_track = TrackManager.getCurrentTrack() or {
-        name = "SYSTEM EMPTY", file_path = "", bpm = 120, root_note = "C", mode = "MINOR"
-    }
-    love.graphics.setFont(FontCache.get(12))
-    love.graphics.setColor(0, 0.8, 1, 0.8)
-    love.graphics.printf("< PREV TRACK  |  DRAG & DROP MP3 TO BATCH  |  NEXT TRACK >", 0, 145, 800, "center")
-    
-    love.graphics.setFont(FontCache.get(15))
-    love.graphics.setColor(1, 1, 1, 0.95)
-    love.graphics.printf(current_track.name, 0, 168, 800, "center")
-    
-    love.graphics.setFont(FontCache.get(12))
-    love.graphics.setColor(0.5, 0.5, 0.6)
-    if current_track.file_path ~= "" then
-        love.graphics.printf("BPM: " .. current_track.bpm .. "   |   KEY: " .. current_track.root_note .. " (" .. current_track.mode .. ")", 0, 195, 800, "center")
-        
-        local hover_lab = (mx >= 275 and mx <= 525 and my >= 222 and my <= 254)
-        love.graphics.setColor(hover_lab and {0, 0.7, 1, 0.35} or {0, 0.4, 0.6, 0.12})
-        love.graphics.rectangle("fill", 275, 222, 250, 32, 4)
-        love.graphics.setColor(0, 0.8, 1, hover_lab and 0.9 or (0.5 + math.sin(timer * 8) * 0.15) + 0.3)
-        love.graphics.rectangle("line", 275, 222, 250, 32, 4)
-        love.graphics.setColor(1, 1, 1, hover_lab and 1.0 or 0.8)
-        love.graphics.printf("CONFIG SOUNDTRACK (LAB)", 275, 230, 250, "center")
-    else
-        love.graphics.printf("SYSTEM EMPTY", 0, 195, 800, "center")
-    end
-
-    for i, d in ipairs(diffs) do
-        local sel = (i == selected)
-        local y_pos = 270 + (i * 38)
-        local hover = (mx >= 300 and mx <= 500 and my >= y_pos and my <= y_pos + 30)
-        if sel then
-            love.graphics.setColor(d.color[1], d.color[2], d.color[3], 0.8 + math.sin(timer * 20) * 0.2)
-            love.graphics.push()
-            love.graphics.translate(400, 275 + (i * 38))
-            love.graphics.scale(1 + math.sin(timer * 15) * 0.05, 1 + math.sin(timer * 15) * 0.05)
-            love.graphics.printf(">> " .. d.name .. " <<", -400, -7, 800, "center")
-            love.graphics.pop()
-        else
-            love.graphics.setColor(d.color[1], d.color[2], d.color[3], hover and 0.7 or 0.22)
-            love.graphics.printf(d.name, 0, 275 + (i * 38), 800, "center")
-        end
-    end
-
-    -- BOTÃ“N SETTINGS (CALIBRACIÃ“N DAS/ARR)
-    local hover_opt = (mx >= 275 and mx <= 525 and my >= 435 and my <= 470)
-    love.graphics.setColor(hover_opt and {0.1, 0.4, 0.7, 0.35} or {0.03, 0.08, 0.15, 0.25})
-    love.graphics.rectangle("fill", 275, 435, 250, 35, 4)
-    love.graphics.setColor(0, 0.7, 1, hover_opt and 0.9 or 0.4)
-    love.graphics.rectangle("line", 275, 435, 250, 35, 4)
-    love.graphics.setColor(1, 1, 1, hover_opt and 1.0 or 0.8)
-    love.graphics.setFont(FontCache.get(12))
-    love.graphics.printf("DAS / ARR SETTINGS", 275, 444, 250, "center")
-
-    -- BOTÃ“N START MATCH
-    local hover_start = (mx >= 275 and mx <= 525 and my >= 485 and my <= 530)
-    love.graphics.setColor(hover_start and {0, 0.9, 0.4, 0.45} or {0.04, 0.25, 0.1, 0.22})
-    love.graphics.rectangle("fill", 275, 485, 250, 45, 4)
-    love.graphics.setColor(0, 1, 0.5, hover_start and 1.0 or 0.5)
-    love.graphics.rectangle("line", 275, 485, 250, 45, 4)
-    love.graphics.setColor(1, 1, 1)
-    love.graphics.setFont(FontCache.get(14))
-    love.graphics.printf("START MATCH", 275, 499, 250, "center")
-end
-
-function GameStates.drawSettings(timer)
-    local mx, my = love.mouse.getPosition()
-    love.graphics.setColor(1, 1, 1, 0.9)
-    love.graphics.setFont(FontCache.get(22))
-    love.graphics.printf("CALIBRATION & SETTINGS", 0, 50, 800, "center")
-    
-    love.graphics.setFont(FontCache.get(12))
-    love.graphics.setColor(0.5, 0.7, 0.9, 0.7)
-    love.graphics.printf("COMPETITIVE DAS / ARR & AUDIO ENGINE TUNING", 0, 85, 800, "center")
-
-    local s = SettingsManager.settings
-    local rows = {
-        { id = "das", label = "DAS (Delayed Auto-Shift)", val = string.format("%d ms", math.floor(s.das * 1000 + 0.5)), min = 50, max = 200, cur = s.das * 1000 },
-        { id = "arr", label = "ARR (Auto-Repeat Rate)", val = string.format("%d ms", math.floor(s.arr * 1000 + 0.5)), min = 0, max = 25, cur = s.arr * 1000 },
-        { id = "sfx", label = "SFX Volume", val = string.format("%d%%", math.floor(s.sfx_vol * 100)), min = 0, max = 100, cur = s.sfx_vol * 100 },
-        { id = "bgm", label = "BGM Volume", val = string.format("%d%%", math.floor(s.bgm_vol * 100)), min = 0, max = 100, cur = s.bgm_vol * 100 }
-    }
-
-    for i, r in ipairs(rows) do
-        local y = 145 + (i - 1) * 75
-        love.graphics.setFont(FontCache.get(13))
-        love.graphics.setColor(0.8, 0.9, 1, 0.9)
-        love.graphics.print(r.label, 200, y)
-
-        love.graphics.setColor(0.02, 0.05, 0.1, 0.8)
-        love.graphics.rectangle("fill", 200, y + 25, 400, 18, 3)
-        love.graphics.setColor(0, 0.6, 1, 0.3)
-        love.graphics.rectangle("line", 200, y + 25, 400, 18, 3)
-
-        local pct = (r.cur - r.min) / (r.max - r.min)
-        pct = math.max(0, math.min(1, pct))
-        love.graphics.setColor(0, 0.85, 1, 0.75)
-        love.graphics.rectangle("fill", 202, y + 27, 396 * pct, 14, 2)
-
-        love.graphics.setFont(FontCache.get(11))
-        love.graphics.setColor(1, 1, 1, 0.9)
-        love.graphics.printf(r.val, 200, y + 26, 400, "center")
-    end
-
-    -- BOTÃ“N VOLVER
-    local hover_back = (mx >= 300 and mx <= 500 and my >= 490 and my <= 535)
-    love.graphics.setColor(hover_back and {0, 0.7, 1, 0.35} or {0.04, 0.1, 0.2, 0.3})
-    love.graphics.rectangle("fill", 300, 490, 200, 45, 4)
-    love.graphics.setColor(0, 0.8, 1, hover_back and 0.9 or 0.4)
-    love.graphics.rectangle("line", 300, 490, 200, 45, 4)
-    love.graphics.setColor(1, 1, 1)
-    love.graphics.setFont(FontCache.get(13))
-    love.graphics.printf("SAVE & RETURN", 300, 504, 200, "center")
-end
-
-function GameStates.handleSettingsMouse(mx, my)
-    local s = SettingsManager.settings
-    local rows = {
-        { id = "das", min = 50, max = 200, setter = function(v) s.das = v / 1000 end },
-        { id = "arr", min = 0, max = 25, setter = function(v) s.arr = v / 1000 end },
-        { id = "sfx", min = 0, max = 100, setter = function(v) s.sfx_vol = v / 100 end },
-        { id = "bgm", min = 0, max = 100, setter = function(v) s.bgm_vol = v / 100 end }
-    }
-
-    for i, r in ipairs(rows) do
-        local y = 145 + (i - 1) * 75 + 25
-        if mx >= 200 and mx <= 600 and my >= y and my <= y + 18 then
-            local pct = (mx - 200) / 400
-            local val = r.min + pct * (r.max - r.min)
-            r.setter(val)
-            SettingsManager.save()
-            return
-        end
-    end
-
-    if mx >= 300 and mx <= 500 and my >= 490 and my <= 535 then
-        SettingsManager.save()
-        _G.SetGameState("menu")
-    end
-end
-
-function GameStates.drawGameOver()
-    love.graphics.setColor(0, 0, 0, 0.9)
-    love.graphics.rectangle("fill", 0, 0, 800, 600)
-    
-    local winner = _G.Winner or "UNKNOWN"
-    local pulse = _G.AudioBeatPulse or 0
-    
-    love.graphics.setFont(FontCache.get(32))
-    if winner == "PLAYER" then
-        love.graphics.setColor(0, 0.8, 1, 0.7 + pulse * 0.3)
-        love.graphics.printf("VICTORY", 0, 200, 800, "center")
-    else
-        love.graphics.setColor(1, 0.2, 0.2, 0.7 + pulse * 0.3)
-        love.graphics.printf("DEFEAT", 0, 200, 800, "center")
-    end
-
-    love.graphics.setFont(FontCache.get(14))
-    love.graphics.setColor(1, 1, 1, 0.6)
-    love.graphics.printf("PRESS R OR START TO RESTART", 0, 320, 800, "center")
-end
-
-return GameStates
+Error reading file with 'cp1252': 'charmap' codec can't decode byte 0x8f in position 3135: character maps to <undefined>
 
 
 ================================================
@@ -4035,35 +3166,58 @@ local FontCache = require "tetris.font_cache"
 
 function Telemetry.draw(player, bot)
     love.graphics.push("all")
-    local energy, pulse = _G.TrackEnergyPunch or 0, _G.AudioBeatPulse or 0
-    local px, py = 310, 540
+    local energy = _G.TrackEnergyPunch or 0
+    local px, py = 290, 526
+    local pw, ph = 220, 64
     
-    love.graphics.setColor(0, 0, 0, 0.65)
-    love.graphics.rectangle("fill", px, py, 180, 46, 4)
-    love.graphics.setColor(0, 0.6, 1, 0.2 + energy * 0.3)
-    love.graphics.rectangle("line", px, py, 180, 46, 4)
+    -- Panel translÃºcido central
+    love.graphics.setColor(0.01, 0.02, 0.04, 0.85)
+    love.graphics.rectangle("fill", px, py, pw, ph, 4)
+    love.graphics.setColor(0, 0.7, 1, 0.25 + energy * 0.35)
+    love.graphics.setLineWidth(1.5)
+    love.graphics.rectangle("line", px, py, pw, ph, 4)
 
-    love.graphics.setFont(FontCache.get(8))
-    love.graphics.setColor(0.5, 0.8, 1, 0.8)
-    love.graphics.print(_G.ENGINE_VERSION or "MUTRIS v0.9.0", px + 8, py + 4)
-
+    -- Encabezado: VersiÃ³n y Tiempo
     love.graphics.setFont(FontCache.get(9))
-    love.graphics.setColor(1, 1, 1, 0.7)
-    love.graphics.print(string.format("T: %.1fs", _G.RealMatchTimer or 0), px + 100, py + 4)
-    love.graphics.print(string.format("FPS: %d", love.timer.getFPS()), px + 140, py + 4)
+    love.graphics.setColor(0.4, 0.85, 1.0, 0.9)
+    love.graphics.print(_G.ENGINE_VERSION or "MUTRIS v1.0.0", px + 8, py + 4)
 
-    -- Barra de Adrenalina
-    love.graphics.setColor(0, 0.8, 1, 0.1)
-    love.graphics.rectangle("fill", px + 8, py + 18, 164, 2)
-    love.graphics.setColor(0, 0.8, 1, 0.8)
-    love.graphics.rectangle("fill", px + 8, py + 18, 164 * energy, 2)
+    love.graphics.setColor(1, 1, 1, 0.8)
+    love.graphics.print(string.format("T: %.1fs", _G.RealMatchTimer or 0), px + 124, py + 4)
+    love.graphics.print(string.format("%d FPS", love.timer.getFPS()), px + 172, py + 4)
 
+    -- Barra de Adrenalina Musical
+    love.graphics.setColor(0, 0.8, 1, 0.12)
+    love.graphics.rectangle("fill", px + 8, py + 18, 204, 3, 1)
+    love.graphics.setColor(0, 0.85, 1, 0.85)
+    love.graphics.rectangle("fill", px + 8, py + 18, 204 * energy, 3, 1)
+
+    -- Lectura de Velocidad PPS en Vivo
     if player and bot then
-        love.graphics.setColor(0.5, 0.9, 1, 0.8)
-        love.graphics.print(string.format("P1: %.1f PPS", player.current_pps_display or 0), px + 8, py + 26)
-        love.graphics.setColor(1, 0.3, 0.3, 0.8)
-        love.graphics.print(string.format("AI: %.1f PPS", bot.current_pps_display or 0), px + 112, py + 26)
+        love.graphics.setFont(FontCache.get(10))
+        love.graphics.setColor(0.2, 0.95, 1.0, 0.95)
+        love.graphics.print(string.format("P1: %.1f PPS", player.current_pps_display or 0), px + 8, py + 25)
+        
+        love.graphics.setColor(1.0, 0.35, 0.4, 0.95)
+        love.graphics.print(string.format("AI LIVE: %.1f", bot.current_pps_display or 0), px + 120, py + 25)
     end
+
+    -- ðŸŽ¯ MONITOR DE DIFICULTAD ADAPTATIVA (Lee ai_profile.json en tiempo real)
+    local prof = _G.AI_ADAPTIVE_PROFILE
+    if prof and _G.CURRENT_GAME_MODE == "versus" then
+        love.graphics.setFont(FontCache.get(9))
+        local target_pps = prof.ai_target_pps or 1.45
+        
+        if target_pps >= 2.5 then love.graphics.setColor(1.0, 0.25, 0.35, 0.95)
+        elseif target_pps >= 1.6 then love.graphics.setColor(1.0, 0.85, 0.2, 0.95)
+        else love.graphics.setColor(0.1, 0.95, 0.7, 0.95) end
+        
+        love.graphics.print(string.format("AI BASE: %.2f PPS", target_pps), px + 8, py + 44)
+
+        love.graphics.setColor(0.6, 0.75, 0.85, 0.8)
+        love.graphics.print(string.format("W/L: %d-%d (P1: %.2f)", prof.player_wins or 0, prof.bot_wins or 0, prof.player_avg_pps or 1.0), px + 105, py + 44)
+    end
+
     love.graphics.pop()
 end
 

@@ -1,505 +1,463 @@
-# 🕹️ TETRIS VERSUS OPT — ARCHIVO MAESTRO COMPLETO
-## COMPENDIO TÉCNICO DE ARQUITECTURA, ZERO-GC, FÍSICA SRS & INYECCIÓN ACÚSTICA POR HARDWARE
-### 🛠️ ESTADO DE SISTEMA: FASE 6 (PULIDO VISUAL) — VERSIÓN ESTABLE DESBUGUEADA AL 100%
+# 🕹️ MUTRIS: SYNTHETIC TRANSCENDENCE
+> **El Super-Hub definitivo de Puzzles Competitivos, Estación DAW & Combate Sinestésico.**  
+> *Desarrollado bajo arquitectura estricta Zero-Garbage Collection, Sincronización Acústica por Hardware y Físicas SRS/ARS Deterministas.*
 
 ---
 
-## 💾 PARTE 1: CORE ENGINE, GRAVEDAD ZERO-GC & ENTORNO DE INPUT (DAS/ARR)
-
-### 1. Estrategia Estricta Zero-Garbage Collection (Zero-GC)
-Para garantizar un rendimiento estricto de **60 FPS estables** tanto en PC como en entornos embebidos (como la arquitectura ARM de la consola Nintendo 3DS), el bucle entero se diseñó bajo una política rígida de cero recolección de basura:
-
-*   🚫 **Pre-alocación de Matrices:** Prohibido instanciar tablas vacías (`{}`) o duplicar diccionarios adentro de las funciones críticas `love.update` o `love.draw`.
-*   🔄 **Reciclaje de Vectores:** Estructuras volátiles como la previsualización del panel NEXT (HUD), el cálculo de posiciones fantasmas (*Ghost Piece*) y las coordenadas de partículas se limpian reescribiendo valores numéricos en variables primitivas o tablas estáticas de fábrica.
-*   🛡️ **Inmunidad al Linter:** Toda la manipulación de variables globales y puenteos cruzados se blindó mediante la inyección superior de directivas: 
-    `---@diagnostic disable: undefined-global, param-type-mismatch`.
+> ⚠️ **DIRECTIVA PRIMARIA PERMANENTE (REGLA DE ORO):**  
+> El identificador de versión (`_G.ENGINE_VERSION = "MUTRIS v1.0.0"`) **debe permanecer siempre visible en la esquina inferior izquierda en todas las pantallas y estados del juego** (Menú, Duelos, Editor DAW, Ajustes, Pausa y Game Over) para garantizar la trazabilidad en capturas y telemetría.
 
 ---
 
-### 2. Geometría Rígida de la Rejilla Matrix (The Grid)
-El campo de juego opera con una matriz matemática interna pura de **10 columnas de ancho por 40 filas de alto**:
+# 📑 ÍNDICE GENERAL
 
-*   👁️ **Filas Ocultas de Amortiguación (1 a 20):** Funcionan como el búfer de entrada de piezas aéreas, entorno de cálculo de Wall-Kicks pesados y la zona muerta donde el Bot Master analiza sus jugadas de forma predictiva.
-*   📺 **Filas Visibles en Pantalla (21 a 40):** La ventana gráfica corta el renderizado aplicando un desplazamiento vertical matemático:
-    `by = self.y + (r - 21) * 24 + 1`
-    De esta forma, el usuario solo visualiza el bloque clásico inferior de combate de 20 filas de alto.
-*   🔢 **Codificación Numérica Rígida de Celdas:**
-    *   `0`: Vacío absoluto (Espacio reactivo a la opacidad del pulso musical).
-    *   `1` a `7`: Segmentos fijos (*Tetrominos*) fijados con color neón nativo permanente.
-    *   `8`: Bloques sólidos de líneas de basura (*Garbage Blocks*) pintados en gris metálico.
-
----
-
-### 3. Parámetros Críticos de Competición de Entrada (`input.lua`)
-Los motores de autorepetición rítmica se calibraron de forma matemática para simular las latencias exactas del Tetris de alta gama competitiva (*Guideline/Jstris/Tetrio*):
-
-*   ⏱️ **DAS (Delayed Auto-Shift):** Clavado de forma estricta en **0.094 segundos** (~5.6 frames). Tiempo físico de espera con la tecla presionada antes de que el bloque empiece a patinar solo hacia el lateral.
-*   ⚡ **ARR (Auto-Repeat Rate):** Fijado de forma matemática en **0.008 segundos** (<0.5 frames). Una vez vencido el DAS, el consumo iterativo de tiempo (`while Input.timers.left >= DAS do`) desplaza la pieza al borde instantáneamente.
-*   🔽 **Soft Drop Factor (Caída Suave):** Reducido de forma masiva a **0.005 segundos**. Gatillado con la tecla `kp5`, genera un descenso inmediato vertical que se bloquea si el contador `spawn_timer > 0` para evitar escapes truchos de piezas o overlaps fantasma.
-*   ⌨️ **Mapeo Físico de Teclas de Combate:**
-    *   *Desplazamiento horizontal:* `kp4` (Izquierda) / `kp6` (Derecha), guiados por DAS/ARR.
-    *   *Rotaciones:* `a` (Giro horario CW), `d` (Giro antihorario CCW).
-    *   *Rotación Extrema 180°:* Mapeada en `kp8`.
-    *   *Mecánica Global de Hold:* `s` (Intercambio de pieza en espera).
-    *   *Activación Zone Mode:* `q` (Congelamiento temporal del tiempo).
-    *   *Hard Drop Instantáneo:* `space` (Fija al cuadro y reinicia el ciclo).
-    *   *Freno/Reinicio:* `r` (Dispara la rutina limpia de vaciado estructural `GlobalRestart`).
+1. [VISIÓN Y MANIFIESTO DEL PROYECTO](#-visión--manifiesto-del-proyecto)
+2. [LOS 5 MANDAMIENTOS SAGRADOS DE CÓDIGO (ZERO-GC ENGINE)](#-los-5-mandamientos-sagrados-de-código-zero-gc-engine)
+3. [DICCIONARIO DE ARQUITECTURA DEL REPOSITORIO](#-diccionario-de-arquitectura-del-repositorio)
+4. [MOTORES INTERNOS ACTIVOS (MATEMÁTICAS & FÍSICAS)](#-motores-internos-activos)
+5. [EL CRONOGRAMA MAESTRO: ROADMAP DE 26 FASES](#-el-cronograma-maestro-roadmap-de-26-fases)
+6. [ESPECIFICACIÓN TÉCNICA DE SISTEMAS FUTUROS](#-especificación-técnica-de-sistemas-futuros)
+7. [PRESUPUESTO DE RENDIMIENTO POR FRAME (144Hz / 240Hz TARGET)](#-presupuesto-de-rendimiento-por-frame)
+8. [ÁRBOL DE DIRECTORIOS MODULAR](#-árbol-de-directorios-modular)
+9. [GUÍA PASO A PASO "A PRUEBA DE TONTOS" (HOW-TOs)](#-guía-paso-a-paso-a-prueba-de-tontos)
+10. [MATRIZ DE DIAGNÓSTICO & RESOLUCIÓN DE BUGS (TROUBLESHOOTING)](#-matriz-de-diagnóstico--resolución-de-bugs)
+11. [MAPEO DE CONTROLES PREDETERMINADO](#-mapeo-de-controles-predeterminado)
 
 ---
 
-## 🔄 PARTE 2: SUPER ROTATION SYSTEM (SRS) & MECÁNICAS DE COMBATE AVANZADAS
+# 👁️ VISIÓN & MANIFIESTO DEL PROYECTO
 
-### 1. Matrices de Rotación SRS y Wall-Kicks de Gracia
-El motor implementa de forma matemática estricta la especificación del **Super Rotation System (SRS)** de competición, mapeando las colisiones a través de un búfer tridimensional precargado:
-
-*   🔄 **Giro de Gracia 180°:** Integrado nativamente. Resuelve de forma instantánea desvíos complejos en pasillos de un solo bloque y permite la ejecución limpia de setups de alta gama como el *DT Cannon*.
-*   ⏳ **Move Reset de Fijación:** El *Lock Delay* otorga un margen de **0.5 segundos** una vez que la pieza toca una superficie sólida. Cada rotación o desplazamiento horizontal exitoso (validado solo si la posición horizontal real cambia en `piece.lua`) reinicia el temporizador de fijación, con un límite máximo infranqueable de **15 movimientos consecutivos** para mitigar el estancamiento infinito.
-*   🎯 **Detección Quirúrgica de T-Spin:** Evaluada en el archivo `tetris/piece.lua`. Revisa la geometría del tetromino T chequeando la ocupación de las **4 esquinas de la matriz de la pieza de 3x3**. Si al menos 3 esquinas están bloqueadas al momento de rotar, el juego convalida un *T-Spin*, multiplicando la salida del daño de ataque.
-
-
-### 2. Tabla de Ataques y Multiplicadores Competitivos
-La distribución del daño saliente por cada borrado de líneas se procesa a través del archivo modular `tetris/garbage_manager.lua`, guiado por la siguiente escala base de impacto:
-
-*   💥 **Single / Double / Triple:** 0, 1 y 2 líneas enviadas respectivamente al oponente.
-*   🔥 **Tetris (4 líneas):** 4 líneas de basura directa.
-*   ⚡ **T-Spin Single / Double / Triple:** 2, 4 y 6 líneas enviadas respectivamente.
-*   ⭐ **B2B (Back-to-Back Bonus):** Si ejecutas dos Tetris o dos T-Spins consecutivos sin limpiezas simples intermedias, se inyecta **+1 línea de basura extra** a la cola del rival.
-*   📊 **Multiplicador de Combos:** Cada borrado consecutivo dentro de la misma ráfaga de piezas incrementa el daño de forma lineal continua (`+1, +1, +2, +2...`), premiando las jugadas de velocidad.
+**MUTRIS** fusiona cinco dimensiones de juego en un único ecosistema:
+1. **La Precisión Competitiva:** Tiempos de entrada al milisegundo (DAS/ARR/SDF estilo *Jstris/TETR.IO*), físicas SRS 180° y renderizado desacoplado a 144Hz / 240Hz.
+2. **La Estación de Audio Digital (DAW):** El tablero es un sintetizador analógico procedural y secuenciador en tiempo real con analizador de espectro, sidechaining paramétrico y modulación por escala armónica Camelot.
+3. **El Combate de Juegos de Lucha & Soulsborne:** Sistema de posturas en vivo (*Stances*), absorción de daño en ventana de 3 frames (*Kinetic Parry*), barras de postura con golpes críticos (*Riposte*) y efectos de estado (*Bleed, Frostbite, Corrupción*).
+4. **La Cacería Estratégica (Monster Hunter DNA):** Cacería de jefes cibernéticos con desmembramiento anatómico por columnas (*Part Breaking*), estados de Furia/Fatiga y el cancionero cromático del Cuerno de Caza (*Chroma-Weaver*).
+5. **Inteligencia Auto-Evolutiva:** El **ARCHON META-BALANCER**, una IA interna que analiza estadísticas globales de juego y auto-equilibra constantes matemáticas en disco de forma autónoma.
 
 ---
 
-### 3. Cancelación de Ataques (Offsetting) y Deuda de Líneas
-El sistema de defensa del juego opera con un buffer reactivo asimétrico para permitir el contraataque estratégico en tiempo real:
+# 📜 LOS 5 MANDAMIENTOS SAGRADOS DE CÓDIGO (ZERO-GC ENGINE)
 
-*   🛡️ **Offsetting Activo:** Si recibes un ataque del rival, la basura no entra inmediatamente a tu grilla. Se aloja en una cola lateral de espera (`garbage_queue`). Si en la siguiente jugada limpias líneas, estas **cancelan la basura en cola de forma matemática instantánea**, anulando el impacto del rival.
-*   🕳️ **Agujeros Alineados:** Las líneas de basura que logran superar el offset e ingresan a la grilla se generan con un agujero de escape vertical alineado mediante una ranura aleatoria fija por ráfaga, permitiendo al jugador realizar un *Downstack* fluido.
-*   🛑 **Límite de Entrada por Pieza:** Para evitar muertes súbitas injustas, se clavó un límite estricto de ingreso de un **máximo de 8 líneas de basura por cada pieza colocada**, inyectándose en el momento exacto del bloqueo de la pieza (`locked`) antes de spawnear el nuevo tetromino.
+Todo módulo, script o aporte al repositorio debe respetar estas 5 leyes de hierro:
 
----
-
-## 🎛️ PARTE 3: LAB DE INYECCIÓN EN LOTES (BATCH), MOUSE DROPDOWNS & PERMISOS FÍSICOS
-
-### 1. Automatización Completa de la Carpeta `music/`
-Se eliminó del código duro cualquier dependencia de archivos de audio por defecto. Al arrancar, el juego inicializa su lista escaneando directamente el directorio físico real `music/` dentro del Escritorio de Windows de forma automatizada mediante `TrackManager.init()`:
-
-*   📁 **Detección Inteligente de Metadatos:** El juego escanea la carpeta. Si encuentra una pista (`base.mp3`), busca de inmediato un archivo `.json` de configuración acoplado (`base.json`). Si existe, precarga sus valores reales de BPM y Camelot; de lo contrario, la expone con el valor base (120 BPM) listo para calibrar en el Lab.
+* 🚫 **1. Cero Recolección de Basura (Zero-GC Loop):** Prohibido instanciar tablas vacías (`{}`) o concatenar strings dentro de `love.update` y `love.draw`. Todo vector, matriz o estructura de partículas se pre-aloca al iniciar el motor.
+* 🔊 **2. Reloj Amarrado a la Placa de Sonido:** Ningún temporizador crítico o ventana de parry depende del `dt` de pantalla; todo pulsa según el contador de hardware de audio (`Source:tell("seconds")`).
+* 👁️ **3. Prioridad Absoluta a la Legibilidad:** Ningún shader o colapso visual puede comprometer la visibilidad milimétrica de la matriz y el *Ghost Piece* a velocidades extremas (6.0+ PPS).
+* ⚙️ **4. Determinismo en Frame-Data:** Las patadas de pared, cuadros de invulnerabilidad (I-Frames) y offsets de basura se calculan en matemática discreta sin aproximaciones de punto flotante.
+* 🎻 **5. Síntesis de Subgraves Cooperativa:** Los efectos de sonido se modulan en octavas bajas (30 Hz - 180 Hz) como instrumentos armónicos afinados a la tonalidad del tema, sin saturar la música del usuario.
 
 ---
 
-### 2. Suite Batch por Lotes e Interfaz Dinámica por Ratón
-La suite de inyección admite arrastres masivos y control absoluto mediante el puntero del mouse, eliminando las configuraciones tediosas por teclado en el menú:
-
-*   📦 **Modo Batch Continuo:** El usuario puede arrastrar y soltar múltiples canciones juntas sobre la ventana. El sistema las absorbe, limpia el búfer transitorio y las encola de forma secuencial en una lista de procesamiento masivo.
-*   🖱️ **Menús Desplegables (Dropdown Overlays):** Al hacer clic con el mouse sobre las cajas flotantes del laboratorio, se despliegan capas visuales interactivas para modificar la raíz cromática fundamental (`C`, `C#`, `F#`...) y el modo armónico Camelot (`MAJOR` o `MINOR`).
-*   🎛️ **Sliders de Regulación:** El BPM se regula manteniendo presionadas las flechas del teclado en ráfagas continuas automáticas fluidas guiadas por un entorno DAS/ARR interno en el propio editor de pistas.
-
----
-
-### 3. Inyector `io.open` de Permisos Nativos de Windows
-Para que las canciones no tengan que configurarse cada vez que se abre el videojuego, implementamos un bypass directo al sistema de archivos restringido de LÖVE2D:
-
-*   🔓 **Bypass de Sandbox:** LÖVE2D obliga a escribir dentro de la carpeta oculta de AppData. Modificamos el backend en `track_manager.lua` para que use el módulo **`io.open` de Lua puro**.
-*   💾 **Escritura Persistente al Lado del MP3:** Al darle al botón de Confirmar en el Lab, el juego inyecta el archivo `.json` de metadatos **físicamente adentro de la carpeta `music/` real de Windows, exactamente al lado de tu pista de audio**. Al iniciar el juego, este leerá la configuración acoplada de fábrica para siempre.
-
----
-
-## 📊 PARTE 4: RELOJ DE HARDWARE, MICRO-SISMOS EN VIVO & THE DROP PUNCH SYSTEM
-
-### 1. Detector Audio-Driven Sync (Reloj de Hardware)
-Los temporizadores de parpadeo visual guiados por el procesador (`dt` en `love.update`) sufren de acumulación de micro-retrasos (*frame-dropping*), lo que causaba que la grilla se desfasara de la música a los pocos minutos de partida:
-
-*   🔊 **Sincronización por Placa de Sonido:** Modificamos el reloj principal en `audio_manager.lua` para engancharlo al contador de hardware del canal de reproducción de audio activo (`MusicManager.getTime()`, que consulta `Source:tell("seconds")`).
-*   🎯 **Precisión Milimétrica Inmune:** El pulso visual neón lee en qué milisegundo real está reproduciéndose el archivo de audio, calculando la fracción exacta del tempo (`fraction = current_beat - math.floor(current_beat)`). El parpadeo y bombeo del escenario van clavados al ritmo del Kick físico de tu tema, **garantizando un desfasaje de cero absoluto a lo largo del tiempo**.
-
----
-
-### 2. Analizador de Espectrograma RMS en Vivo
-Al cargar la canción, el juego simula un analizador de energía estructural basado en el reloj de hardware para generar la vibración envolvente del ambiente al estilo de los visualizadores clásicos de Windows Media Player:
-
-*   📊 **32 Barras de Frecuencia Dinámicas:** Dibuja un ecualizador interactivo flotante en la base del laboratorio de sonido. Las barras calculan oscilaciones asimétricas de picos RMS en base al milisegundo de reproducción activa del stream.
-*   📈 **Interpolación Lineal Suave (Lerp):** El suavizado de las barras evita saltos toscos o tirones visuales (`bars[i] = bars[i] + (target - bars[i]) * 15 * dt`), logrando una estela fluida de alta fidelidad que reacciona de inmediato si el tema se pone en pausa o se detiene.
+# 🗂️ DICCIONARIO DE ARQUITECTURA DEL REPOSITORIO
+MUTRIS/
+├── conf.lua -- Configuración de ventana (800x600, VSync, V-Refresh 144/240Hz).
+├── main.lua -- Kernel central, despacho de estados, RealMatchTimer e Hitstop.
+├── input.lua -- Motor DAS/ARR milimétrico, lectura de Gamepad y remapeo.
+├── settings_manager.lua -- Serialización y lectura de ajustes persistentes en settings.json.
+├── audio_manager.lua -- Síntesis procedural senoidal, Sidechain Ducking y rampa de energía.
+├── music_manager.lua -- Reloj de hardware de audio amarrado a Source:tell("seconds").
+├── track_manager.lua -- Extracción modal Camelot, mapeo cromático de notas y metadatos.
+├── track_editor.lua -- Laboratorio DAW: Timeline con Scrubber, espectrograma y rack SFX.
+│
+└── tetris/
+├── ai_bot.lua -- IA heurística downstacker con memoria persistente (ai_profile.json).
+├── anomaly_manager.lua -- Gestor de anomalías rítmicas (Torus, Laser, Swap, Eclipse).
+├── bloom_shader.lua -- Shader GLSL con resplandor neón, aberración cromática y shockwaves.
+├── board.lua -- Grid 10x40, render 21-40, implosión poliédrica de cristal y Zone.
+├── fog_layer.lua -- Niebla volumétrica Z-Depth reactiva a la tonalidad Camelot.
+├── font_cache.lua -- Caché de fuentes tipográficas para eliminar llamadas a newFont().
+├── game_states.lua -- Pantallas de Menú Principal interactivo y Calibración de Inputs.
+├── garbage_manager.lua -- Offsetting reactivo de basura, colas y multiplicadores Zone.
+├── hud_center.lua -- Placa central flotante con PPS dual (Humano vs Bot) y pulso de beat.
+├── hud_panels.lua -- Paneles laterales NEXT y HOLD centrados por tetromino + Barra Zone.
+├── particle_system.lua -- Pool estático de 200 partículas reciclables para limpiezas de líneas.
+├── piece.lua -- Físicas SRS, patadas de pared 180°, detección T-Spin y Lock Delay.
+├── pps_counter.lua -- Buffer circular de 60 ranuras para media móvil de velocidad en 5s.
+├── shaker.lua -- Micro-sismos desacoplados por matriz gráfica push/pop aislada.
+├── telemetry.lua -- Panel de diagnóstico en vivo (FPS, Match Time, AI Base PPS).
+├── randomizers/7bag.lua -- Generador estándar Guideline con bolsa aleatoria sin repetición.
+└── rotation_systems/srs.lua -- Tablas de Wall-Kick tridimensionales para tetrominos I y JLSTZ.
 
 ---
 
-### 3. El Motor de Adrenalina Visual (The Punch System)
-El juego calcula segundo a segundo la intensidad de la canción en base a los metadatos de BPM, Nota y Modo Camelot configurados de forma permanente, desatando el caos visual de forma automatizada:
+# ⚙️ MOTORES INTERNOS ACTIVOS
 
-*   🌋 **Fase de Build-Up (Micro-Sismos Constantes):** Al ingresar a las subidas o partes tensas del tema menor, la rejilla de los bloques experimenta micro-sismos rítmicos constantes que se sacuden en `shaker.lua` al compás del bombo (`shake_x = shake_x + math.random(-4 * active_punch, 4 * active_punch)`).
-*   🌈 **Fase de THE DROP (Clímax Psicodélico):** Cuando el contador de la placa de sonido cruza el umbral de energía (`_G.TrackEnergyPunch >= 0.95`), el marco neón grueso abandona su color cian estable y empieza a mutar cíclicamente por todo el espectro cromático del arcoíris mediante ondas senoidales de tiempo, expandiendo la caja del tablero un **6% extra** en cada pulso de bajo.
-
----
-
-## 🎻 PARTE 5: SÍNTESIS ACÚSTICA COOPERATIVA & ORQUESTACIÓN DE EFECTOS DE CRISTAL
-
-### 1. Afinación Acústica Cooperativa de Sub-Bajos Senoidales
-Se erradicó por completo la música sintética procedural del pasado sobre los sonidos del juego para eliminar los choques rítmicos espantosos sobre tus pistas de audio personalizadas. Toda la síntesis analógica de LÖVE2D en `audio_manager.lua` se reenfocó estrictamente en efectos de sonido (SFX) que interactúan como **instrumentos integrados a la producción armónica de tu canción**:
-
-*   🎹 **Transposición Grave de dos Octavas:** Mudamos las frecuencias base de `_G.PLAYER_NOTES` y `_G.BOT_NOTES` hacia las octavas profundas (`C2` a `B2` y `C3` a `B3`). Al emitirse como sub-bajos limpios, se empastan *por debajo* de tu `.mp3` sin molestar ni pinchar el oído.
-*   🔗 **Afinación Simétrica Unificada:** Se eliminó la disonancia del Bot. Ahora, tanto tú como la Inteligencia Artificial comparten **estrictamente las mismas notas exactas de la escala Camelot activa** configurada en el Lab, transformando la partida entera en un remix armónico en vivo.
-*   🌌 **Efecto de Eco Espacial (Estela de Aire):** Los clicks secos se reemplazaron por ondas senoidales etéreas con desvanecimientos exponenciales suaves (`math.exp(-decay * t)`) y un colchón de ruido blanco altamente amortiguado de fondo. Esto emula una reverberación espacial tridimensional, haciendo que los SFX parezcan nacer desde adentro de la mezcla de tu música.
-
----
-
-### 2. Orquestación de Efectos Interactivos (Tetris Effect Vibe)
-Cada movimiento y colocación de piezas añade arreglos musicales coherentes al entorno sonoro:
-
-*   🎵 **Desplazamientos Melódicos:** Mover las piezas hacia los costados (`move`) ejecuta notas numéricas individuales de forma consecutiva, saltando cíclicamente entre la tónica, tercera y quinta del acorde Camelot activo. Desplazar la pieza arma una melodía fluida en tiempo real (`AudioManager.melody_step`).
-*   💎 **Giro Armónico Suave:** Rotar la pieza (`rotate`) extrae el segundo índice de la tabla Camelot y lo duplica en frecuencia, generando un destello esbelto de cristal senoidal libre de colapsos matemáticos.
-*   💨 **Hard Drop de Cristal Embozado:** Se eliminaron las ondas de sierra rústicas invasivas. Al clavar una pieza con Hard Drop, se dispara un acorde etéreo difuminado en bloque de tres notas senoidales en combinación con un sutil soplido de viento largo que decae en el fondo, modulando su afinación de tono según la fila física real (`self.y`) donde impactó la pieza.
-
-✨ Cascadas Celestiales (Tetris & T-Spins): Completar un Tetris detona un arpegio polifónico glorioso ascendente a toda velocidad a través de AudioManager.playArpeggio que recorre la escala musical entera subiendo y bajando en octavas brillantes, coronado con un remate de impacto cinemático largo que celebra la jugada masiva.
-
-
-## 🎛️ PARTE 6: AUDIO-DRIVEN ARCHITECTURE, INYECTOR DINÁMICO DE CANCIONES Y RELOJ MAESTRO
-
-### 1. Backend de Extracción y Traducción Armónica (`track_manager.lua`)
-La música de fondo (`BGM`) no es un elemento pasivo, sino el **núcleo modular que altera los parámetros físicos y la afinación armónica** de todo el juego:
-
-*   📂 **Aislamiento de Archivos Nativos:** El juego inicializa su playlist escaneando el directorio físico real `music/`. Detecta archivos `.mp3` u `.ogg` y busca de forma binaria su contraparte `.json` acoplada de metadatos.
-*   🎹 **Mapeo de Frecuencias Camelot:** Al cargar una pista, el inyector extrae los metadatos de Nota Raíz y Modo (`MAJOR` o `MINOR`). El motor traduce esa nota en hercios puros usando la tabla de intervalos estáticos `TrackManager.MODES` cruzados con la nota fundamental de `TrackManager.NOTE_FREQS` (ej: `["A"] = 440.00`).
-*   ⚡ **Inyección Renglón por Renglón (Anti-Collision):** Para evitar que el recolector de basura de Lua colapse o que se multipliquen tablas enteras, la escala musical se desestructura de forma escalar estricta directo a las variables globales:
-    `_G.PLAYER_NOTES = { base_octave * (scale_intervals or 1.0), base_octave * (scale_intervals or 1.189), ... }`
-    Esto alimenta al sintetizador procedimental de `audio_manager.lua`, garantizando que cada sonido del juego esté perfectamente afinado con el acorde de la canción de fondo actual.
+### 1. Geometría Rígida de la Matriz (The Grid)
+* **Dimensiones Totales:** `10 columnas x 40 filas`.
+* **Filas 1 a 20 (Zona Oculta de Amortiguación):** Búfer aéreo de spawn, cálculo de patadas pesadas y evaluación predictiva de la IA.
+* **Filas 21 a 40 (Zona Visible de Combate):** Renderizada en pantalla con traslación matemática:
+  `Render_Y = Board.y + (row - 21) * 24`
+* **Codificación Numérica de Celdas:**
+  - `0`: Vacío absoluto.
+  - `1`: Tetromino **I** (Cian).
+  - `2`: Tetromino **J** (Azul).
+  - `3`: Tetromino **L** (Naranja).
+  - `4`: Tetromino **O** (Amarillo).
+  - `5`: Tetromino **S** (Verde).
+  - `6`: Tetromino **T** (Púrpura).
+  - `7`: Tetromino **Z** (Rojo).
+  - `8`: Bloque sólido de basura (*Garbage Block* gris metálico).
 
 ---
 
-### 2. El Reloj Maestro por Hardware de la Placa de Sonido
-Se eliminaron por completo los contadores basados en el delta time del frame (`dt`), ya que producían micro-desfasajes acumulativos inevitables (*audio-drift*):
+### 2. Motor de Entrada Competitivo DAS / ARR (`input.lua`)
+* **DAS (Delayed Auto-Shift):** Clavado en `0.094 s` (~5.6 frames). Tiempo físico de espera antes de que la pieza se desplace automáticamente.
+* **ARR (Auto-Repeat Rate):** Fijado en `0.008 s` (<0.5 frames). Intervalo de desplazamiento continuo tras vencer el DAS.
+* **SDF (Soft Drop Factor):** Reducido a `0.001 s` para descenso vertical prácticamente instantáneo.
+* **Lock Delay:** Margen de `0.5 s` con un límite estricto de **15 reinicios de movimiento** por rotación o traslación horizontal validada.
 
-*   🔊 **Anclaje al Stream de Audio:** El temporizador principal del juego se amarra directamente al contador interno de hardware de la placa de sonido mediante la función `MusicManager.getTime()`, la cual consulta directamente el búfer de reproducción del motor a través de `Source:tell("seconds")`.
-*   🔢 **Matemática de Compás Pura (Inmunidad al Lag):** El cálculo del parpadeo del escenario se procesa frame a frame midiendo la fracción exacta del tempo de la canción según el BPM actual:
-    `local beat_duration = (60 / AudioManager.current_bpm)`
-    `local current_beat = play_time / beat_duration`
-    `local fraction = current_beat - math.floor(current_beat)`
-    Si `fraction < 0.09`, el flag `_G.AudioBeatPulse` se clava en `1.0`, logrando que el bombeo visual neón vaya perfectamente clavado al *Kick* físico de tu tema musical de forma de bucle infinita.
+```lua
+-- Algoritmo de consumo DAS/ARR Zero-GC
+if move_left_held then
+    if not Input.das_active.left then
+        p:move(-1, 0) -- Tap inicial
+        Input.das_active.left = true
+        Input.timers.left = 0
+    else
+        Input.timers.left = Input.timers.left + dt
+        while Input.timers.left >= das do
+            if not p:move(-1, 0) then
+                Input.timers.left = 0
+                break
+            end
+            Input.timers.left = Input.timers.left - arr
+        end
+    end
+else
+    Input.das_active.left = false
+end
 
----
 
-### 3. Rampa Maestra de Adrenalina (`The Punch System`)
-La intensidad visual del escenario y las acciones de la Inteligencia Artificial se rigen de forma matemática lineal y cúbica a través de las variables globales de energía, calculadas de forma fotométrica según el punto exacto de la canción:
 
-*   📈 **Procesamiento de Rampa Cúbica Progresiva:** En base a los segundos configurados para el Drop (`drop_second`) y la subida (`build_duration`), el juego procesa fotograma a fotograma el factor de adrenalina utilizando una progresión de suavizado cúbico:
-    `local progress = (song_time - build_start) / build_len`
-    `_G.TrackEnergyPunch = progress * progress * progress`
-*   🤖 **Modulación de PPS del Bot Master:** La velocidad del rival es directamente proporcional a la adrenalina de la música. En la intro se mantiene frío en su base (`self.base_pps`), pero a medida que el tema sube, la rampa inyecta velocidad pura: `self.pps = self.base_pps + (_G.TrackEnergyPunch * 8.0)`, forzando al Bot Master a jugar a su clímax de 12.0 PPS en pleno Drop musical.
-*   💾 **Bypass de Persistencia Física:** Al confirmar las ediciones en el Lab de Soundtrack, el módulo `io.open` rompe el sandbox restringido de LÖVE2D y genera el archivo `.json` de metadatos **directamente en el disco duro de Windows al lado de tu tema musical**, automatizando las cargas futuras de fábrica para siempre.
+3. Sincronización Acústica y The Punch System
 
----
+    Reloj de Hardware de Audio: El temporizador principal del juego se amarra al contador interno de hardware de la placa de sonido mediante MusicManager.getTime() (que consulta Source:tell("seconds")), eliminando el desfasaje acumulativo (audio-drift:
 
-## 📈 PARTE 7: ROADMAP INMEDIATO DE DESARROLLO (FUTURO CERCANO)
 
-Habiendo consolidado el Lab Batch interactivo por ratón, la persistencia física en disco de Windows, el motor acústico de sub-bajos etéreos, la barra de alerta de peligro roja interna estilo Jstris y la consola de diagnóstico en tiempo real de `telemetry.lua`, la agenda estricta del proyecto marca las siguientes prioridades:
 
-1.  🎯 **Contador de PPS Flotantes en el Pasillo Central:** Diseñar e inyectar el cálculo matemático de piezas colocadas por segundo (Humano vs Bot) analizando los últimos 5 segundos de combate móvil a través del buffer circular de 60 ranuras. El indicador flotará con estética neón en medio del pasillo central (el espacio vacío entre ambos tableros) y encenderá alertas rojas si el Bot te supera en velocidad, o destellos cian si mantienes el liderazgo de carrera.
-2.  🤖 **Calibración Heurística de la IA Master:** Pulir los pesos evaluadores de la Inteligencia Artificial en base a los combos del nuevo motor, impidiendo atascos algorítmicos en piezas simétricas (como la barra I o el cuadrado O) y optimizando su rendimiento en la ráfaga máxima de 12.0 PPS en dificultad Master durante el Drop.
 
+local beat_duration = 60 / AudioManager.current_bpm
+local current_beat = song_time / beat_duration
+local fraction = current_beat - math.floor(current_beat)
+if fraction < 0.08 and _G.AudioBeatPulse <= 0.1 then
+    _G.AudioBeatPulse = 1.0
+end
 
----
+The Punch System (Rampa Maestra de Adrenalina): Calcula la intensidad energética fotograma a fotograma según el punto exacto de la canción:
 
-## 🔍 CONSIDERACIONES TÉCNICAS FINALES & COMPORTAMIENTO DEL ENTORNO
+local drop_point = current_track.drop_second or (bar_duration * 32)
+local build_len  = current_track.build_duration or (bar_duration * 16)
+local build_start = math.max(0, drop_point - build_len)
 
-### 1. Gestión de Estados Globales (`game_states.lua` & `main.lua`)
-*   🎛️ **Menú de Selección de Dificultades:** Opera de forma estática leyendo la tabla `difficulties`. El cambio de nivel altera directamente el parámetro de velocidad base de la Inteligencia Artificial (`pps`) previo a la llamada limpia de `GlobalRestart()`.
-*   💀 **Rutina de Game Over:** Se gatilla de forma simétrica si la pieza humana recién spawneada en el búfer de entrada (fila 21) da colisión negativa con `canMove`. Al presionar `space` o `return`, el estado limpia el tablero y regresa al menú de selección principal de forma segura.
+if song_time >= drop_point then
+    _G.TrackEnergyPunch = 1.0
+elseif song_time >= build_start then
+    local progress = (song_time - build_start) / build_len
+    _G.TrackEnergyPunch = progress * progress * progress -- Curva cúbica
+else
+    _G.TrackEnergyPunch = 0.0
+end
 
----
+Dynamic Sidechain Ducking: Atenúa automáticamente la música de fondo ante eventos de alto impacto para dar peso cinemático a la partida.
 
-### 🖼️ 2. Jerarquía de Renderizado y Máscaras Gráficas
-*   📈 **Aislamiento de Matrices Gráficas:** Cada tablero encapsula sus efectos de sacudida llamando a `Shaker.apply(self)` e inyectando un bloque cerrado de `love.graphics.push()` y `love.graphics.pop()` de forma simétrica. Esto evita que el temblor de la grilla de un jugador contamine las coordenadas de renderizado del rival o desplace el marcador central del HUD.
-*   🎭 **Recorte Visual de la Grilla (Fila 21 a 40):** El motor gráfico dibuja únicamente los bloques cuyos índices de fila estén por encima de 20. Los tetrominos que se deslicen o roten en el espacio de amortiguación aéreo (filas 1 a 20) se procesan matemáticamente en la lógica, pero permanecen completamente invisibles para el usuario humano para simular la interfaz oficial competitiva.
+4. Físicas SRS y Detección Quirúrgica de T-Spin (3-Corners Rule)
 
----
+    Super Rotation System (SRS): Soporte nativo para rotaciones horarias, antihorarias y giros completos de 180° mediante tablas de Wall-Kick tridimensionales.
 
-### ⚙️ 3. Sincronización del Rendimiento (Threading & Garbage Collector)
-*   ⏳ **Inmunidad al Stuttering por Latencia:** Al haber extraído la carga de dependencias dinámicas (`require`) y la instanciación de objetos (`Piece.new`) fuera de las funciones críticas de dibujado (paneles NEXT y HOLD), el juego se encuentra operando bajo una arquitectura *Zero-GC compliant*. La recolección de basura de Lua permanece inactiva durante la partida, eliminando micro-tirones y congelamientos frame a frame.
-*   🎮 **Bucle de Ejecución de Inputs Competitivos:** Para que los valores milimétricos del DAS y el ARR estilo *Jstris/Tetrio* se apliquen sin tirones, la lectura del teclado con `Input.update(dt)` corre de forma obligatoria al principio absoluto del frame dentro de `love.update(dt)`, procesando las banderas de movimiento de las piezas antes de que el motor gráfico calcule la gravedad de descenso vertical o el arrastre de las líneas de basura.
+    Detección T-Spin: Evaluada en tetris/piece.lua:
 
+        La pieza activa debe ser id == 6 (Tetromino T).
 
+        El último movimiento validado debe haber sido una rotación.
 
+        Al menos 3 de las 4 esquinas de su matriz de 3x3 {(x, y), (x+2, y), (x, y+2), (x+2, y+2)} deben estar ocupadas por bloques fijos o bordes de la grilla.
 
+5. Tabla de Ataques, Offsetting y Zone Mode
 
+    Tabla Base de Daño: Single (0), Double (1), Triple (2), Tetris (4), T-Spin Single (2), T-Spin Double (4), T-Spin Triple (6), Back-to-Back (+1 línea), Combos (+0, +0, +1, +1, +1, +2, +2, +3, +3, +4, +4, +4, +5).
 
+    Offsetting Activo: Si el jugador recibe un ataque, la basura se aloja en garbage_queue. Al limpiar líneas en la siguiente jugada, el ataque saliente cancela primero la deuda pendiente de su propia cola antes de enviar basura al oponente.
 
-# 🕹️ MUTRIS v0.8.5 - ETHEREAL ENGINE
-## ESTADO DE SISTEMA: FASE 6 (PULIDO AUDIOVISUAL FINAL)
+    Límite de Entrada: Máximo 8 líneas de basura transferidas a la grilla por pieza colocada.
 
----
+    Zone Mode: Inmunidad total a la basura entrante y almacenamiento acumulado para un estallido único (Zone Burst):
 
-## 💎 NUEVAS MECÁNICAS DE ESTA VERSIÓN
+        Tier 1 (25% - 99%): Holo-Cyan Matrix.
 
-### 1. Sistema de "Ethereal Trails" (Estelas de Polvo Estelar)
-Se eliminaron las estelas sólidas por un sistema de **haces de luz volumétricos** con decaimiento cuadrático.
-*   **Partículas Internas:** Cada estela genera motas de polvo que caen físicamente hacia el tablero.
-*   **Flicker Aditivo:** Las estelas parpadean aleatoriamente para simular descargas de energía.
+        Tier 2 (100%): Hyper Gold-Diamond Prism.
 
-### 2. Ghost Piece "Wired" (Estructura de Alambre Eléctrica)
-La sombra ya no es un bloque; es un **contorno ondulante** reactivo.
-*   **Danger Reaction:** A medida que la pila de bloques sube hacia el límite, la ondulación del Ghost se vuelve más violenta y errática.
-*   **Beat Sync:** El esqueleto de la pieza vibra físicamente con cada pulso de bajo detectado por el hardware.
+6. IA Heurística y DDA Persistente (ai_bot.lua, ai_profile.json)
 
-### 3. Kinetic Impact (Impacto de Suelo)
-Los bloques que ya están fijos en el tablero tienen "conciencia" del aterrizaje de nuevas piezas.
-*   **Lock Impact:** Al fijar una pieza, todo el tablero experimenta un pulso de escala (se agranda un 10%) y un destello interno masivo.
-*   **Aura Disco:** Los bloques mantienen un núcleo oscuro y bordes eléctricos para garantizar legibilidad en altas velocidades.
+    Registra el desempeño del usuario tras cada combate evaluando la Media Móvil Exponencial (EMA):
+    PlayerAvgPPS = (PlayerAvgPPS * 0.70) + (PlayerLastMatchPPS * 0.30)
 
----
+    Calibra la velocidad base del bot para situarse entre un 8% y 15% por encima del ritmo real del jugador.
 
-## 🗺️ ROADMAP ACTUALIZADO (PROXIMOS PASOS)
+    Radar de Agujeros (Hole-Seeking): Identifica la columna del agujero de escape en las líneas de basura para realizar un Downstacking quirúrgico sin tapar pozos.
 
-1.  **SFX Harmonization:** Implementar un motor de reverberación para los efectos de sonido que escale con el `TrackEnergyPunch`. Los sonidos deben sonar "secos" en la intro y "espaciales" en el Drop.
-2.  **Master AI Heuristics:** Calibrar el Bot para que realice T-Spins de forma intencional en dificultad Master durante el clímax musical.
-3.  **Z-Depth Layering:** Añadir una capa de "niebla de color" detrás de los tableros que cambie de tono según la escala Camelot del track actual.
+👑 EL CRONOGRAMA MAESTRO: ROADMAP DE 26 FASES
+code Code
 
----
+========================================================================================================
+                        MUTRIS ENGINE: CRONOGRAMA MAESTRO DE PRODUCCIÓN
+========================================================================================================
+ ESTADO:  [✔️] COMPLETO     [🚧] EN DESARROLLO     [⏳] PLANIFICADO
+========================================================================================================
 
-## 🛠️ CONSIDERACIONES TÉCNICAS
-*   **Zero-GC Compliant:** Todo el sistema de estelas y partículas utiliza pools estáticos pre-alocados.
-*   **Hardware Sync:** El parpadeo y la ondulación están anclados al buffer de la placa de sonido, garantizando desfasaje cero.
+ ── ÉPOCA I: NÚCLEO ZERO-GC, HARDWARE AUDIO & ESTACIÓN DAW ─────────────────────────────────────────────
+ [✔️] FASE 1  │ Core Engine Zero-GC, SRS 180°, Offsetting & DAS/ARR Competitivo
+ [✔️] FASE 2  │ Reloj de Hardware por Placa de Sonido & Sync de Beat Puro (0.0 ms Desfasaje)
+ [✔️] FASE 3  │ Síntesis Acústica Cooperativa & Afinación Modal Camelot (Sub-Bajos 30Hz)
+ [✔️] FASE 4  │ Mapeo Universal de Teclado/Mandos con Persistencia JSON (settings.json)
+ [✔️] FASE 5  │ Timeline DAW Interactivo con Scrubber, Marcador de Drop y Curvas de Energía
+ [✔️] FASE 6  │ Dynamic Sidechain Ducking, Rack de Saturación Tanh y Audición de SFX en Vivo
 
+ ── ÉPOCA II: COMBATE RÍTMICO, SINESTESIA & MECÁNICAS DE JUEGO DE LUCHA ────────────────────────────────
+ [🚧] FASE 7  │ Beat-Lock Timing: Ventana de ±35ms, Groove Strikes y Multiplicadores de Tempo
+ [⏳] FASE 8  │ Stance Switching System: Rush, Bastion y Resonance con físicas dinámicas
+ [⏳] FASE 9  │ Kinetic Parry: Ventana de 3 Frames para Absorción y Contraataque de Basura (Spikes)
+ [✔️] FASE 10 │ Zone Mode 3-Tiers: Tier 1 Holo-Cyan, Tier 2 Hyper Gold, Tier 3 Supernova Overdrive
+ [✔️] FASE 11 │ Gestor de Anomalías V2: Torus Belt, Quantum Laser, Sudden Matrix Swap y Eclipse
 
+ ── ÉPOCA III: INTELIGENCIA ARTIFICIAL, AUTO-BALANCE & ENTRENAMIENTO ───────────────────────────────────
+ [🚧] FASE 12 │ ARCHON META-BALANCER: IA Interna de Auto-Equilibrio Estadístico y Auto-Patches
+ [✔️] FASE 13 │ DDA Heurística 2.0 & Ghost AI Profiler: Clonación de Estilo de Juego del Usuario
+ [⏳] FASE 14 │ Trainer Lab & Asistente Holográfico de Aperturas (T-Spins, DT Cannon, PC con Undo)
+ [✔️] FASE 15 │ Telemetría Centralizada en Vivo (PPS Dual, FPS, Adrenalina Musical y Récords)
 
-PARTE 8: PULIDO DE RENDIMIENTO (FASE 6.5) — CACHÉ DE FUENTES, IA OPTIMIZADA & CORRECCIONES
-1. Sistema de Caché de Fuentes (tetris/font_cache.lua)
+ ── ÉPOCA IV: SISTEMAS SOULSBORNE & MONSTER HUNTING ────────────────────────────────────────────────────
+ [⏳] FASE 16 │ Souls Dynamics: Barra de Postura, Aturdimiento de Jefes, I-Frames & Visceral Clears
+ [⏳] FASE 17 │ Status Blights: Hemorragia por T-Spins, Congelación de DAS/ARR y Corrupción de Matriz
+ [⏳] FASE 18 │ Anatomía por Columnas & Part Breaking: Corte de Colas y Rotura de Cuernos en Jefes
+ [⏳] FASE 19 │ Chroma-Weaver Engine: Pentagrama HUD, Fusión de Colores y Melodías Activas
+ [⏳] FASE 20 │ The Hunter's Forge & Cyber-Palico: Sets de Armadura, Joyas Pasivas y Dron de Soporte
 
-Se detectó que love.graphics.newFont() se estaba llamando dentro del propio love.draw(), en cinco módulos distintos (tablero, paneles HOLD/NEXT, marcador central, telemetría y menús), generando una fuente rasterizada nueva 60 veces por segundo — la causa principal de presión sobre el recolector de basura, contradiciendo la propia filosofía Zero-GC del proyecto.
+ ── ÉPOCA V: MULTI-RULESET UNIVERSAL, FÍSICAS & CREATIVIDAD ───────────────────────────────────────────
+ [⏳] FASE 21 │ Multi-Ruleset Engine: Guideline Moderno, TGM 20G Shirase, NES 1989, Pentomino 18
+ [⏳] FASE 22 │ Modos Híbridos: Push 1v1 Tug-of-War, Sandtrix Granular y Waveform Dynamic Grid
+ [⏳] FASE 23 │ Mutris Architect Studio: Grid Painter, Timeline Tracker y Lógica por Nodos
+ [⏳] FASE 24 │ Lua Scripting API con Sandbox _ENV Seguro & Paquetes Todo-en-Uno (.mutrispack)
+
+ ── ÉPOCA VI: INFRAESTRUCTURA DEPORTIVA, RED & TRANSCENDENCIA ──────────────────────────────────────────
+ [⏳] FASE 25 │ Rollback Netcode P2P (GGPO), Replays Binarios (.mutrisrec) y Broadcast Esports HUD
+ [⏳] FASE 26 │ Modo Historia "Synthetic Transcendence", Shaders 3D Voxel y Lanzamiento Multiplataforma
+========================================================================================================
+
+🚀 ESPECIFICACIÓN TÉCNICA DE SISTEMAS FUTUROS
+1. Beat-Lock Timing (Fase 7)
+
+    Algoritmo: Evalúa si el Hard Drop aterriza en una ventana de
+
+            
+    ±35 ms
+    ±35 ms
+
+          
+
+    respecto al tiempo fuerte del compás musical.
+
+    Recompensa:
+
+            
+    +1
+    +1
+
+          
+
+    línea de ataque enviada, pulso dorado en la grilla y disparo de transitorio percusivo de subgraves.
+
+2. Stances & Kinetic Parry (Fases 8 y 9)
+
+    Posturas Conmutables (Tab / L3):
+
+        Rush: Ataque x1.5, Lock Delay 0.12s, ARR 0.001s.
+
+        Bastion: Ataque x0.5, activa la ventana de Parry de 3 frames.
+
+        Resonance: Carga de Zone x2, gravedad 20G instantánea.
+
+    Kinetic Parry: Bloquear una pieza en los 3 frames previos a la entrada de basura anula el 100% del daño y devuelve un Counter-Spike del 50%.
+
+3. Archon Meta-Balancer (Fase 12)
+
+    Módulo: core/meta_balancer.lua y saves/game_balance.json.
+
+    Función: Monitorea el Win Rate y la tasa de letalidad de cada modo/anomalía. Si un valor se desvía del equilibrio, auto-ajusta constantes en disco mediante descenso de gradiente e imprime notas de parche automáticas en el menú.
+
+4. Sistemas Souls & Monster Hunting (Fases 16 a 20)
+
+    Barra de Postura & Riposte: Llenar la postura del jefe causa un aturdimiento de 6s donde cada línea hace daño x3 (Visceral Clears).
+
+    Part Breaking por Columnas: Columnas 1-3 (Cuernos), 4-7 (Núcleo), 8-10 (Cola). Romper partes desactiva ataques del monstruo y suelta materiales raros (Carves).
+
+    Chroma-Weaver (Cuerno de Caza): Pentagrama HUD con 4 ranuras. Limpiar colores específicos completa recetas (ej. Cian+Violeta+Naranja = Attack Up [XL]) activables con el botón de Recital.
+
+5. Mutris Architect & Lua Sandbox (Fases 23 y 24)
+
+    Editor Integrado: Grid Painter de bloques elementales + Timeline Tracker DAW + Editor de Nodos visuales.
+
+    Sandbox Seguro: Entorno cerrado con _ENV que expone solo funciones seguras de juego (GameAPI.*), bloqueando accesos peligrosos al sistema operativo.
+
+⚡ PRESUPUESTO DE RENDIMIENTO POR FRAME
+Subsistema / Módulo	Tiempo Asignado	Estrategia de Optimización
+Input & DAS/ARR Sampling	0.15 ms	Consulta directa sin llamadas intermedias ni polling pesado.
+Físicas SRS / Matriz de Bloques	0.60 ms	Tablas pre-indexadas y operaciones matemáticas escalares.
+IA Heurística (Bot & DDA)	0.45 ms	Buffer plano reutilizable _overlay de 400 posiciones en 1 solo barrido.
+Síntesis de Audio & Sidechain	0.30 ms	SoundData estático y modulación mediante curvas analógicas tanh.
+Renderizado & Shaders (GPU)	2.50 ms	Dibujado por lotes, FontCache centralizado y postprocesado en Canvas.
+TOTAL FRAME BUDGET CONSUMIDO	~4.00 ms	Margen libre superior al 60% en 144Hz (6.94ms) y 240Hz (4.16ms).
+📂 ÁRBOL DE DIRECTORIOS MODULAR
+code Code
 
-🗂️ Caché por Tamaño: FontCache.get(size) crea cada tamaño de fuente una única vez y lo reutiliza para siempre, redondeando tamaños dinámicos (como el popup de combos, que escala con TrackEnergyPunch) sin alterar ni un píxel del resultado visual.
-2. Motor Heurístico de la IA Master, Recalculado (tetris/ai_bot.lua)
-
-AIBot:evaluate() escaneaba el tablero completo dos veces por cada candidato de colocación (hasta 56 por pieza), recorriendo además la forma entera de la pieza por cada una de las 400 celdas del grid — hasta ~12.800 operaciones por candidato.
-
-⚡ Un Solo Recorrido con Overlay Reutilizable: La posición de la pieza se estampa una única vez sobre un buffer plano pre-alocado (self._overlay), y un solo barrido del tablero calcula alturas, huecos y líneas completas en simultáneo. Los puntajes resultantes son matemáticamente idénticos a la versión anterior — la IA toma exactamente las mismas decisiones, sólo que con una fracción del costo de CPU.
-3. Correcciones de Estabilidad Visual y de Partida
-🎨 Fix de Color en el Menú: GameStates.drawMenu pasaba la tabla de color de cada dificultad tres veces como argumentos sueltos a setColor en vez de sus tres componentes, lo que anulaba el alpha de atenuación/hover. Corregido para restaurar el efecto de parpadeo/dimming original.
-💀 Game Over por Hold: Board:hold() no verificaba si la pieza intercambiada entraba al tablero al spawnear. Ahora expone _G.GameOverPending, escuchado en main.lua, para que un topout vía Hold termine la partida igual que un topout normal.
-4. Simplificación del Menú
-🎯 Dificultad Única: Se eliminaron APPRENTICE y PRO. Sólo queda MASTER, y la partida arranca directamente con ENTER o SPACE.
-
-
-
-
-
-# 🕹️ MUTRIS v0.9.0 — ETHEREAL CHROMA ENGINE
-## COMPENDIO TÉCNICO DE ARQUITECTURA, ZERO-GC, FÍSICA SRS & INYECCIÓN ACÚSTICA POR HARDWARE
-### 🛠️ ESTADO DE SISTEMA: FASE 7 (INMERSIÓN AUDIOVISUAL, GAMEPAD & ESPACIALIDAD) — VERSIÓN ESTABLE
-
----
-
-> ⚠️ **REGLA DE ORO DE DESARROLLO PERMANENTE:**
-> **EL TÍTULO DEL JUEGO Y EL NÚMERO DE VERSIÓN (`MUTRIS v0.9.0`) DEBEN PERMANECER SIEMPRE VISIBLES EN PANTALLA EN TODOS LOS ESTADOS (MENÚ, GAMEPLAY, EDITOR Y GAME OVER).** Esta directiva es obligatoria para garantizar la trazabilidad visual en capturas de pantalla, pruebas de telemetría y reportes de rendimiento.
-
----
-
-## 💎 NOVEDADES Y ARQUITECTURA DE LA VERSIÓN v0.9.0
-
-### 1. Watermark Global y Trazabilidad Visual
-* **Identificador de Versión Persistente:** Se implementó `_G.ENGINE_VERSION = "MUTRIS v0.9.0"` renderizado en la esquina inferior izquierda con tipografía optimizada por `FontCache`. Visible tanto en el menú principal como en gameplay activo, Game Over y Lab.
-* **Integración en Telemetría y Menú:** El encabezado del menú y el panel de diagnóstico de combate exponen la versión activa del motor.
-
-### 2. Motor de Reverb y Espacialidad Dinámica (`audio_manager.lua`)
-* **Procesamiento de Audio Escalar en el Drop:** Los efectos procedurales de sonido (SFX) modulan su respuesta temporal según la rampa `_G.TrackEnergyPunch`.
-* **Sonido Seco vs. Espacial:** En la intro (energía baja) los golpes y giros suenan secos, nítidos y directos. Al desatarse el Drop (`TrackEnergyPunch > 0.8`), se inyecta un buffer de realimentación de retardo (*delay feedback*) y saturación suave `tanh` que genera una cola de reverberación espacial etérea sin generar objetos nuevos en memoria (*Zero-GC*).
-* **Pitch Shifting por Altura:** El impacto de caída (*Hard Drop*) modula armónicamente su frecuencia en función de la fila vertical (`row_y`) de aterrizaje.
-
-### 3. Capa de Niebla Cromática Z-Depth (`tetris/fog_layer.lua`)
-* **Atmósfera Reactiva Camelot:** Módulo independiente que genera 12 nodos de luz volumétrica flotante en el fondo del escenario.
-* **Mapeo Cromático Armónico:** Los nodos leen la tonalidad de la pista activa (`track.root_note`) mapeada en `TrackManager.NOTE_COLORS` (C = Cian, D = Púrpura, F# = Naranja, A = Verde Neón, etc.).
-* **Pulsación Rítmica:** El radio y la opacidad de los orbes respiran al compás exacto de la placa de sonido (`_G.AudioBeatPulse`) y se expanden en una aurora perimetral durante el clímax musical.
-
-### 4. Soporte Integral para Mandos / Gamepads (`input.lua`)
-* **Mapeo Plug & Play:** Compatibilidad nativa con mandos de Xbox, PlayStation y genéricos vía `love.joystick`.
-* **Integración DAS/ARR Híbrida:** El D-Pad y el Stick Analógico izquierdo alimentan exactamente el mismo motor de autorepetición milimétrica (DAS 0.094s / ARR 0.008s).
-* **Configuración de Botones:**
-  * **Rotaciones:** Botones frontales (`A`/`B` = Horario, `X`/`Y` = Antihorario, `DPad Arriba` = 180°).
-  * **Hold:** Gatillos y bumpers izquierdos (`LB` / `LT`).
-  * **Hard Drop:** Gatillos y bumpers derechos (`RB` / `RT`).
-  * **Soft Drop:** Stick analógico abajo o `DPad Abajo`.
-  * **Reinicio:** Botones `Start` o `Back`.
-
-### 5. Estelas Volumétricas Láser ("Ethereal Trails") (`board.lua`)
-* **Caída Cuadrática:** Al ejecutar un *Hard Drop*, la pieza proyecta haces de luz verticales aditivos con degradado exponencial y núcleo blanco brillante.
-* **Pool Estático:** Gestión mediante 8 estructuras reciclables de tiempo finito sin asignación de memoria dinámica.
-
----
-
-## 🗂️ REGISTRO DE ARCHIVOS MODIFICADOS Y CREADOS
-
-| Archivo | Estado | Descripción del Cambio |
-| :--- | :--- | :--- |
-| `main.lua` | **Modificado** | Integración de watermark global, FogLayer, callbacks de Gamepad y mouse/drag drops. |
-| `audio_manager.lua` | **Modificado** | Reverb dinámico, delay feedback en Drop, saturación y escalado de duración. |
-| `tetris/fog_layer.lua` | **Nuevo** | Renderizador de niebla cromática Z-Depth con modulación armónica Camelot. |
-| `input.lua` | **Modificado** | Soporte para mandos físicos (D-Pad, Sticks, triggers) unificado con DAS/ARR. |
-| `track_manager.lua` | **Modificado** | Tabla `NOTE_COLORS` cromática para sincronía visual entre audio y gráficos. |
-| `tetris/board.lua` | **Modificado** | Haces de luz Ethereal Trails, marco reactivo al Drop y pulso lock impact. |
-| `tetris/game_states.lua` | **Modificado** | Ajuste de tipografía, badge de versión visible e interactividad refinada. |
-| `tetris/telemetry.txt` | **Modificado** | Exposición del identificador de versión en el HUD de combate. |
-
-
-
-
-
-
-# 🕹️ MUTRIS v0.9.5 — ETHEREAL TRANSCENDENCE & COMBAT ENGINE
-## COMPENDIO TÉCNICO DE ARQUITECTURA, ZERO-GC, FÍSICA SRS & INYECCIÓN ACÚSTICA POR HARDWARE
-### 🛠️ ESTADO DE SISTEMA: FASE 8 (DESTRUCCIÓN CINEMÁTICA, DANGER GLITCH & HYPER ZONE) — VERSIÓN ESTABLE
-
----
-
-> ⚠️ **REGLA DE ORO DE DESARROLLO PERMANENTE:**
-> **EL TÍTULO DEL JUEGO Y EL NÚMERO DE VERSIÓN (`MUTRIS v0.9.5`) DEBEN PERMANECER SIEMPRE VISIBLES EN PANTALLA EN TODOS LOS ESTADOS (MENÚ, GAMEPLAY, EDITOR, SETTINGS Y GAME OVER).** Esta directiva es obligatoria para garantizar la trazabilidad visual en capturas de pantalla, pruebas de telemetría y reportes de rendimiento.
-
----
-
-## 💎 NOVEDADES Y ARQUITECTURA DE LA VERSIÓN v0.9.5
-
-### 1. Sistema de Muerte e Implosión en Cristal Poliédrico (`board.lua`, `audio_manager.lua`)
-* **Secuencia Cinemática de Derrota:** Al perder por top-out, la matriz no desaparece abruptamente:
-  1. **Fisuras de Energía:** Se genera una red de 40 grietas luminosas interconectadas que parpadean sobre los bloques.
-  2. **Micro-Hitstop (0.35s):** Congelamiento de impacto cinemático que da peso físico a la derrota.
-  3. **Desintegración en 350 Fragmentos:** Cada bloque se divide en esquirlas poliédricas con 4 geometrías distintas (triángulos afilados, rombos facetados, bloques biselados y agujas láser) con física de rotación y gravedad pesada (*Zero-GC Pool*).
-  4. **Audio Sub-Bass Crunch:** Caída tonal senoidal profunda combinada con distorsión analógica destructiva.
-
-### 2. HUD de Tensión Crítica & Micro-Glitches Horizontales (`board.lua`)
-* **Láser de Alarma en el Techo:** Línea neón roja de advertencia en la fila 21 que se activa cuando la pila supera los 13 bloques, parpadeando con el compás de la música.
-* **Scanline Tearing (Desplazamiento RGB):** Al acercarse a 3 bloques del límite superior, el marco del tablero sufre micro-cortes y saltos horizontales aleatorios modulados por la intensidad del peligro (`danger_level`).
-* **Audio Glitch Clicks:** Micro-stutters periódicos en el audio al estar en peligro extremo.
-
-### 3. Mecánica Zone Mode de 2 Niveles & Almacenamiento Estricto (`board.lua`, `garbage_manager.lua`)
-* **Invulnerabilidad Total en Zone:** Inmunidad absoluta contra Game Over al spawnear piezas y bloqueo total de basura entrante mientras la Zona esté activa.
-* **Carga Balanceada del Medidor:** Acumulación calibrada a `0.038` por línea para premiar jugadas estratégicas.
-* **Almacenamiento de Ataque Estricto:** Durante Zone Mode **no se fuga daño al rival**; el 100% del ataque se acumula en el contador y detona en un único estallido al expirar la Zona.
-* **Doble Nivel Visual (2 Skins de Zone):**
-  * **Tier 1 (25% - 99%):** *Holo-Cyan Matrix* con ondas diagonales continuas `sin((c + r) * 0.55 - time * 8.0)`.
-  * **Tier 2 (100% Clavado - Hyper Zone):** Solo se activa con el medidor al máximo (`zone_meter >= 1.0`). Transforma los bloques en una piel *Gold-Diamond Prism* con rejilla láser en cruz, bordes iridiscentes arcoíris y SFX de activación con acorde ascendente extendido.
-
-### 4. IA Master con Radar de Downstacking Quirúrgico (`ai_bot.lua`)
-* **Hole-Seeking Algorithm:** La IA detecta la columna exacta de los pozos de basura (`col 1..10`).
-* **Anti-Obstruction Penalty:** Si la IA está bajo peligro, castiga severamente (`-1500 pts`) colocar piezas que tapen la salida de basura sin limpiar líneas.
-* **Aplanamiento Forzado de Grilla:** Máxima prioridad a limpiezas continuas de líneas simples/dobles para reducir la altura de la torre y contraatacar.
-
-### 5. Laboratorio de Configuración DAS/ARR & Audio (`settings_manager.lua`, `game_states.lua`)
-* **Calibración Competitiva en Vivo:** Sliders interactivos para calibrar DAS (50 a 200 ms), ARR (0 a 25 ms), volumen SFX y BGM.
-* **Persistencia JSON Local:** Guardado y carga automática en `settings.json`.
-
----
-
-## 🗂️ REGISTRO DE ARCHIVOS MODIFICADOS Y CREADOS
-
-| Archivo | Estado | Descripción del Cambio |
-| :--- | :--- | :--- |
-| `main.lua` | **Modificado** | Control de Hitstop, enlace de muerte cinemática, ruteo de settings y watermark persistente. |
-| `tetris/board.lua` | **Modificado** | Shards de cristal poliédrico, fisuras, 2 skins de Zone (Tier 1 y Tier 2), láser de alarma y scanline tearing. |
-| `tetris/ai_bot.lua` | **Modificado** | Heurística de Downstacking con radar de pozos de basura y anti-obstrucción. |
-| `tetris/garbage_manager.lua` | **Modificado** | Almacenamiento 100% estricto de ataques Zone, cálculo de Hyper Zone y ganancia balanceada. |
-| `audio_manager.lua` | **Modificado** | SFX de muerte digital destructiva y activación Hyper Zone 100%. |
-| `tetris/hud_panels.lua` | **Modificado** | Centrado milimétrico por Tetromino (`PREVIEW_CONFIG`) y badge dorado `[Q] 100%`. |
-| `tetris/bloom_shader.lua` | **Modificado** | Calibración anti-burnout con aberración cromática nítida. |
-| `settings_manager.lua` | **Nuevo** | Módulo de guardado y lectura de parámetros competitivos (`settings.json`). |
-| `tetris/game_states.lua` | **Modificado** | Pantalla interactiva de ajustes DAS/ARR con sliders en tiempo real. |
-
-
-
-
-
-
-# 🕹️ MUTRIS v0.9.5 — ETHEREAL TRANSCENDENCE & ADAPTIVE COMBAT ENGINE
-## COMPENDIO TÉCNICO DE ARQUITECTURA, ZERO-GC, FÍSICA SRS & IA ADAPTATIVA DDA
-### 🛠️ ESTADO DE SISTEMA: FASE 8 (SUPERVIVENCIA EXTREMA, DDA PERSISTENTE & FIXES DE TIMING) — VERSIÓN ESTABLE
-
----
-
-> ⚠️ **REGLA DE ORO DE DESARROLLO PERMANENTE:**
-> **EL TÍTULO DEL JUEGO Y EL NÚMERO DE VERSIÓN (`MUTRIS v0.9.5`) DEBEN PERMANECER SIEMPRE VISIBLES EN PANTALLA EN TODOS LOS ESTADOS (MENÚ, GAMEPLAY, EDITOR, SETTINGS Y GAME OVER).** Esta directiva es obligatoria para garantizar la trazabilidad visual en capturas de pantalla, pruebas de telemetría y reportes de rendimiento.
-
----
-
-## 🧠 NOVEDADES DESTACADAS DE LA VERSIÓN v0.9.5
-
-### 1. Sistema de Dificultad Dinámica Adaptativa (DDA) (`tetris/ai_bot.lua`, `ai_profile.json`)
-* **Memoria Persistente de Rendimiento:** La Inteligencia Artificial genera y actualiza automáticamente el archivo local `ai_profile.json` tras cada combate.
-* **Cálculo de Media Móvil Exponencial (EMA):** El nivel del jugador se evalúa promediando su velocidad histórica con la velocidad de la última partida (`player_avg_pps = player_avg_pps * 0.70 + player_pps * 0.30`).
-* **Calibración Simbiótica:** La IA calibra su velocidad base para jugar **entre un 8% y 15% por encima del ritmo real del usuario**, incrementando su agresividad si el jugador acumula rachas de victorias o aflojando la presión de forma justa si el usuario sufre derrotas consecutivas.
-* **Registro Inmediato en Frame 0:** El resultado de la partida y el PPS final se escriben en disco en el instante exacto del impacto de muerte en `Board:triggerDeath()`, garantizando que la dificultad se actualice incluso si el jugador pulsa `R` durante la animación de Game Over.
-
-### 2. Heurística de Supervivencia y Downstack Quirúrgico (`tetris/ai_bot.lua`)
-* **Tolerancia Cero a Huecos:** Pesos heurísticos masivos (`-18000` / `-25000` pts) que penalizan la creación o cobertura de agujeros.
-* **Aplanamiento Forzado del Tablero:** Castigo severo a la irregularidad de la superficie (`bumpiness`), obligando al bot a mantener una matriz plana.
-* **Radar de Pozo de Basura (Hole-Seeking):** Identificación activa de la columna del agujero de escape en las líneas de basura para abrir caminos y contraatacar en situaciones críticas.
-* **Offsetting Defensivo Proactivo:** Bonificación prioritaria a la limpieza de líneas simples/dobles que cancelen basura entrante alojada en la cola de ataque.
-* **Ejecución a Velocidad Real:** Eliminación de los retrasos por fotograma en giros y desplazamientos laterales en `executeMove()`, permitiendo al bot colocar piezas de forma limpia y precisa al compás exacto de su velocidad asignada.
-
-### 3. Reloj de Partida Continuo y Telemetría Inmune (`main.lua`, `tetris/telemetry.lua`)
-* **Timer Continuo por Frame:** El temporizador `_G.RealMatchTimer` avanza de forma ininterrumpida mediante delta time acumulativo en `love.update(dt)`, erradicando congelamientos en `T: 0.0s` causados por loops de música o incompatibilidades con el modo de entrada GPU.
-* **Monitoreo en Tiempo Real:** Telemetría centralizada con lectura dual de PPS (Humano vs Bot), contador de FPS, tiempo transcurrido y barra reactiva de energía musical.
-
-### 4. Sistema de Destrucción Cinemática en Cristal (`tetris/board.lua`)
-* **Micro-Hitstop (0.35s):** Congelamiento de impacto cinemático que da peso físico a la derrota.
-* **Implosión Poliédrica (350 Fragmentos):** Desintegración de los bloques en esquirlas con físicas de aceleración, gravedad pesada y rotación mediante pools pre-alocados *Zero-GC*.
-* **Fisuras Luminosas:** Red de 40 grietas de energía procedurales en el marco de la matriz.
-
-### 5. Mecánica Zone Mode de 2 Niveles (`tetris/board.lua`, `tetris/garbage_manager.lua`)
-* **Tier 1 (25% - 99%):** Matriz *Holo-Cyan* reactiva a ondas senoidales diagonales.
-* **Tier 2 (100% Clavado - Hyper Zone):** Piel *Gold-Diamond Prism* con rejilla láser en cruz, bordes iridiscentes y acorde polifónico extendido.
-* **Almacenamiento Estricto de Ataque:** Inmunidad total a basura durante la Zona; todo el daño acumulado detona en un único estallido al salir de la mecánica.
-
----
-
-## 💾 ARQUITECTURA TÉCNICA & RENDIMIENTO ZERO-GC
-
-Para sostener **60 FPS estables** sin micro-tirones (*stuttering*) provocados por el recolector de basura de Lua:
-
-1. **Pre-alocación de Matrices y Arrays:** No se instancian tablas vacías (`{}`) dentro de los bucles críticos `love.update` ni `love.draw`.
-2. **Caché de Fuentes (`tetris/font_cache.lua`):** Centralización de fuentes tipográficas para evitar llamadas repetitivas a `love.graphics.newFont()`.
-3. **Pools Reutilizables:**
-   * `ParticleSystem`: Pool estático de 200 partículas reciclables.
-   * `Board.trails`: Pool de 8 estelas volumétricas láser.
-   * `Board.shatter_shards`: Pool de 350 fragmentos de cristal poliédrico.
-   * `AIBot._overlay`: Buffer plano de 400 posiciones para evaluación heurística en un solo barrido.
-
----
-
-## ⌨️ MAPEO DE ENTRADA Y CONTROLES
-
-### Teclado (Estándar Competitivo & DAS/ARR)
-| Acción | Teclas Primarias | Teclas Secundarias |
-| :--- | :--- | :--- |
-| **Mover Izquierda / Derecha** | `Left` / `Right` | `KP 4` / `KP 6` |
-| **Soft Drop (Caída Suave)** | `Down` | `KP 5` / `5` / `Clear` |
-| **Hard Drop (Fijación Instantánea)** | `Space` | — |
-| **Rotación Horaria (CW)** | `A` | `Z` |
-| **Rotación Antihoraria (CCW)** | `D` | `X` |
-| **Rotación 180°** | `Up` | `KP 8` |
-| **Hold (Reserva)** | `S` | `C` |
-| **Zone Mode** | `Q` | — |
-| **Reinicio Rápido** | `R` | — |
-| **Menú de Ajustes / Volver** | `Escape` | — |
-| **Silenciar Audio (Mute)** | `M` *(en menú settings)* | — |
-
-### Gamepad / Mando
-| Acción | Botón |
-| :--- | :--- |
-| **Mover / Soft Drop** | D-Pad o Stick Analógico Izquierdo |
-| **Hard Drop** | `RB` / `RT` (Bumpers / Triggers derechos) |
-| **Hold** | `LB` / `LT` (Bumpers / Triggers izquierdos) |
-| **Rotaciones** | `A` / `B` (Horario), `X` / `Y` (Antihorario), `D-Pad Up` (180°) |
-| **Reinicio / Menú** | `Start` / `Back` |
-
----
-
-## 🗂️ REGISTRO HISTÓRICO DE ARCHIVOS
-
-| Archivo | Rol en el Motor |
-| :--- | :--- |
-| `main.lua` | Bucle principal, control de estados, temporizador continuo e Hitstop. |
-| `tetris/ai_bot.lua` | IA adaptativa con DDA persistente (`ai_profile.json`) y downstacking. |
-| `tetris/board.lua` | Renderizado de grilla, Zone Tier 1/2, trails, muerte cinemática y phantoms. |
-| `tetris/garbage_manager.lua` | Gestión de offset reactivo, tabla de ataques y cálculo de daño Zone. |
-| `tetris/piece.lua` | Física SRS, Wall-Kicks, detección T-Spin 3-corners y lock delay. |
-| `tetris/pps_counter.lua` | Buffer circular de 60 ranuras para cálculo móvil de PPS. |
-| `tetris/font_cache.lua` | Caché rasterizado de fuentes para inmunidad a Garbage Collection. |
-| `tetris/fog_layer.lua` | Niebla volumétrica Z-Depth con tonalidades reactivas Camelot. |
-| `tetris/bloom_shader.lua` | Post-procesado bloom y aberración cromática calibrada. |
-| `settings_manager.lua` | Persistencia y calibración en vivo de DAS/ARR y volúmenes (`settings.json`). |
-| `track_manager.lua` | Traducción modal armónica Camelot y mapeo cromático de notas. |
-| `track_editor.lua` | Laboratorio interactivo por mouse para importación y calibración de audio. |
+MUTRIS/
+├── main.lua                     -- Kernel maestro, despacho de estados e Hitstop
+├── conf.lua                     -- Configuración de ventana LÖVE2D a 144/240Hz
+├── input.lua                    -- Motor DAS/ARR/SDF y remapeo universal
+├── audio_manager.lua            -- Síntesis procedural, Sidechain y Ducking
+├── music_manager.lua            -- Reloj de hardware y streaming de audio
+├── settings_manager.lua         -- Persistencia de controles y volumen (settings.json)
+├── track_manager.lua            -- Extracción modal armónica y tablas Camelot
+├── track_editor.lua             -- DAW Studio, Scrubber y colocación de Cues
+│
+├── core/                        -- Librerías base del motor
+│   ├── meta_balancer.lua        -- [F12] ARCHON AI: Auto-tuning y balance interno
+│   ├── ruleset_manager.lua      -- [F21] Selector Guideline, TGM 20G, NES, Push
+│   ├── mod_loader.lua           -- [F24] Intérprete Sandbox Lua (_ENV) y .mutrispack
+│   └── netcode_ggpo.lua         -- [F25] Rollback P2P y sincronización determinista
+│
+├── combat/                      -- Módulos de combate y sistemas de juego
+│   ├── combat_stances.lua       -- [F8] Stances: Rush, Bastion, Resonance
+│   ├── kinetic_parry.lua        -- [F9] Ventana de 3 frames y Counter-Spikes
+│   ├── poise_system.lua         -- [F16] Postura, aturdimiento y golpes críticos
+│   ├── part_breaking.lua        -- [F18] Anatomía por columnas y desmembramiento
+│   ├── chroma_weaver.lua        -- [F19] Cancionero de acordes y buffs melódicos
+│   └── hunting_forge.lua        -- [F20] Taller de forja, builds y dron Palico
+│
+├── tetris/                      -- Lógica pura de la grilla y físicas
+│   ├── board.lua                -- Grid 10x40, animaciones y muerte en cristal
+│   ├── piece.lua                -- Físicas SRS/ARS, 180° kicks y detección T-Spin
+│   ├── garbage_manager.lua      -- Offsetting reactivo, colas y Zone Storage
+│   ├── anomaly_manager.lua      -- Gestor de anomalías rítmicas e invasiones
+│   ├── particle_system.lua      -- Pool estático de 200 partículas Zero-GC
+│   ├── pps_counter.lua          -- Buffer circular de 60 ranuras para cálculo móvil
+│   ├── font_cache.lua           -- Caché de fuentes tipográficas rasterizadas
+│   ├── fog_layer.lua            -- Niebla cromática Z-Depth reactiva a Camelot
+│   ├── bloom_shader.lua         -- Shaders de resplandor neón y ondas expansivas
+│   ├── hud_panels.lua           -- Paneles NEXT/HOLD con centrado milimétrico
+│   ├── hud_center.lua           -- Marcador VS central y medidor de compás
+│   ├── telemetry.lua            -- Consola de diagnóstico y métricas en vivo
+│   └── ai_bot.lua               -- Bot heurístico con DDA adaptativo 2.0
+│
+├── architect/                   -- Herramientas de creación
+│   ├── grid_painter.lua         -- [F23] Diseñador visual de puzzles y metas
+│   ├── timeline_sequencer.lua   -- [F23] Secuenciador de eventos musicales DAW
+│   └── node_editor.lua          -- [F23] Lógica visual por cajas conectables
+│
+├── music/                       -- Pistas de audio (.mp3/.ogg) y metadatos (.json)
+├── sfx/                         -- Soundpacks y voces del presentador
+└── saves/                       -- Perfiles DDA, repeticiones .mutrisrec y niveles
+
+🛠️ GUÍA PASO A PASO "A PRUEBA DE TONTOS"
+1. ¿Cómo agregar una Nueva Anomalía Rítmica?
+
+    Abre tetris/anomaly_manager.lua.
+
+    En la tabla ANOMALY_POOL, añade una nueva entrada con su identificador, nombre y duración:
+    code Lua
+
+    { id = "mi_anomalia", name = "NOMBRE VISUAL EN PANTALLA", dur = 10.0 }
+
+    En la tabla ANOMALY_THEMES, define sus colores neón y su etiqueta:
+    code Lua
+
+    mi_anomalia = { c1 = {1.0, 0.2, 0.5}, c2 = {1.0, 0.6, 0.8}, label = "MI ANOMALIA" }
+
+    En AnomalyManager.update(dt, player, bot), programa la lógica matemática sin crear tablas {} en memoria.
+
+2. ¿Cómo agregar una Canción Nueva Manualmente?
+
+    Coloca tu archivo cancion.mp3 o cancion.ogg en la carpeta music/.
+
+    Crea un archivo con el mismo nombre exacto pero extensión .json: music/cancion.json.
+
+    Completa los metadatos:
+    code JSON
+
+    {
+      "name": "MI CANCION",
+      "bpm": 135,
+      "root_note": "F#",
+      "mode": "MINOR",
+      "drop_second": 85.0,
+      "build_duration": 30.0
+    }
+
+    Opcional: Abre el juego, ve a SOUNDTRACK & FX LAB, arrastra el archivo y calíbralo con el timeline.
+
+3. ¿Cómo agregar un nuevo SFX sin romper el Zero-GC?
+
+    Abre audio_manager.lua.
+
+    En AudioManager.playImmediateSFX(type, is_bot, row_y), agrega tu nuevo elseif:
+    code Lua
+
+    elseif type == "mi_sonido" then
+        AudioManager.playToneEx(freq, duration, volume, "sine", drive, decay, pitch_bend)
+    end
+
+    Dispara el sonido desde cualquier archivo con:
+    code Lua
+
+    local AudioManager = require "audio_manager"
+    AudioManager.playImmediateSFX("mi_sonido", false)
+
+4. ¿Cómo garantizar que tu nuevo código cumpla con Zero-GC?
+
+Coloca temporalmente al final de love.update:
+code Lua
+
+local count = collectgarbage("count")
+print(string.format("MEMORIA LUA EN VIVO: %.2f KB", count))
+
+    Correcto: La memoria permanece fija en un número constante frame a frame durante el combate.
+
+    Incorrecto: El número sube de forma continua. Revisa si dejaste tablas {} o llamadas a newFont() dentro de funciones de actualización o dibujado.
+
+🔍 MATRIZ DE DIAGNÓSTICO & RESOLUCIÓN DE BUGS
+code Code
+
+┌──────────────────────────────────────┬────────────────────────────────┬────────────────────────────────────────────┐
+│ SÍNTOMA / ERROR EN CONSOLA           │ CAUSA RAÍZ TÉCNICA             │ SOLUCIÓN INGENIERIL INMEDIATA              │
+├──────────────────────────────────────┼────────────────────────────────┼────────────────────────────────────────────┤
+│ Micro-congelamientos cada 4 segundos │ Asignación de tablas {} en     │ Mover variables a buffers pre-alocados en  │
+│ (Garbage Collection Stutter)         │ love.update o love.draw.       │ el init() del módulo correspondiente.      │
+├──────────────────────────────────────┼────────────────────────────────┼────────────────────────────────────────────┤
+│ Desfase entre el bombo de la canción │ Se usó dt acumulado para medir │ Reemplazar por MusicManager.getTime() que  │
+│ y el parpadeo neón tras 3 minutos    │ el compás en vez del hardware. │ consulta directamente Source:tell().       │
+├──────────────────────────────────────┼────────────────────────────────┼────────────────────────────────────────────┤
+│ Error 'attempt to index a nil value' │ La pieza intenta consultar     │ Validar siempre índices con:               │
+│ al evaluar colisiones cerca del techo│ grid[y][x] con fila y < 1.     │ if y >= 1 and y <= 40 and x >= 1 and x <= 10│
+├──────────────────────────────────────┼────────────────────────────────┼────────────────────────────────────────────┤
+│ El temblor (Shaker) de un jugador    │ Falta de aislamiento de matriz │ Encapsular el bloque de dibujado entre:    │
+│ sacude también el HUD del rival      │ gráfica en love.graphics.      │ love.graphics.push() y love.graphics.pop() │
+├──────────────────────────────────────┼────────────────────────────────┼────────────────────────────────────────────┤
+│ Crash por 'out of memory' en fuentes │ love.graphics.newFont() dentro │ Utilizar estrictamente FontCache.get(size).│
+│ tipográficas al escalar textos       │ del ciclo de dibujado draw().  │                                            │
+└──────────────────────────────────────┴────────────────────────────────┴────────────────────────────────────────────┘
+
+🎮 MAPEO DE CONTROLES PREDETERMINADO
+Acción	Teclado Primario	Teclado Secundario	Gamepad / Mando
+Mover Izquierda / Derecha	Left / Right	KP 4 / KP 6	D-Pad L/R o Stick Izq
+Soft Drop (Caída Suave)	Down	KP 5	D-Pad Down o Stick Abajo
+Hard Drop (Fijación Instantánea)	Space	—	RB / RT
+Rotación Horaria (CW)	A	Z	Botón A / Botón B
+Rotación Antihoraria (CCW)	D	X	Botón X / Botón Y
+Rotación 180°	Up	KP 8	D-Pad Up
+Hold (Reserva)	S	C	LB / LT
+Zone Mode / Recital Melódico	Q	E	Gatillo L2 / R2
+Cambio de Postura (Stance)	Tab	Shift	L3 / R3 (Stick Click)
+Reinicio Rápido	R	—	Start / Back
+Menú de Ajustes / Salir	Escape	—	—
+🏁 CERTIFICACIÓN TÉCNICA FINAL
+
+Este compendio técnico unifica la totalidad del código vigente y las especificaciones completas para las Fases 7 a 26 de MUTRIS. Cualquier sesión de desarrollo futura puede ejecutarse tomando este archivo como referencia definitiva y absoluta.
