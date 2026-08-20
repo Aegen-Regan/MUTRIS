@@ -32,22 +32,30 @@ function AudioManager.init()
     AudioManager.step = 0
     AudioManager.melody_step = 1
     _G.TrackEnergyPunch = 0
+    AudioManager.glitch_timer = 0
 end
 
 function AudioManager.playTone(freq, duration, volume, wave_type, is_kick, drive, decay, no_lfo)
     if AudioManager.glitch_timer > 0 and math.random() < 0.25 then return end
 
+    local energy = _G.TrackEnergyPunch or 0
     local sample_rate = 44100
-    local length = math.floor(sample_rate * duration)
+    
+    local reverb_mult = 1.0 + (energy * 0.75)
+    local effective_duration = duration * reverb_mult
+    local length = math.floor(sample_rate * effective_duration)
     if length <= 0 then return end
     
-    drive = drive or 0
-    decay = decay or 22 
+    drive = (drive or 0) + (energy * 1.8)
+    decay = (decay or 22) / (1.0 + energy * 0.5)
 
     if AudioManager.zone_active and not is_kick then
         drive = drive + 4
         freq = freq * 0.98
     end
+
+    local delay_samples = math.floor(sample_rate * (0.05 + energy * 0.04))
+    local delay_feedback = 0.15 + energy * 0.35
 
     local data = love.sound.newSoundData(length, sample_rate, 16, 1)
     for i = 0, length - 1 do
@@ -57,21 +65,27 @@ function AudioManager.playTone(freq, duration, volume, wave_type, is_kick, drive
         local val = 0
         
         if wave_type == "square" then
-            val = math.sin(2*math.pi*f*t) >= 0 and 0.4 or -0.4
+            val = math.sin(2 * math.pi * f * t) >= 0 and 0.4 or -0.4
         elseif wave_type == "triangle" then
-            local sv = math.sin(2*math.pi*f*t)
-            val = (2/math.pi)*math.asin(math.max(-1, math.min(1, sv)))
+            local sv = math.sin(2 * math.pi * f * t)
+            val = (2 / math.pi) * math.asin(math.max(-1, math.min(1, sv)))
         elseif wave_type == "saw" then
             local ft = f * t
             val = 1.4 * (ft - math.floor(ft + 0.5))
-            val = val * (1 - math.min(0.7, t * 15)) 
+            val = val * (1 - math.min(0.7, t * 15))
         else
-            val = math.sin(2*math.pi*f*t)
+            val = math.sin(2 * math.pi * f * t)
         end
 
         if not is_kick and not no_lfo then
-            local lfo = 0.8 + 0.2 * math.sin(2 * math.pi * 6 * t)
+            local lfo_rate = 6 + energy * 4
+            local lfo = (1.0 - energy * 0.2) + (0.2 + energy * 0.2) * math.sin(2 * math.pi * lfo_rate * t)
             val = val * lfo
+        end
+
+        if energy > 0.2 and i >= delay_samples then
+            local prev_sample = data:getSample(i - delay_samples)
+            val = val + prev_sample * delay_feedback
         end
 
         if drive > 0 then val = tanh(val * drive) / tanh(drive) end
@@ -84,17 +98,20 @@ function AudioManager.playNoise(duration, volume, decay, drive)
     if AudioManager.zone_active then volume = volume * 0.2 end
     if AudioManager.glitch_timer > 0 and math.random() < 0.3 then return end
 
+    local energy = _G.TrackEnergyPunch or 0
     local sample_rate = 44100
-    local length = math.floor(sample_rate * duration)
+    local effective_duration = duration * (1.0 + energy * 0.5)
+    local length = math.floor(sample_rate * effective_duration)
     if length <= 0 then return end
-    decay = decay or 45
-    drive = drive or 0
+    
+    decay = (decay or 45) / (1.0 + energy * 0.4)
+    drive = (drive or 0) + (energy * 1.5)
 
     local data = love.sound.newSoundData(length, sample_rate, 16, 1)
     for i = 0, length - 1 do
         local t = i / sample_rate
         local val = (math.random() * 2 - 1)
-        val = val * math.sin(2 * math.pi * 3200 * t) 
+        val = val * math.sin(2 * math.pi * (3200 + energy * 800) * t) 
         if drive > 0 then val = tanh(val * drive) / tanh(drive) end
         data:setSample(i, val * math.exp(-decay * t) * volume)
     end
@@ -104,8 +121,10 @@ end
 function AudioManager.playArpeggio(notes, wave_type, volume, drive, speed, scale_factor)
     speed = speed or 0.045
     scale_factor = scale_factor or 1
+    local energy = _G.TrackEnergyPunch or 0
     for i, base_f in ipairs(notes) do
-        AudioManager.playTone(base_f * scale_factor, 0.2 + (i * 0.03), volume * 0.75, wave_type, false, drive, 18 - i, true)
+        local note_dur = 0.2 + (i * 0.03) + (energy * 0.15)
+        AudioManager.playTone(base_f * scale_factor, note_dur, volume * 0.75, wave_type, false, drive, 18 - i, true)
     end
 end
 
@@ -120,22 +139,23 @@ end
 function AudioManager.playImmediateSFX(type, is_bot, row_y)
     local notes = is_bot and _G.BOT_NOTES or _G.PLAYER_NOTES
     local vol = is_bot and 0.45 or 0.38
+    local energy = _G.TrackEnergyPunch or 0
     
     if type == "move" then
         local idx = AudioManager.melody_step
         local current_note = notes[idx] or notes[1] or 130.81
-        AudioManager.playTone(current_note, 0.06, vol * 0.45, "triangle", false, 0, 65, true)
+        AudioManager.playTone(current_note, 0.06 + energy * 0.02, vol * 0.45, "triangle", false, 0, 65, true)
         AudioManager.melody_step = (AudioManager.melody_step % #notes) + 1
         
     elseif type == "rotate" then
         local rotate_note = notes[2] or notes[1] or 155.56
-        AudioManager.playTone(rotate_note * 2, 0.08, vol * 0.5, "sine", false, 0, 50, true)
+        AudioManager.playTone(rotate_note * 2, 0.08 + energy * 0.03, vol * 0.5, "sine", false, 0, 50, true)
         
     elseif type == "hold" then
         local n1 = notes[1] or 130.81
         local n4 = notes[4] or notes[3] or 233.08
         AudioManager.playTone(n1, 0.07, vol * 0.5, "sine", false, 0, 40, true)
-        AudioManager.playTone(n4 * 2, 0.09, vol * 0.45, "sine", false, 1, 30, true)
+        AudioManager.playTone(n4 * 2, 0.09 + energy * 0.04, vol * 0.45, "sine", false, 1, 30, true)
         
     elseif type == "drop" then
         local target_row = tonumber(row_y) or 40
@@ -144,7 +164,7 @@ function AudioManager.playImmediateSFX(type, is_bot, row_y)
         local third = notes[2] or 164.81
         local fifth = notes[3] or 196.00
         local pitch_mod = 1 + (height_factor * 0.3) 
-        local drop_vol_boost = 1 + (_G.TrackEnergyPunch * 0.5)
+        local drop_vol_boost = 1 + (energy * 0.6)
         
         AudioManager.playTone(root * pitch_mod, 0.4, vol * 0.35 * drop_vol_boost, "sine", false, 0, 12, true)
         AudioManager.playTone(third * pitch_mod, 0.42, vol * 0.3 * drop_vol_boost, "sine", false, 0, 11, true)
@@ -155,15 +175,15 @@ function AudioManager.playImmediateSFX(type, is_bot, row_y)
         local n1 = notes[1] or 130.81
         local n2 = notes[2] or 164.81
         local n3 = notes[3] or 196.00
-        AudioManager.playArpeggio({n1, n2, n3}, "sine", vol * 0.85, 0, 0.04, 2)
-        AudioManager.playNoise(0.45, vol * 0.45, 15, 1)
+        AudioManager.playArpeggio({n1, n2, n3}, "sine", vol * 0.85, energy * 2, 0.04, 2)
+        AudioManager.playNoise(0.45 + energy * 0.1, vol * 0.45, 15, 1)
         
     elseif type == "t_spin" then
         local n1 = notes[1] or 130.81
         local n2 = notes[2] or 164.81
         local n3 = notes[3] or 196.00
         local n4 = notes[4] or 233.08
-        AudioManager.playArpeggio({n1 * 2, n3 * 2, n4 * 2, n2 * 4}, "triangle", vol * 0.98, 1, 0.035, 1)
+        AudioManager.playArpeggio({n1 * 2, n3 * 2, n4 * 2, n2 * 4}, "triangle", vol * 0.98, 1 + energy * 3, 0.035, 1)
         AudioManager.playNoise(0.55, vol * 0.35, 12, 0)
         
     elseif type == "zone_enter" then
@@ -176,7 +196,7 @@ function AudioManager.playImmediateSFX(type, is_bot, row_y)
         local n2 = notes[2] or 164.81
         local n3 = notes[3] or 196.00
         local n4 = notes[4] or 233.08
-        AudioManager.playArpeggio({n1, n2, n3 * 2, n4 * 2, n1 * 4}, "sine", vol * 1.35, 0, 0.028, 1)
+        AudioManager.playArpeggio({n1, n2, n3 * 2, n4 * 2, n1 * 4}, "sine", vol * 1.35, energy * 3, 0.028, 1)
         AudioManager.playNoise(0.9, vol * 0.55, 5, 0)
     end
 end
@@ -194,21 +214,17 @@ function AudioManager.update(dt, stats)
         AudioManager.base_bpm = current_track.bpm
     end
     
-       -- CONFIGURACIÓN DE RELOJ MAESTRO EXTENDIDO (La mitad de la canción)
     local song_time = _G.RealMatchTimer or 0
-    local drop_point = 110.0 -- El Drop estalla RECIÉN al segundo 110 (casi 2 minutos de partida)
-    local build_len = 80.0   -- La subida progresiva se estira a 80 segundos completos
-    local build_start = drop_point - build_len -- Arranca obligatoriamente al segundo 30
+    local drop_point = (current_track and current_track.drop_second and current_track.drop_second > 0) and current_track.drop_second or 110.0
+    local build_len = (current_track and current_track.build_duration and current_track.build_duration > 0) and current_track.build_duration or 80.0
+    local build_start = math.max(0, drop_point - build_len)
     
-    -- PROCESAMIENTO MATEMÁTICO DIRECTO POR CAPAS DE ADRENALINA
     if song_time >= drop_point then
-        _G.TrackEnergyPunch = 1.0 -- DROP SEGURO
+        _G.TrackEnergyPunch = 1.0
     elseif song_time >= build_start then
-        -- Rampa cúbica hiper-lenta que avanza fotograma a fotograma
         local progress = (song_time - build_start) / build_len
         _G.TrackEnergyPunch = progress * progress * progress
     else
-        -- Intro fría garantizada por hardware (segundos 0 al 15)
         _G.TrackEnergyPunch = 0.0
     end
 
@@ -225,7 +241,7 @@ function AudioManager.update(dt, stats)
     end
 
     local play_time = MusicManager.getTime() or 0
-    if play_time > 0.5 then
+    if play_time > 0.05 then
         local beat_duration = (60 / AudioManager.current_bpm)
         local current_beat = play_time / beat_duration
         local fraction = current_beat - math.floor(current_beat)
@@ -234,6 +250,5 @@ function AudioManager.update(dt, stats)
         end
     end
 end
-
 
 return AudioManager

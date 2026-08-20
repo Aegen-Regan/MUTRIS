@@ -16,7 +16,6 @@ function Board.new(x, y, player_type, colors)
     local self = setmetatable({}, Board)
     self.x, self.y, self.player_type = x, y, player_type
     
-    -- PALETA "VIBRANT CANDY" (Agradable y Clara)
     self.colors = colors or {
         {0.1, 0.9, 1.0}, -- I: Cyan
         {0.2, 0.4, 1.0}, -- J: Blue
@@ -37,7 +36,7 @@ function Board.new(x, y, player_type, colors)
     self.popup_text, self.popup_timer, self.popup_color = "", 0, {1, 1, 1}
 
     self.lock_impact = 0
-    self.trail_duration = 0.5
+    self.trail_duration = 0.45
     self.trails = {}
     for i = 1, 8 do 
         self.trails[i] = { active = false, x = 0, y_start = 0, y_end = 0, id = 0, timer = 0, shape = nil }
@@ -65,6 +64,14 @@ function Board:spawnTrail(x, y_start, y_end, id, shape)
     end
 end
 
+function Board:enterZone()
+    if self.zone_meter >= 1.0 and not self.is_zone_active then
+        self.is_zone_active = true
+        AudioManager.zone_active = true
+        AudioManager.playImmediateSFX("zone_enter", self.player_type == "bot")
+    end
+end
+
 function Board:update(dt)
     Shaker.update(self, dt)
     ParticleSystem.update(self, dt)
@@ -77,13 +84,16 @@ function Board:update(dt)
 
     local pulse = _G.AudioBeatPulse or 0
     for i = 1, 10 do
-        local target = (0.1 + pulse * 0.6 + math.random()*0.2) * self.eq_charge
+        local target = (0.1 + pulse * 0.6 + math.random() * 0.2) * self.eq_charge
         self.eq_bars[i] = self.eq_bars[i] + (target - self.eq_bars[i]) * 10 * dt
     end
 
     for i = 1, #self.trails do
         local t = self.trails[i]
-        if t.active then t.timer = t.timer - dt if t.timer <= 0 then t.active = false end end
+        if t.active then 
+            t.timer = t.timer - dt 
+            if t.timer <= 0 then t.active = false end 
+        end
     end
     PPSCounter.update(self)
 end
@@ -119,7 +129,6 @@ function Board:drawEQBackground()
         for s = 0, 18 do
             if s <= bar_val then
                 local sy = self.y + 480 - (s * 25) - 22
-                -- EQ más sutil para no tapar las piezas
                 local alpha = (0.15 + pulse * 0.25)
                 
                 if is_danger then
@@ -139,28 +148,62 @@ function Board:drawEQBackground()
     love.graphics.pop()
 end
 
+function Board:drawTrails()
+    local pulse = _G.AudioBeatPulse or 0
+    local energy = _G.TrackEnergyPunch or 0
+    love.graphics.push("all")
+    love.graphics.setBlendMode("add")
+
+    for i = 1, #self.trails do
+        local t = self.trails[i]
+        if t.active and t.shape then
+            local progress = t.timer / self.trail_duration
+            local clr = self.colors[t.id] or {0.5, 0.8, 1}
+            local alpha = (progress * progress) * (0.35 + energy * 0.35 + pulse * 0.15)
+            
+            for r = 1, #t.shape do
+                for c = 1, #t.shape[r] do
+                    if t.shape[r][c] ~= 0 then
+                        local col_x = self.x + (t.x + c - 2) * 24
+                        local top_y = self.y + (t.y_start + r - 22) * 24
+                        local bot_y = self.y + (t.y_end + r - 22) * 24
+                        local beam_h = math.max(0, bot_y - top_y)
+                        
+                        if beam_h > 0 then
+                            love.graphics.setColor(clr[1], clr[2], clr[3], alpha * 0.4)
+                            love.graphics.rectangle("fill", col_x + 2, top_y, 20, beam_h)
+                            
+                            love.graphics.setColor(1, 1, 1, alpha * 0.6)
+                            love.graphics.rectangle("fill", col_x + 8, top_y, 8, beam_h)
+                        end
+                    end
+                end
+            end
+        end
+    end
+
+    love.graphics.setBlendMode("alpha")
+    love.graphics.pop()
+end
+
 function Board:drawBlock(bx, by, id, alpha)
     local clr = self.colors[id] or {1, 1, 1}
     local pulse = _G.AudioBeatPulse or 0
     local energy = _G.TrackEnergyPunch or 0
     local a = alpha or 1.0
     
-    local scale = 1 + (self.lock_impact * 0.1) + (pulse * 0.02 * energy)
+    local scale = 1 + (self.lock_impact * 0.08) + (pulse * 0.02 * energy)
     local ds = 24 * scale
     local off = (ds - 24) / 2
 
-    -- BLOQUE CRYSTAL (Legibilidad Máxima)
-    -- Capa 1: Relleno con el color de la pieza (suave)
-    love.graphics.setColor(clr[1], clr[2], clr[3], a * 0.35)
+    love.graphics.setColor(clr[1], clr[2], clr[3], a * 0.38)
     love.graphics.rectangle("fill", bx - off, by - off, ds, ds, 4)
     
-    -- Capa 2: Borde Neón fuerte
     love.graphics.setLineWidth(2)
-    love.graphics.setColor(clr[1], clr[2], clr[3], a * (0.8 + pulse * 0.2))
+    love.graphics.setColor(clr[1], clr[2], clr[3], a * (0.85 + pulse * 0.25))
     love.graphics.rectangle("line", bx - off, by - off, ds, ds, 4)
 
-    -- Capa 3: Brillo de cristal superior
-    love.graphics.setColor(1, 1, 1, a * (0.2 + pulse * 0.2))
+    love.graphics.setColor(1, 1, 1, a * (0.25 + pulse * 0.25))
     love.graphics.rectangle("fill", bx + 3 - off, by + 3 - off, ds - 6, 4, 2)
 end
 
@@ -175,13 +218,12 @@ function Board:draw()
     love.graphics.rectangle("fill", self.x, self.y, 240, 480, 4)
     
     self:drawEQBackground()
+    self:drawTrails()
 
-    -- Grilla sutil
     love.graphics.setColor(1, 1, 1, 0.03 + pulse * 0.03)
     for c = 0, 10 do love.graphics.line(self.x + c*24, self.y, self.x + c*24, self.y + 480) end
     for r = 0, 20 do love.graphics.line(self.x, self.y + r*24, self.x + 240, self.y + r*24) end
 
-    -- Bloques
     for r = 21, 40 do
         for c = 1, 10 do
             local id = self.grid[r][c]
@@ -189,9 +231,16 @@ function Board:draw()
         end
     end
 
-    -- Marco
-    love.graphics.setLineWidth(2)
-    love.graphics.setColor(0, 0.5, 1, 0.4 + pulse * 0.3)
+    love.graphics.setLineWidth(2 + pulse * 1.5 * energy)
+    if energy >= 0.9 then
+        local t = love.timer.getTime() * 5
+        local r = 0.5 + 0.5 * math.sin(t)
+        local g = 0.5 + 0.5 * math.sin(t + 2.094)
+        local b = 0.5 + 0.5 * math.sin(t + 4.188)
+        love.graphics.setColor(r, g, b, 0.8 + pulse * 0.2)
+    else
+        love.graphics.setColor(0, 0.5, 1, 0.4 + pulse * 0.3)
+    end
     love.graphics.rectangle("line", self.x - 2, self.y - 2, 244, 484, 4)
 
     if self.popup_timer > 0 then
@@ -239,7 +288,9 @@ function Board:checkLines(is_tspin)
             table.insert(self.grid, 1, {0,0,0,0,0,0,0,0,0,0})
         end
         self:triggerShake(#lines * 7, 0.3)
-    else self.combo = -1 end
+    else 
+        self.combo = -1 
+    end
 end
 
 function Board:hold()
@@ -255,9 +306,6 @@ function Board:hold()
     end
     self.can_hold, self.active_piece.spawn_timer = false, 0
 
-    -- Chequeo de Game Over: si la pieza recién intercambiada no entra al
-    -- spawnear, avisamos a main.lua igual que se hace tras el spawn normal
-    -- post-lock (antes el Hold podía dejar una pieza inválida sin detectar derrota).
     if not self.active_piece:canMove(self.active_piece.x, self.active_piece.y, 1) then
         _G.GameOverPending = self.player_type
     end

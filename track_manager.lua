@@ -8,6 +8,21 @@ TrackManager.NOTE_FREQS = {
     ["G#"] = 415.30, ["A"]  = 440.00, ["A#"] = 466.16, ["B"]  = 493.88
 }
 
+TrackManager.NOTE_COLORS = {
+    ["C"]  = {0.1, 0.8, 1.0},
+    ["C#"] = {0.2, 0.4, 1.0},
+    ["D"]  = {0.4, 0.2, 1.0},
+    ["D#"] = {0.8, 0.2, 1.0},
+    ["E"]  = {1.0, 0.2, 0.6},
+    ["F"]  = {1.0, 0.2, 0.2},
+    ["F#"] = {1.0, 0.5, 0.1},
+    ["G"]  = {1.0, 0.9, 0.1},
+    ["G#"] = {0.4, 1.0, 0.2},
+    ["A"]  = {0.1, 1.0, 0.6},
+    ["A#"] = {0.1, 1.0, 0.9},
+    ["B"]  = {0.2, 0.6, 1.0}
+}
+
 TrackManager.MODES = {
     ["MAJOR"] = {
         human = {1.0, 1.122, 1.260, 1.335, 1.498, 1.682, 1.888}, 
@@ -49,7 +64,9 @@ end
 
 function TrackManager.init()
     TrackManager.loadSavedTracks()
+    TrackManager.applyTrackAudioSettings()
 end
+
 function TrackManager.loadSavedTracks()
     TrackManager.tracks = {}
     
@@ -68,8 +85,8 @@ function TrackManager.loadSavedTracks()
                 bpm = 120,
                 root_note = "A",
                 mode = "MINOR",
-                drop_second = 60,       
-                build_duration = 15
+                drop_second = 110,       
+                build_duration = 80
             }
             
             if love.filesystem.getInfo(json_file_path) then
@@ -79,8 +96,8 @@ function TrackManager.loadSavedTracks()
                     track_data.bpm = tonumber(data.bpm) or 120
                     track_data.root_note = data.root_note or "A"
                     track_data.mode = data.mode or "MINOR"
-                    track_data.drop_second = tonumber(data.drop_second) or 60
-                    track_data.build_duration = tonumber(data.build_duration) or 15
+                    track_data.drop_second = tonumber(data.drop_second) or 110
+                    track_data.build_duration = tonumber(data.build_duration) or 80
                     if data.name then track_data.name = data.name:upper() end
                 end
             end
@@ -90,8 +107,8 @@ function TrackManager.loadSavedTracks()
     
     if #TrackManager.tracks == 0 then
         table.insert(TrackManager.tracks, {
-            name = "COLOQUE TEMAS EN MUSIC/", file_path = "", is_embedded = true,
-            bpm = 120, root_note = "C", mode = "MINOR", drop_second = 60, build_duration = 15
+            name = "DEFAULT THEME", file_path = "", is_embedded = true,
+            bpm = 120, root_note = "C", mode = "MINOR", drop_second = 110, build_duration = 80
         })
     end
 end
@@ -105,8 +122,8 @@ function TrackManager.injectCustomTrack(source_full_path, track_name, bpm, root_
         bpm = tonumber(bpm) or 120,
         root_note = root_note or "A",
         mode = mode or "MINOR",
-        drop_second = tonumber(drop_sec) or 60,
-        build_duration = tonumber(build_dur) or 15
+        drop_second = tonumber(drop_sec) or 110,
+        build_duration = tonumber(build_dur) or 80
     }
     
     local file = io.open(system_path, "w")
@@ -118,7 +135,8 @@ function TrackManager.injectCustomTrack(source_full_path, track_name, bpm, root_
     end
     
     TrackManager.loadSavedTracks()
-    return true, "Configuración inyectada con éxito físico en Windows."
+    TrackManager.applyTrackAudioSettings()
+    return true, "OK"
 end
 
 function TrackManager.getCurrentTrack()
@@ -128,17 +146,19 @@ end
 function TrackManager.nextTrack()
     if #TrackManager.tracks <= 1 then return end
     TrackManager.current_track_index = (TrackManager.current_track_index % #TrackManager.tracks) + 1
+    TrackManager.applyTrackAudioSettings()
 end
 
 function TrackManager.prevTrack()
     if #TrackManager.tracks <= 1 then return end
     TrackManager.current_track_index = TrackManager.current_track_index - 1
     if TrackManager.current_track_index < 1 then TrackManager.current_track_index = #TrackManager.tracks end
+    TrackManager.applyTrackAudioSettings()
 end
 
 function TrackManager.applyTrackAudioSettings()
     local track = TrackManager.getCurrentTrack()
-    if track.is_embedded and track.file_path == "" then return end
+    if not track then return end
     
     local AudioManager = require "audio_manager"
     AudioManager.base_bpm = track.bpm
@@ -149,9 +169,6 @@ function TrackManager.applyTrackAudioSettings()
     local base_octave = root_freq * 0.25
     local scale_intervals = active_mode.human
 
-    -- FIX BLINDADO ABSOLUTO: Acceder explícitamente renglón por renglón al índice numérico
-    -- de la tabla de la escala para extraer flotantes puros y evitar la multiplicación directa de tablas.
-    --: Tónica, [3]: Tercera, [5]: Quinta, [7]: Séptima menor/mayor
     _G.PLAYER_NOTES = { 
         base_octave * (scale_intervals[1] or 1.0), 
         base_octave * (scale_intervals[3] or 1.189), 

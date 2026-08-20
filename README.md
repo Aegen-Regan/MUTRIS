@@ -255,3 +255,82 @@ Los bloques que ya están fijos en el tablero tienen "conciencia" del aterrizaje
 ## 🛠️ CONSIDERACIONES TÉCNICAS
 *   **Zero-GC Compliant:** Todo el sistema de estelas y partículas utiliza pools estáticos pre-alocados.
 *   **Hardware Sync:** El parpadeo y la ondulación están anclados al buffer de la placa de sonido, garantizando desfasaje cero.
+
+
+
+PARTE 8: PULIDO DE RENDIMIENTO (FASE 6.5) — CACHÉ DE FUENTES, IA OPTIMIZADA & CORRECCIONES
+1. Sistema de Caché de Fuentes (tetris/font_cache.lua)
+
+Se detectó que love.graphics.newFont() se estaba llamando dentro del propio love.draw(), en cinco módulos distintos (tablero, paneles HOLD/NEXT, marcador central, telemetría y menús), generando una fuente rasterizada nueva 60 veces por segundo — la causa principal de presión sobre el recolector de basura, contradiciendo la propia filosofía Zero-GC del proyecto.
+
+🗂️ Caché por Tamaño: FontCache.get(size) crea cada tamaño de fuente una única vez y lo reutiliza para siempre, redondeando tamaños dinámicos (como el popup de combos, que escala con TrackEnergyPunch) sin alterar ni un píxel del resultado visual.
+2. Motor Heurístico de la IA Master, Recalculado (tetris/ai_bot.lua)
+
+AIBot:evaluate() escaneaba el tablero completo dos veces por cada candidato de colocación (hasta 56 por pieza), recorriendo además la forma entera de la pieza por cada una de las 400 celdas del grid — hasta ~12.800 operaciones por candidato.
+
+⚡ Un Solo Recorrido con Overlay Reutilizable: La posición de la pieza se estampa una única vez sobre un buffer plano pre-alocado (self._overlay), y un solo barrido del tablero calcula alturas, huecos y líneas completas en simultáneo. Los puntajes resultantes son matemáticamente idénticos a la versión anterior — la IA toma exactamente las mismas decisiones, sólo que con una fracción del costo de CPU.
+3. Correcciones de Estabilidad Visual y de Partida
+🎨 Fix de Color en el Menú: GameStates.drawMenu pasaba la tabla de color de cada dificultad tres veces como argumentos sueltos a setColor en vez de sus tres componentes, lo que anulaba el alpha de atenuación/hover. Corregido para restaurar el efecto de parpadeo/dimming original.
+💀 Game Over por Hold: Board:hold() no verificaba si la pieza intercambiada entraba al tablero al spawnear. Ahora expone _G.GameOverPending, escuchado en main.lua, para que un topout vía Hold termine la partida igual que un topout normal.
+4. Simplificación del Menú
+🎯 Dificultad Única: Se eliminaron APPRENTICE y PRO. Sólo queda MASTER, y la partida arranca directamente con ENTER o SPACE.
+
+
+
+
+
+# 🕹️ MUTRIS v0.9.0 — ETHEREAL CHROMA ENGINE
+## COMPENDIO TÉCNICO DE ARQUITECTURA, ZERO-GC, FÍSICA SRS & INYECCIÓN ACÚSTICA POR HARDWARE
+### 🛠️ ESTADO DE SISTEMA: FASE 7 (INMERSIÓN AUDIOVISUAL, GAMEPAD & ESPACIALIDAD) — VERSIÓN ESTABLE
+
+---
+
+> ⚠️ **REGLA DE ORO DE DESARROLLO PERMANENTE:**
+> **EL TÍTULO DEL JUEGO Y EL NÚMERO DE VERSIÓN (`MUTRIS v0.9.0`) DEBEN PERMANECER SIEMPRE VISIBLES EN PANTALLA EN TODOS LOS ESTADOS (MENÚ, GAMEPLAY, EDITOR Y GAME OVER).** Esta directiva es obligatoria para garantizar la trazabilidad visual en capturas de pantalla, pruebas de telemetría y reportes de rendimiento.
+
+---
+
+## 💎 NOVEDADES Y ARQUITECTURA DE LA VERSIÓN v0.9.0
+
+### 1. Watermark Global y Trazabilidad Visual
+* **Identificador de Versión Persistente:** Se implementó `_G.ENGINE_VERSION = "MUTRIS v0.9.0"` renderizado en la esquina inferior izquierda con tipografía optimizada por `FontCache`. Visible tanto en el menú principal como en gameplay activo, Game Over y Lab.
+* **Integración en Telemetría y Menú:** El encabezado del menú y el panel de diagnóstico de combate exponen la versión activa del motor.
+
+### 2. Motor de Reverb y Espacialidad Dinámica (`audio_manager.lua`)
+* **Procesamiento de Audio Escalar en el Drop:** Los efectos procedurales de sonido (SFX) modulan su respuesta temporal según la rampa `_G.TrackEnergyPunch`.
+* **Sonido Seco vs. Espacial:** En la intro (energía baja) los golpes y giros suenan secos, nítidos y directos. Al desatarse el Drop (`TrackEnergyPunch > 0.8`), se inyecta un buffer de realimentación de retardo (*delay feedback*) y saturación suave `tanh` que genera una cola de reverberación espacial etérea sin generar objetos nuevos en memoria (*Zero-GC*).
+* **Pitch Shifting por Altura:** El impacto de caída (*Hard Drop*) modula armónicamente su frecuencia en función de la fila vertical (`row_y`) de aterrizaje.
+
+### 3. Capa de Niebla Cromática Z-Depth (`tetris/fog_layer.lua`)
+* **Atmósfera Reactiva Camelot:** Módulo independiente que genera 12 nodos de luz volumétrica flotante en el fondo del escenario.
+* **Mapeo Cromático Armónico:** Los nodos leen la tonalidad de la pista activa (`track.root_note`) mapeada en `TrackManager.NOTE_COLORS` (C = Cian, D = Púrpura, F# = Naranja, A = Verde Neón, etc.).
+* **Pulsación Rítmica:** El radio y la opacidad de los orbes respiran al compás exacto de la placa de sonido (`_G.AudioBeatPulse`) y se expanden en una aurora perimetral durante el clímax musical.
+
+### 4. Soporte Integral para Mandos / Gamepads (`input.lua`)
+* **Mapeo Plug & Play:** Compatibilidad nativa con mandos de Xbox, PlayStation y genéricos vía `love.joystick`.
+* **Integración DAS/ARR Híbrida:** El D-Pad y el Stick Analógico izquierdo alimentan exactamente el mismo motor de autorepetición milimétrica (DAS 0.094s / ARR 0.008s).
+* **Configuración de Botones:**
+  * **Rotaciones:** Botones frontales (`A`/`B` = Horario, `X`/`Y` = Antihorario, `DPad Arriba` = 180°).
+  * **Hold:** Gatillos y bumpers izquierdos (`LB` / `LT`).
+  * **Hard Drop:** Gatillos y bumpers derechos (`RB` / `RT`).
+  * **Soft Drop:** Stick analógico abajo o `DPad Abajo`.
+  * **Reinicio:** Botones `Start` o `Back`.
+
+### 5. Estelas Volumétricas Láser ("Ethereal Trails") (`board.lua`)
+* **Caída Cuadrática:** Al ejecutar un *Hard Drop*, la pieza proyecta haces de luz verticales aditivos con degradado exponencial y núcleo blanco brillante.
+* **Pool Estático:** Gestión mediante 8 estructuras reciclables de tiempo finito sin asignación de memoria dinámica.
+
+---
+
+## 🗂️ REGISTRO DE ARCHIVOS MODIFICADOS Y CREADOS
+
+| Archivo | Estado | Descripción del Cambio |
+| :--- | :--- | :--- |
+| `main.lua` | **Modificado** | Integración de watermark global, FogLayer, callbacks de Gamepad y mouse/drag drops. |
+| `audio_manager.lua` | **Modificado** | Reverb dinámico, delay feedback en Drop, saturación y escalado de duración. |
+| `tetris/fog_layer.lua` | **Nuevo** | Renderizador de niebla cromática Z-Depth con modulación armónica Camelot. |
+| `input.lua` | **Modificado** | Soporte para mandos físicos (D-Pad, Sticks, triggers) unificado con DAS/ARR. |
+| `track_manager.lua` | **Modificado** | Tabla `NOTE_COLORS` cromática para sincronía visual entre audio y gráficos. |
+| `tetris/board.lua` | **Modificado** | Haces de luz Ethereal Trails, marco reactivo al Drop y pulso lock impact. |
+| `tetris/game_states.lua` | **Modificado** | Ajuste de tipografía, badge de versión visible e interactividad refinada. |
+| `tetris/telemetry.txt` | **Modificado** | Exposición del identificador de versión en el HUD de combate. |

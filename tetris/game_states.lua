@@ -1,3 +1,4 @@
+---@diagnostic disable: undefined-global
 local TrackManager = require "track_manager" 
 local FontCache = require "tetris.font_cache"
 
@@ -7,8 +8,13 @@ function GameStates.drawMenu(timer, selected, diffs)
     local mx, my = love.mouse.getPosition()
     local title_scale = 2 + math.sin(timer * 12) * 0.05
     love.graphics.setColor(1, 1, 1, 0.9)
-    love.graphics.printf("TETRIS VERSUS OPT", 0, 60, 800 / title_scale, "center", 0, title_scale, title_scale)
+    love.graphics.printf("MUTRIS", 0, 52, 800 / title_scale, "center", 0, title_scale, title_scale)
     
+    -- Subtítulo con versión explícita
+    love.graphics.setFont(FontCache.get(11))
+    love.graphics.setColor(0, 0.8, 1, 0.7)
+    love.graphics.printf(_G.ENGINE_VERSION or "ETHEREAL ENGINE", 0, 115, 800, "center")
+
     local current_track = TrackManager.getCurrentTrack() or {
         name = "SYSTEM EMPTY", file_path = "", bpm = 120, root_note = "C", mode = "MINOR"
     }
@@ -81,7 +87,7 @@ function GameStates.drawGameOver()
 
     love.graphics.setFont(FontCache.get(14))
     love.graphics.setColor(1, 1, 1, 0.6)
-    love.graphics.printf("PRESS R TO RESTART", 0, 320, 800, "center")
+    love.graphics.printf("PRESS R OR START TO RESTART", 0, 320, 800, "center")
 end
 
 return GameStates
