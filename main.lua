@@ -1,5 +1,5 @@
 ---@diagnostic disable: undefined-global
-_G.ENGINE_VERSION = "MUTRIS v0.9.0"
+_G.ENGINE_VERSION = "MUTRIS v0.9.5"
 
 local Piece = require "tetris.piece"
 local Board = require "tetris.board"
@@ -13,6 +13,7 @@ local FogLayer = require "tetris.fog_layer"
 local FontCache = require "tetris.font_cache"
 local BloomShader = require "tetris.bloom_shader"
 local SettingsManager = require "settings_manager"
+local AnomalyManager = require "tetris.anomaly_manager"
 
 _G.RestartHalo = 0
 _G.Winner = nil 
@@ -34,6 +35,7 @@ function love.load()
     TrackManager.init()
     FogLayer.init()
     BloomShader.init()
+    AnomalyManager.init()
     _G.RealMatchTimer, _G.TrackEnergyPunch, _G.AudioBeatPulse = 0, 0, 0
     _G.HitStopTimer = 0
     _G.Stars = {}
@@ -56,6 +58,7 @@ function GlobalRestart()
     player.active_piece = Piece.new(player.bag:next(), player)
     bot.active_piece = Piece.new(bot.bag:next(), bot)
     Input.init(player)
+    AnomalyManager.init()
     MusicManager.stop()
     MusicManager.start()
     game_state = "play"
@@ -109,8 +112,8 @@ function love.update(dt)
         local bot_danger = (bot and bot.danger_level) or 0
         AudioManager.update(dt, { danger_level = math.max(player_danger, bot_danger), drop_intensity = 0 })
         MusicManager.update(dt)
+        AnomalyManager.update(dt, player, bot)
 
-        -- Chequeo de Game Over y detonación de la secuencia de muerte
         if _G.GameOverPending then
             local loser = _G.GameOverPending
             _G.GameOverPending = nil
@@ -123,7 +126,6 @@ function love.update(dt)
             end
         end
 
-        -- Transición a pantalla de Game Over cuando termina la animación de muerte
         if player and player.is_dying and player.death_timer <= 0 then
             game_state = "over"
         elseif bot and bot.is_dying and bot.death_timer <= 0 then
@@ -195,6 +197,7 @@ function love.draw()
                 bot.active_piece:draw(bot.x, bot.y) 
             end 
         end
+        AnomalyManager.draw(player, bot)
         require("tetris.hud_center").draw(player, bot)
         local success, Telemetry = pcall(require, "tetris.telemetry")
         if success then Telemetry.draw(player, bot) end

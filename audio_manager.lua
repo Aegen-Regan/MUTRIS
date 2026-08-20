@@ -186,6 +186,13 @@ function AudioManager.playImmediateSFX(type, is_bot, row_y)
         AudioManager.playArpeggio({n1 * 2, n3 * 2, n4 * 2, n2 * 4}, "triangle", vol * 0.98, 1 + energy * 3, 0.035, 1)
         AudioManager.playNoise(0.55, vol * 0.35, 12, 0)
         
+    elseif type == "phantom_attack" then
+        local root = notes[1] or 130.81
+        AudioManager.playTone(root * 4.5, 0.45, 0.85, "saw", true, 4, 10, false)
+        AudioManager.playTone(root * 2.2, 0.65, 0.75, "triangle", false, 2, 6, false)
+        AudioManager.playTone(root * 0.75, 0.8, 0.9, "sine", true, 5, 4, true)
+        AudioManager.playNoise(0.4, 0.65, 18, 3)
+        
     elseif type == "zone_enter" then
         local low_note = _G.BG_SCALE and _G.BG_SCALE[1] or 32.70
         AudioManager.playTone(low_note, 1.8, 0.95, "sine", false, 2, 1.2, true)
@@ -216,7 +223,6 @@ function AudioManager.playImmediateSFX(type, is_bot, row_y)
         AudioManager.playNoise(1.2, 0.65, 4, 2)
 
     elseif type == "death" then
-        -- Efecto de colapso/implosión digital (Sub-bass pitch dive + Crunch destructivo)
         AudioManager.playTone(55.0, 1.6, 1.2, "saw", true, 5, 1.8, true)
         AudioManager.playNoise(1.4, 0.85, 3, 4)
         AudioManager.playTone(32.7, 2.0, 1.0, "sine", false, 6, 1.1, true)
@@ -236,9 +242,16 @@ function AudioManager.update(dt, stats)
         AudioManager.base_bpm = current_track.bpm
     end
     
-    local song_time = _G.RealMatchTimer or 0
-    local drop_point = (current_track and current_track.drop_second and current_track.drop_second > 0) and current_track.drop_second or 110.0
-    local build_len = (current_track and current_track.build_duration and current_track.build_duration > 0) and current_track.build_duration or 80.0
+    local song_time = MusicManager.getTime()
+    if song_time <= 0.01 then song_time = _G.RealMatchTimer or 0 end
+
+    -- SISTEMA HÍBRIDO DE DROP Y COMPASES MUSICALES
+    local bpm = AudioManager.base_bpm or 120
+    local bar_duration = (60 / bpm) * 4
+    
+    -- Si el JSON tiene drop configurado, se respeta al milisegundo; si no, cuantización por 32 compases
+    local drop_point = (current_track and current_track.drop_second and current_track.drop_second > 0) and current_track.drop_second or (bar_duration * 32)
+    local build_len = (current_track and current_track.build_duration and current_track.build_duration > 0) and current_track.build_duration or (bar_duration * 16)
     local build_start = math.max(0, drop_point - build_len)
     
     if song_time >= drop_point then
@@ -262,10 +275,9 @@ function AudioManager.update(dt, stats)
         if _G.AudioBeatPulse < 0 then _G.AudioBeatPulse = 0 end
     end
 
-    local play_time = MusicManager.getTime() or 0
-    if play_time > 0.05 then
+    if song_time > 0.05 then
         local beat_duration = (60 / AudioManager.current_bpm)
-        local current_beat = play_time / beat_duration
+        local current_beat = song_time / beat_duration
         local fraction = current_beat - math.floor(current_beat)
         if fraction < 0.09 and _G.AudioBeatPulse <= 0.1 then
             _G.AudioBeatPulse = 1.0

@@ -5,25 +5,23 @@ local love = love
 local TrackManager = require "track_manager"
 local AudioManager = require "audio_manager"
 
--- Control del Laboratorio y Cola Batch
 TrackEditor.active = false
-TrackEditor.batch_queue = {} -- Lista de archivos encolados por arrastre masivo
+TrackEditor.batch_queue = {}
 TrackEditor.current_file_path = nil
 TrackEditor.track_name = "NO TRACK LOADED"
 TrackEditor.bpm = 120
 TrackEditor.root_note = "A"
 TrackEditor.mode = "MINOR"
+TrackEditor.drop_second = 0
 
--- Simulación de Espectrograma RMS por Hardware-Sync (Windows Media Player Vibe)
 TrackEditor.spectrogram_bars = {}
 for i = 1, 32 do TrackEditor.spectrogram_bars[i] = 0 end
 
--- Estados de Menús Desplegables (Dropdowns con Mouse)
 TrackEditor.dropdowns = {
     note = { active = false, x = 320, y = 245, w = 120, h = 22 },
     mode = { active = false, x = 320, y = 295, w = 120, h = 22 }
 }
-TrackEditor.selected_field = 1 -- Para soporte híbrido de teclado
+TrackEditor.selected_field = 1
 
 TrackEditor.preview_source = nil
 TrackEditor.is_playing = false
@@ -35,7 +33,6 @@ local key_repeat_timer = 0
 TrackEditor.CHROMATIC_NOTES = {"C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"}
 local note_index = 10
 
--- Iniciar procesamiento, soporta inyección individual o masiva (Batch)
 function TrackEditor.enterBatch(file_paths_list)
     TrackEditor.batch_queue = file_paths_list
     TrackEditor.processNextInQueue()
@@ -58,6 +55,7 @@ function TrackEditor.processNextInQueue()
     
     TrackEditor.bpm = 120
     TrackEditor.mode = "MINOR"
+    TrackEditor.drop_second = 0
     TrackEditor.selected_field = 1
     TrackEditor.dropdowns.note.active = false
     TrackEditor.dropdowns.mode.active = false
@@ -80,6 +78,15 @@ function TrackEditor.processNextInQueue()
     end
 end
 
+function TrackEditor.markDropSecond()
+    if TrackEditor.preview_source and TrackEditor.is_playing then
+        local sec = TrackEditor.preview_source:tell("seconds")
+        TrackEditor.drop_second = math.floor(sec * 10 + 0.5) / 10
+        TrackEditor.flash_alpha = 0.95
+        AudioManager.playImmediateSFX("tetris", false)
+    end
+end
+
 function TrackEditor.tap()
     local now = love.timer.getTime()
     table.insert(TrackEditor.tap_times, now)
@@ -95,6 +102,7 @@ function TrackEditor.tap()
     end
     TrackEditor.flash_alpha = 0.65
 end
+
 function TrackEditor.update(dt)
     if not TrackEditor.active then return end
     
@@ -102,7 +110,6 @@ function TrackEditor.update(dt)
         TrackEditor.flash_alpha = TrackEditor.flash_alpha - dt * 4
     end
     
-    -- CONTROL DE RÁFAGA CONTINUA (DAS/ARR) PARA BPM POR TECLADO
     if TrackEditor.selected_field == 1 and not TrackEditor.dropdowns.note.active and not TrackEditor.dropdowns.mode.active then
         if love.keyboard.isDown("left") then
             key_held_timer = key_held_timer + dt
@@ -127,32 +134,24 @@ function TrackEditor.update(dt)
         end
     end
     
-    -- MOTOR DE ESPECTROGRAMA AUDIO-DRIVEN (WINDOWS MEDIA VISUALIZER VIBE):
-    -- Si la música suena, calculamos la energía matemática oscilante basada en la posición exacta 
-    -- de hardware del stream para simular picos RMS y alimentar el parpadeo.
     if TrackEditor.is_playing and TrackEditor.preview_source then
         local play_time = TrackEditor.preview_source:tell("seconds")
         local beat_duration = 60 / TrackEditor.bpm
         local current_beat = play_time / beat_duration
         local fraction = current_beat - math.floor(current_beat)
         
-        -- Detección rítmica limpia para el flash perimetral
         if fraction < 0.08 and TrackEditor.flash_alpha <= 0.1 then
             TrackEditor.flash_alpha = 0.45
             AudioManager.playHatClosed(0.08)
         end
         
-        -- Generar las 32 barras dinámicas del ecualizador rítmico en base al pulso de la canción
         for i = 1, 32 do
             local wave_sync = math.sin(play_time * 8 + i * 0.3) * math.cos(play_time * 3 - i * 0.5)
             local impulse = (fraction < 0.25) and (1 - fraction / 0.25) * 0.6 or 0.1
             local target_height = math.max(5, (0.3 + wave_sync * 0.3 + impulse) * 110)
-            
-            -- Aplicar interpolación lineal suave para evitar tirones en las barras
             TrackEditor.spectrogram_bars[i] = TrackEditor.spectrogram_bars[i] + (target_height - TrackEditor.spectrogram_bars[i]) * 15 * dt
         end
     else
-        -- Decaimiento natural de las barras si la música está en pausa
         for i = 1, 32 do
             TrackEditor.spectrogram_bars[i] = math.max(2, TrackEditor.spectrogram_bars[i] - dt * 120)
         end
@@ -162,7 +161,6 @@ end
 function TrackEditor.mousepressed(mx, my, button)
     if not TrackEditor.active or button ~= 1 then return end
     
-    -- 1. CONTROL DE DESPLEGABLE DE NOTAS (CHROMATIC KEY)
     local dn = TrackEditor.dropdowns.note
     if mx >= dn.x and mx <= dn.x + dn.w and my >= dn.y and my <= dn.y + dn.h then
         dn.active = not dn.active
@@ -185,7 +183,6 @@ function TrackEditor.mousepressed(mx, my, button)
         dn.active = false
     end
 
-    -- 2. CONTROL DE DESPLEGABLE DE MODO (MAJOR / MINOR)
     local dm = TrackEditor.dropdowns.mode
     if mx >= dm.x and mx <= dm.x + dm.w and my >= dm.y and my <= dm.y + dm.h then
         dm.active = not dm.active
@@ -208,7 +205,13 @@ function TrackEditor.mousepressed(mx, my, button)
         dm.active = false
     end
 
-    -- 3. BOTÓN INTERACTIVO: PLAY / PAUSA
+    -- BOTÓN MARCADOR DROP [D]
+    if mx >= 320 and mx <= 520 and my >= 340 and my <= 368 then
+        TrackEditor.markDropSecond()
+        return
+    end
+
+    -- BOTÓN PLAY / PAUSA
     if mx >= 200 and mx <= 380 and my >= 440 and my <= 475 then
         if TrackEditor.preview_source then
             if TrackEditor.is_playing then
@@ -222,18 +225,18 @@ function TrackEditor.mousepressed(mx, my, button)
         end
     end
 
-    -- 4. BOTÓN INTERACTIVO: CONFIRMAR E INYECTAR
+    -- BOTÓN CONFIRMAR E INYECTAR
     if mx >= 420 and mx <= 600 and my >= 440 and my <= 475 then
         TrackEditor.saveAndInject()
     end
 end
+
 function TrackEditor.draw()
     if not TrackEditor.active then return end
     
     love.graphics.push("all")
     love.graphics.clear(0.01, 0.01, 0.04)
     
-    -- Rejilla rítmica de fondo
     local grid_alpha = 0.02 + TrackEditor.flash_alpha * 0.02
     love.graphics.setColor(0, 0.8, 1, grid_alpha)
     for i = 0, 800, 40 do 
@@ -241,7 +244,6 @@ function TrackEditor.draw()
         love.graphics.line(0, i, 800, i) 
     end
 
-    -- METRÓNOMO VISUAL PERIMETRAL
     if TrackEditor.flash_alpha > 0 then
         love.graphics.setLineWidth(4)
         love.graphics.setColor(0, 0.8, 1, TrackEditor.flash_alpha * 0.5)
@@ -249,8 +251,6 @@ function TrackEditor.draw()
         love.graphics.setLineWidth(1)
     end
 
-    -- RENDERIZADO DEL ESPECTROGRAMA ESTILO WINDOWS MEDIA PLAYER
-    -- Dibuja las 32 barras de frecuencia en la base inferior del editor en caliente
     love.graphics.setColor(0, 0.8, 1, 0.15)
     for i = 1, 32 do
         local bar_x = 75 + (i - 1) * 20
@@ -261,43 +261,35 @@ function TrackEditor.draw()
         love.graphics.setColor(0, 0.8, 1, 0.15)
     end
 
-    -- Cabecera
     love.graphics.setFont(love.graphics.newFont(22))
     love.graphics.setColor(0, 0.8, 1, 0.9)
-    love.graphics.printf("SOUNDTRACK INJECTION LAB", 0, 25, 800, "center")
+    love.graphics.printf("SOUNDTRACK INJECTION LAB", 0, 20, 800, "center")
     love.graphics.setFont(love.graphics.newFont(12))
     love.graphics.setColor(0.5, 0.5, 0.6)
-    love.graphics.printf("INTERACTIVE BATCH MODE SYSTEM  |  MOUSE DROPDOWNS INTEGRATED", 0, 58, 800, "center")
+    love.graphics.printf("HYBRID PHRASE & DROP OVERRIDE SYSTEM", 0, 50, 800, "center")
 
-    -- Panel del Archivo Actual
     love.graphics.setColor(0.03, 0.04, 0.08, 0.8)
-    love.graphics.rectangle("fill", 150, 85, 500, 50, 4)
+    love.graphics.rectangle("fill", 150, 75, 500, 45, 4)
     love.graphics.setColor(0, 0.8, 1, 0.2)
-    love.graphics.rectangle("line", 150, 85, 500, 50, 4)
+    love.graphics.rectangle("line", 150, 75, 500, 45, 4)
     
     love.graphics.setFont(love.graphics.newFont(10))
     love.graphics.setColor(0.4, 0.6, 0.8)
-    love.graphics.print("TARGET BATCH TRACK:", 170, 93)
-    love.graphics.setFont(love.graphics.newFont(13))
-    love.graphics.setColor(1, 1, 1)
-    love.graphics.print(TrackEditor.track_name, 170, 110)
-
-    -- RENDERIZADO DE CAMPOS DE EDICIÓN ESTÁTICOS
+    love.graphics.print("TARGET TRACK:", 170, 81)
     love.graphics.setFont(love.graphics.newFont(12))
+    love.graphics.setColor(1, 1, 1)
+    love.graphics.print(TrackEditor.track_name, 170, 96)
+
+    -- Fila 1: BPM
+    love.graphics.setFont(love.graphics.newFont(11))
     love.graphics.setColor(0.6, 0.7, 0.8)
-    
-    -- Fila 1: BPM Slider manual / teclado
-    love.graphics.print("BPM (BEATS PER MINUTE):", 170, 165)
+    love.graphics.print("BPM (BEATS PER MINUTE):", 170, 155)
     love.graphics.setColor(0.05, 0.07, 0.12, 0.9)
-    love.graphics.rectangle("fill", 320, 160, 200, 24, 2)
+    love.graphics.rectangle("fill", 320, 150, 200, 24, 2)
     love.graphics.setColor(1, 1, 1)
-    love.graphics.printf(tostring(TrackEditor.bpm) .. " BPM", 320, 165, 200, "center")
-    love.graphics.setFont(love.graphics.newFont(10))
-    love.graphics.setColor(0, 0.8, 1, 0.4)
-    love.graphics.print("[Hold Left/Right to slide or Tap Spacebar]", 535, 166)
+    love.graphics.printf(tostring(TrackEditor.bpm) .. " BPM", 320, 155, 200, "center")
 
-    -- Fila 2: Cuadro Dropdown Cromático de Notas
-    love.graphics.setFont(love.graphics.newFont(12))
+    -- Fila 2: Tonalidad
     love.graphics.setColor(0.6, 0.7, 0.8)
     love.graphics.print("ROOT KEY (CHROMATIC):", 170, 248)
     love.graphics.setColor(0.05, 0.07, 0.12, 0.9)
@@ -307,7 +299,7 @@ function TrackEditor.draw()
     love.graphics.setColor(1, 1, 1)
     love.graphics.printf(TrackEditor.root_note .. "  v", TrackEditor.dropdowns.note.x, TrackEditor.dropdowns.note.y + 3, TrackEditor.dropdowns.note.w, "center")
 
-    -- Fila 3: Cuadro Dropdown de Modo Camelot (Mayor / Menor)
+    -- Fila 3: Modo
     love.graphics.setColor(0.6, 0.7, 0.8)
     love.graphics.print("HARMONIC MODE (CAMELOT):", 170, 298)
     love.graphics.setColor(0.05, 0.07, 0.12, 0.9)
@@ -317,20 +309,27 @@ function TrackEditor.draw()
     love.graphics.setColor(1, 1, 1)
     love.graphics.printf(TrackEditor.mode .. "  v", TrackEditor.dropdowns.mode.x, TrackEditor.dropdowns.mode.y + 3, TrackEditor.dropdowns.mode.w, "center")
 
-    -- RENDERIZADO DE BOTONES INTERACTIVOS DE BASE (PLAY / CONFIRM)
+    -- Fila 4: MARCADOR DROP [D]
+    love.graphics.setColor(0.6, 0.7, 0.8)
+    love.graphics.print("DROP SECOND OVERRIDE:", 170, 348)
+    love.graphics.setColor(0.05, 0.07, 0.15, 0.9)
+    love.graphics.rectangle("fill", 320, 340, 200, 26, 2)
+    love.graphics.setColor(0, 0.8, 1, 0.4)
+    love.graphics.rectangle("line", 320, 340, 200, 26, 2)
+    love.graphics.setColor(1.0, 0.85, 0.2)
+    local drop_str = (TrackEditor.drop_second > 0) and (string.format("%.1fs", TrackEditor.drop_second) .. " (CLICK OR [D])") or "AUTO (PRESS [D] ON DROP)"
+    love.graphics.printf(drop_str, 320, 346, 200, "center")
+
+    -- BOTONES
     local mx, my = love.mouse.getPosition()
-    
-    -- Botón 1: Play / Pausa
     local hover_play = (mx >= 200 and mx <= 380 and my >= 440 and my <= 475)
     love.graphics.setColor(hover_play and {0, 0.4, 0.7, 0.8} or {0.05, 0.08, 0.15, 0.8})
     love.graphics.rectangle("fill", 200, 440, 180, 35, 4)
     love.graphics.setColor(0, 0.8, 1, 0.4)
     love.graphics.rectangle("line", 200, 440, 180, 35, 4)
     love.graphics.setColor(1, 1, 1)
-    love.graphics.setFont(love.graphics.newFont(11))
     love.graphics.printf(TrackEditor.is_playing and "MUTED MONITOR" or "PLAY AUDITION", 200, 451, 180, "center")
 
-    -- Botón 2: Confirmar & Siguiente
     local hover_confirm = (mx >= 420 and mx <= 600 and my >= 440 and my <= 475)
     love.graphics.setColor(hover_confirm and {0, 0.6, 0.4, 0.9} or {0.04, 0.15, 0.08, 0.8})
     love.graphics.rectangle("fill", 420, 440, 180, 35, 4)
@@ -340,15 +339,13 @@ function TrackEditor.draw()
     local label_save = (#TrackEditor.batch_queue > 0) and "INJECT & NEXT TRACK" or "INJECT SOUNDTRACK"
     love.graphics.printf(label_save, 420, 451, 180, "center")
 
-    -- CAPAS FLOTANTES DE MENÚS DESPLEGABLES (Dropdown overlays sobre la UI)
-    -- Dropdown de Notas desplegado en caliente
+    -- Overlays de dropdowns
     if TrackEditor.dropdowns.note.active then
         local dn = TrackEditor.dropdowns.note
         love.graphics.setColor(0.02, 0.03, 0.06, 0.95)
         love.graphics.rectangle("fill", dn.x, dn.y + dn.h, dn.w, #TrackEditor.CHROMATIC_NOTES * 20, 2)
         love.graphics.setColor(0, 0.8, 1, 0.5)
         love.graphics.rectangle("line", dn.x, dn.y + dn.h, dn.w, #TrackEditor.CHROMATIC_NOTES * 20, 2)
-        love.graphics.setFont(love.graphics.newFont(11))
         for i, n in ipairs(TrackEditor.CHROMATIC_NOTES) do
             local item_y = dn.y + dn.h + (i - 1) * 20
             local h_item = (mx >= dn.x and mx <= dn.x + dn.w and my >= item_y and my <= item_y + 20)
@@ -359,7 +356,6 @@ function TrackEditor.draw()
         end
     end
 
-    -- Dropdown de Modos desplegado en caliente
     if TrackEditor.dropdowns.mode.active then
         local dm = TrackEditor.dropdowns.mode
         local modes_opt = {"MINOR", "MAJOR"}
@@ -367,7 +363,6 @@ function TrackEditor.draw()
         love.graphics.rectangle("fill", dm.x, dm.y + dm.h, dm.w, #modes_opt * 20, 2)
         love.graphics.setColor(0, 0.8, 1, 0.5)
         love.graphics.rectangle("line", dm.x, dm.y + dm.h, dm.w, #modes_opt * 20, 2)
-        love.graphics.setFont(love.graphics.newFont(11))
         for i, m in ipairs(modes_opt) do
             local item_y = dm.y + dm.h + (i - 1) * 20
             local h_item = (mx >= dm.x and mx <= dm.x + dm.w and my >= item_y and my <= item_y + 20)
@@ -378,11 +373,6 @@ function TrackEditor.draw()
         end
     end
 
-    -- Footer informativo de lotes
-    love.graphics.setFont(love.graphics.newFont(11))
-    love.graphics.setColor(0, 0.8, 1, 0.35)
-    love.graphics.printf("REMAINING BATCH TRACKS IN COLA: " .. #TrackEditor.batch_queue, 0, 565, 800, "center")
-    
     love.graphics.pop()
 end
 
@@ -390,6 +380,10 @@ function TrackEditor.keypressed(key)
     if not TrackEditor.active then return end
     if key == "escape" then
         TrackEditor.close()
+        return
+    end
+    if key == "d" then
+        TrackEditor.markDropSecond()
         return
     end
     if key == "space" then
@@ -404,18 +398,16 @@ end
 
 function TrackEditor.saveAndInject()
     if TrackEditor.current_file_path then
-        -- Pasamos las variables fijas al TrackManager que inyectará el bloc de notas
         local success, msg = TrackManager.injectCustomTrack(
             TrackEditor.current_file_path, 
             TrackEditor.track_name, 
             TrackEditor.bpm, 
             TrackEditor.root_note,
             TrackEditor.mode,
-            0, -- Forzamos cero como bandera ya que el espectrograma RMS se calcula solo
+            TrackEditor.drop_second or 0,
             0
         )
         if success then
-            -- Pasar de inmediato a procesar el siguiente tema de la cola de lotes
             TrackEditor.processNextInQueue()
         end
     end

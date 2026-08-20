@@ -42,12 +42,22 @@ function Board.new(x, y, player_type, colors)
     self.highest_row = 40
     self.danger_level = 0.0
     
-    -- SISTEMA DE DESTRUCCIÓN CINEMÁTICA EN CRISTAL (Zero-GC)
+    -- SISTEMA DE INTERFERENCIA ESPECTRAL (PHANTOM DUEL - 4 FASES)
+    self.phantoms = {}
+    for i = 1, 4 do
+        self.phantoms[i] = { 
+            active = false, x = 4, y = 26, 
+            origin_x = 400, origin_y = 260,
+            id = 1, shape = nil, timer = 0, max_timer = 2.8, 
+            glitch_phase = 0 
+        }
+    end
+
+    -- SISTEMA DE DESTRUCCIÓN CINEMÁTICA EN CRISTAL
     self.is_dying = false
     self.death_timer = 0.0
     self.death_duration = 1.45
     
-    -- Pool estático de fragmentos poliédricos de cristal
     self.shatter_shards = {}
     for i = 1, 350 do
         self.shatter_shards[i] = { 
@@ -59,7 +69,6 @@ function Board.new(x, y, player_type, colors)
     end
     self.shatter_head = 1
 
-    -- Fisuras y grietas en la matriz previa al estallido
     self.cracks = {}
     for i = 1, 40 do
         self.cracks[i] = { active = false, x1 = 0, y1 = 0, x2 = 0, y2 = 0, alpha = 1.0 }
@@ -87,71 +96,79 @@ function Board.new(x, y, player_type, colors)
     return self
 end
 
-function Board:triggerDeath()
-    if self.is_dying then return end
-    self.is_dying = true
-    self.death_timer = self.death_duration
-    self.is_zone_active = false
-    
-    -- Generar red de grietas luminosas en la matriz
-    for i = 1, 40 do
-        local c = self.cracks[i]
-        c.active = true
-        c.x1 = self.x + math.random(10, 230)
-        c.y1 = self.y + math.random(80, 470)
-        c.x2 = c.x1 + math.random(-45, 45)
-        c.y2 = c.y1 + math.random(-55, 55)
-        c.alpha = 1.0
-    end
-
-    -- Descomponer cada bloque en múltiples fragmentos facetados angulares
-    self.shatter_head = 1
+function Board:shiftColumnsLocal(dir)
+    -- Cinta Torus Local: Rota columnas 1 a 10 horizontalmente sin generar basura
     for r = 21, 40 do
-        for col = 1, 10 do
-            local id = self.grid[r][col]
-            if id ~= 0 then
-                local bx = self.x + (col - 1) * 24 + 12
-                local by = self.y + (r - 21) * 24 + 12
-                
-                -- Cada bloque se divide en 3 esquirlas de cristal de distinta forma geométrica
-                for shard_idx = 1, 3 do
-                    local s = self.shatter_shards[self.shatter_head]
-                    s.active = true
-                    s.x = bx + math.random(-6, 6)
-                    s.y = by + math.random(-6, 6)
-                    
-                    local angle = math.random() * math.pi * 2
-                    local speed = math.random(160, 520)
-                    s.vx = math.cos(angle) * speed + math.random(-60, 60)
-                    s.vy = math.sin(angle) * speed - math.random(120, 320)
-                    s.rot = math.random() * math.pi * 2
-                    s.vrot = (math.random() - 0.5) * 18.0
-                    s.w = math.random(6, 14)
-                    s.h = math.random(8, 18)
-                    s.shard_type = math.random(1, 4) -- 1: Triángulo, 2: Rombo, 3: Bisel, 4: Aguja
-                    s.id = id
-                    s.alpha = 1.0
-                    s.life = 1.0
-
-                    self.shatter_head = (self.shatter_head % 350) + 1
-                end
-                self.grid[r][col] = 0
-            end
+        if dir > 0 then
+            local last = self.grid[r][10]
+            for c = 10, 2, -1 do self.grid[r][c] = self.grid[r][c - 1] end
+            self.grid[r][1] = last
+        else
+            local first = self.grid[r][1]
+            for c = 1, 9 do self.grid[r][c] = self.grid[r][c + 1] end
+            self.grid[r][10] = first
         end
     end
-
-    _G.HitStopTimer = 0.35
-    self:triggerShake(32, 0.8)
-    AudioManager.playImmediateSFX("death", self.player_type == "bot")
-    AudioManager.triggerGlitch(0.9)
 end
 
-function Board:spawnTrail(x, y_start, y_end, id, shape)
-    for i = 1, #self.trails do
-        if not self.trails[i].active then
-            local t = self.trails[i]
-            t.active, t.x, t.y_start, t.y_end = true, x, y_start, y_end
-            t.id, t.shape, t.timer = id, shape, self.trail_duration
+function Board:shiftColumnsGlobal(target_board, dir)
+    -- Cinta Global Cruzada: Anillo continuo de 20 columnas compartido entre ambos jugadores
+    for r = 21, 40 do
+        if dir > 0 then
+            local p_last = self.grid[r][10]
+            local b_last = target_board.grid[r][10]
+            
+            for c = 10, 2, -1 do self.grid[r][c] = self.grid[r][c - 1] end
+            for c = 10, 2, -1 do target_board.grid[r][c] = target_board.grid[r][c - 1] end
+            
+            target_board.grid[r][1] = p_last
+            self.grid[r][1] = b_last
+        end
+    end
+end
+
+function Board:swapGrids(target_board)
+    -- Intercambio completo de matrices en la anomalía Matrix Swap
+    for r = 1, 40 do
+        for c = 1, 10 do
+            local temp = self.grid[r][c]
+            self.grid[r][c] = target_board.grid[r][c]
+            target_board.grid[r][c] = temp
+        end
+    end
+    self:setPopup("⚠ MATRIX SWAP!", {1.0, 0.85, 0.2})
+    target_board:setPopup("⚠ MATRIX SWAP!", {1.0, 0.85, 0.2})
+end
+
+function Board:spawnPhantom(x, y, id, shape, origin_x, origin_y)
+    for i = 1, #self.phantoms do
+        local ph = self.phantoms[i]
+        if not ph.active then
+            ph.active = true
+            ph.x = math.max(1, math.min(7, x or 4))
+            ph.y = math.max(22, math.min(34, y or 28))
+            ph.origin_x = origin_x or (self.opponent and (self.opponent.x + 120) or 400)
+            ph.origin_y = origin_y or (self.opponent and (self.opponent.y + 240) or 260)
+            ph.id = id or 1
+            ph.shape = shape or SRS.shapes[ph.id][1]
+            ph.timer = ph.max_timer
+            ph.glitch_phase = math.random() * 10
+            
+            self:setPopup("⚠ GHOST INTRUSION!", {0.9, 0.2, 1.0})
+            self:triggerShake(10, 0.35)
+            AudioManager.triggerGlitch(0.25)
+            break
+        end
+    end
+end
+
+function Board:dispelOnePhantom()
+    -- Regla de Juego Justo: Limpiar líneas disipa 1 fantasma de tu pantalla
+    for i = 1, #self.phantoms do
+        local ph = self.phantoms[i]
+        if ph.active then
+            ph.active = false
+            self:setPopup("PHANTOM DISPELLED!", {0.2, 0.95, 1.0})
             break
         end
     end
@@ -162,7 +179,18 @@ function Board:enterZone()
     if self.zone_meter >= 0.25 and not self.is_zone_active then
         self.zone_tier = (self.zone_meter >= 0.999) and 2 or 1
         self.is_zone_active = true
-        self.zone_timer = self.zone_max_time * self.zone_meter
+        
+        -- FASE 0: PHANTOM EXORCISM (Purga defensiva que absorbe energía)
+        local purged_count = 0
+        for i = 1, #self.phantoms do
+            if self.phantoms[i].active then
+                self.phantoms[i].active = false
+                purged_count = purged_count + 1
+            end
+        end
+        
+        local bonus_time = purged_count * 0.8
+        self.zone_timer = (self.zone_max_time * self.zone_meter) + bonus_time
         self.zone_lines = 0
         self.zone_wave_timer = 0
         AudioManager.zone_active = true
@@ -174,7 +202,8 @@ function Board:enterZone()
             ParticleSystem.spawnSupernova(self, {1.0, 0.9, 0.3})
         else
             AudioManager.playImmediateSFX("zone_enter", self.player_type == "bot")
-            self:setPopup("ZONE ACTIVE", {0.1, 0.9, 1.0})
+            local msg = (purged_count > 0) and ("ZONE EXORCISM +" .. string.format("%.1fs", bonus_time)) or "ZONE ACTIVE"
+            self:setPopup(msg, {0.1, 0.9, 1.0})
             self:triggerShake(8, 0.3)
         end
     end
@@ -204,6 +233,20 @@ function Board:exitZone()
         GarbageManager.sendGarbage(self, self.opponent, attack)
         self:setPopup(title, col)
         
+        -- FASE 2: PHANTOM STORM (Enjambre según el rango de Zone)
+        local storm_count = 1
+        if self.zone_lines >= 16 or was_hyper or is_pc then
+            storm_count = 4
+        elseif self.zone_lines >= 12 then
+            storm_count = 3
+        elseif self.zone_lines >= 8 then
+            storm_count = 2
+        end
+
+        for s = 1, storm_count do
+            self.opponent:spawnPhantom(math.random(1, 7), math.random(22, 34), math.random(1, 7))
+        end
+        
         if is_pc or self.zone_lines >= 20 or was_hyper then
             self.ultimatris_halo = 1.0
             _G.HitStopTimer = 0.22
@@ -218,6 +261,73 @@ function Board:exitZone()
     self.zone_lines = 0
 end
 
+function Board:triggerDeath()
+    if self.is_dying then return end
+    self.is_dying = true
+    self.death_timer = self.death_duration
+    self.is_zone_active = false
+    
+    for i = 1, 40 do
+        local c = self.cracks[i]
+        c.active = true
+        c.x1 = self.x + math.random(10, 230)
+        c.y1 = self.y + math.random(80, 470)
+        c.x2 = c.x1 + math.random(-45, 45)
+        c.y2 = c.y1 + math.random(-55, 55)
+        c.alpha = 1.0
+    end
+
+    self.shatter_head = 1
+    for r = 21, 40 do
+        for col = 1, 10 do
+            local id = self.grid[r][col]
+            if id ~= 0 then
+                local bx = self.x + (col - 1) * 24 + 12
+                local by = self.y + (r - 21) * 24 + 12
+                
+                for shard_idx = 1, 3 do
+                    local s = self.shatter_shards[self.shatter_head]
+                    s.active = true
+                    s.x = bx + math.random(-6, 6)
+                    s.y = by + math.random(-6, 6)
+                    
+                    local angle = math.random() * math.pi * 2
+                    local speed = math.random(160, 520)
+                    s.vx = math.cos(angle) * speed + math.random(-60, 60)
+                    s.vy = math.sin(angle) * speed - math.random(120, 320)
+                    s.rot = math.random() * math.pi * 2
+                    s.vrot = (math.random() - 0.5) * 18.0
+                    s.w = math.random(6, 14)
+                    s.h = math.random(8, 18)
+                    s.shard_type = math.random(1, 4)
+                    s.id = id
+                    s.alpha = 1.0
+                    s.life = 1.0
+
+                    self.shatter_head = (self.shatter_head % 350) + 1
+                end
+                self.grid[r][col] = 0
+            end
+        end
+    end
+
+    _G.HitStopTimer = 0.35
+    self:triggerShake(32, 0.8)
+    AudioManager.playImmediateSFX("death", self.player_type == "bot")
+    AudioManager.triggerGlitch(0.9)
+end
+
+function Board:spawnTrail(x, y_start, y_end, id, shape)
+    for i = 1, #self.trails do
+        if not self.trails[i].active then
+            local t = self.trails[i]
+            t.active, t.x, t.y_start, t.y_end = true, x, y_start, y_end
+            t.id, t.shape, t.timer = id, shape, self.trail_duration
+            break
+        end
+    end
+end
+
 function Board:update(dt)
     Shaker.update(self, dt)
     ParticleSystem.update(self, dt)
@@ -225,7 +335,15 @@ function Board:update(dt)
     if self.lock_impact > 0 then self.lock_impact = math.max(0, self.lock_impact - dt * 4.0) end
     if self.ultimatris_halo > 0 then self.ultimatris_halo = math.max(0, self.ultimatris_halo - dt * 2.0) end
 
-    -- Física cinemática de fragmentos de cristal
+    for i = 1, #self.phantoms do
+        local ph = self.phantoms[i]
+        if ph.active then
+            ph.timer = ph.timer - dt
+            ph.glitch_phase = ph.glitch_phase + dt * 12.0
+            if ph.timer <= 0 then ph.active = false end
+        end
+    end
+
     if self.is_dying then
         self.death_timer = self.death_timer - dt
         local prog = math.max(0, self.death_timer / self.death_duration)
@@ -240,8 +358,8 @@ function Board:update(dt)
             if s.active then
                 s.x = s.x + s.vx * dt
                 s.y = s.y + s.vy * dt
-                s.vy = s.vy + 720 * dt -- Gravedad pesada
-                s.vx = s.vx * (1.0 - 0.4 * dt) -- Fricción de aire
+                s.vy = s.vy + 720 * dt
+                s.vx = s.vx * (1.0 - 0.4 * dt)
                 s.rot = s.rot + s.vrot * dt
                 s.alpha = prog * prog
                 if s.y > 660 then s.active = false end
@@ -305,6 +423,59 @@ function Board:triggerShake(mag, dur)
     self.shake_time = dur
 end
 
+function Board:drawPhantoms()
+    local time = love.timer.getTime()
+    local pulse = _G.AudioBeatPulse or 0
+    love.graphics.push("all")
+    love.graphics.setBlendMode("add")
+
+    for i = 1, #self.phantoms do
+        local ph = self.phantoms[i]
+        if ph.active and ph.shape then
+            local progress = ph.timer / ph.max_timer
+            local alpha = progress * (0.65 + math.sin(time * 28 + ph.glitch_phase) * 0.25)
+            local target_cx = self.x + (ph.x + 1) * 24
+            local target_cy = self.y + (ph.y - 21) * 24
+
+            -- RAYO LÁSER CONECTOR
+            if progress > 0.4 then
+                local beam_alpha = (progress - 0.4) / 0.6
+                love.graphics.setLineWidth(2 + pulse * 3)
+                love.graphics.setColor(0.9, 0.2, 1.0, beam_alpha * 0.7)
+                love.graphics.line(ph.origin_x, ph.origin_y, target_cx, target_cy)
+                love.graphics.setColor(1.0, 1.0, 1.0, beam_alpha * 0.9)
+                love.graphics.setLineWidth(1)
+                love.graphics.line(ph.origin_x, ph.origin_y, target_cx, target_cy)
+            end
+
+            -- FANTASMA HOLOGRÁFICO CON TRANSPARENCIA TRANSPARENTE FAIR-PLAY
+            for r = 1, #ph.shape do
+                for c = 1, #ph.shape[r] do
+                    if ph.shape[r][c] ~= 0 then
+                        local jitter_x = (math.random() - 0.5) * 8 * progress
+                        local jitter_y = (math.random() - 0.5) * 4 * progress
+                        local px = self.x + (ph.x + c - 2) * 24 + jitter_x
+                        local py = self.y + (ph.y + r - 22) * 24 + jitter_y
+
+                        love.graphics.setColor(0.9, 0.1, 1.0, alpha * 0.5)
+                        love.graphics.rectangle("fill", px - 2, py - 2, 28, 28, 4)
+
+                        love.graphics.setLineWidth(2.2)
+                        love.graphics.setColor(0.2, 0.95, 1.0, alpha * 0.9)
+                        love.graphics.rectangle("line", px + 1, py + 1, 22, 22, 3)
+
+                        love.graphics.setColor(1, 1, 1, alpha * 0.75)
+                        love.graphics.rectangle("fill", px + 4, py + 4, 16, 16, 2)
+                    end
+                end
+            end
+        end
+    end
+
+    love.graphics.setBlendMode("alpha")
+    love.graphics.pop()
+end
+
 function Board:drawDangerAtmosphere()
     if self.danger_level <= 0.05 then return end
     
@@ -340,7 +511,6 @@ function Board:drawShatterAnimation()
     love.graphics.push("all")
     love.graphics.setBlendMode("add")
 
-    -- 1. Dibujar red de fisuras de energía fracturadas
     love.graphics.setLineWidth(1.5)
     for i = 1, 40 do
         local c = self.cracks[i]
@@ -352,7 +522,6 @@ function Board:drawShatterAnimation()
         end
     end
     
-    -- 2. Dibujar esquirlas poliédricas de cristal detalladas
     for i = 1, 350 do
         local s = self.shatter_shards[i]
         if s.active and s.alpha > 0 then
@@ -364,43 +533,30 @@ function Board:drawShatterAnimation()
             love.graphics.rotate(s.rot)
             
             if s.shard_type == 1 then
-                -- Esquirlas Triangulares Afiladas
                 love.graphics.setColor(clr[1], clr[2], clr[3], s.alpha * 0.4)
                 love.graphics.polygon("fill", -w/2, -h/2, w/2, -h/4, 0, h/2)
-                
                 love.graphics.setLineWidth(1.5)
                 love.graphics.setColor(clr[1] * 1.2, clr[2] * 1.2, clr[3] * 1.2, s.alpha * 0.9)
                 love.graphics.polygon("line", -w/2, -h/2, w/2, -h/4, 0, h/2)
-                
                 love.graphics.setColor(1, 1, 1, s.alpha * 0.7)
                 love.graphics.line(-w/4, -h/3, 0, h/3)
-                
             elseif s.shard_type == 2 then
-                -- Diamantes / Rombo Facetado
                 love.graphics.setColor(clr[1], clr[2], clr[3], s.alpha * 0.45)
                 love.graphics.polygon("fill", 0, -h/2, w/2, 0, 0, h/2, -w/2, 0)
-                
                 love.graphics.setLineWidth(1.5)
                 love.graphics.setColor(1.0, 1.0, 1.0, s.alpha * 0.95)
                 love.graphics.polygon("line", 0, -h/2, w/2, 0, 0, h/2, -w/2, 0)
-                
                 love.graphics.setColor(clr[1], clr[2], clr[3], s.alpha * 0.8)
                 love.graphics.line(0, -h/2, 0, h/2)
-                
             elseif s.shard_type == 3 then
-                -- Fragmentos Biselados
                 love.graphics.setColor(clr[1] * 0.8, clr[2] * 0.8, clr[3] * 0.8, s.alpha * 0.5)
                 love.graphics.polygon("fill", -w/2, -h/3, w/3, -h/2, w/2, h/2, -w/3, h/3)
-                
                 love.graphics.setLineWidth(1.5)
                 love.graphics.setColor(clr[1], clr[2], clr[3], s.alpha * 0.85)
                 love.graphics.polygon("line", -w/2, -h/3, w/3, -h/2, w/2, h/2, -w/3, h/3)
-                
                 love.graphics.setColor(1, 1, 1, s.alpha * 0.6)
                 love.graphics.circle("fill", 0, 0, 1.5)
-                
             else
-                -- Agujas Láser de Cristal Fino
                 love.graphics.setColor(clr[1], clr[2], clr[3], s.alpha * 0.6)
                 love.graphics.rectangle("fill", -w/4, -h/2, w/2, h, 1)
                 love.graphics.setColor(1, 1, 1, s.alpha * 0.9)
@@ -596,6 +752,7 @@ function Board:draw()
     
     self:drawEQBackground()
     self:drawTrails()
+    self:drawPhantoms()
     self:drawDangerAtmosphere()
 
     love.graphics.setColor(1, 1, 1, 0.03 + pulse * 0.03)
@@ -670,10 +827,20 @@ function Board:checkLines(is_tspin)
         if full then table.insert(lines, r) end
     end
     if #lines > 0 then
+        -- REGLA DE JUEGO JUSTO: Limpiar líneas disipa la interferencia de 1 Phantom
+        self:dispelOnePhantom()
+
         if self.is_zone_active then
             self.zone_lines = self.zone_lines + #lines
             local col = (self.zone_tier == 2) and {1.0, 0.9, 0.3} or {0.2, 1.0, 0.8}
             self:setPopup("ZONE " .. self.zone_lines, col)
+            
+            -- FASE 1: ASTRAL MIRAGE (Proyección de eco en vivo sobre el rival)
+            if self.opponent and self.active_piece then
+                local p = self.active_piece
+                self.opponent:spawnPhantom(p.x, p.y, p.id, p.shape[p.rotation], self.x + 120, self.y + 240)
+            end
+
             for _, r in ipairs(lines) do
                 ParticleSystem.spawnLineBlast(self, r, self.grid[r][1] or 1)
                 table.remove(self.grid, r)

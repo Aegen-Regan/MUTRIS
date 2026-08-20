@@ -34,7 +34,6 @@ function GarbageManager.calculateAttack(lines, is_tspin, is_mini, combo, b2b, bo
 
     board.eq_charge = math.min(1.0, board.eq_charge + charge_boost)
 
-    -- Carga del medidor Zone calibrada (apenas más lenta y balanceada)
     if not board.is_zone_active then
         local zone_gain = lines * 0.038
         if is_tspin then zone_gain = zone_gain + 0.06 end
@@ -64,6 +63,14 @@ function GarbageManager.calculateAttack(lines, is_tspin, is_mini, combo, b2b, bo
         if combo >= 2 then board:setPopup("COMBO " .. combo, {1, 0.8, 0}) end
     end
 
+    -- DETONACIÓN DE PHANTOM DUEL (Interferencia Espectral al Rival)
+    if (lines == 4 or is_tspin or (b2b > 0 and lines >= 2)) and board.opponent and board.active_piece then
+        local p = board.active_piece
+        board.opponent:spawnPhantom(p.x, math.random(22, 34), p.id, p.shape[p.rotation])
+        local AudioManager = require "audio_manager"
+        AudioManager.playImmediateSFX("phantom_attack", board.player_type == "bot")
+    end
+
     if message ~= "" then board:setPopup(message, color) end
     return attack
 end
@@ -79,7 +86,6 @@ function GarbageManager.calculateZoneBurst(lines_cleared, is_perfect_clear, is_h
 
     local base = ZONE_ATTACK_TIERS[lines_cleared] or math.floor(lines_cleared * 2.3)
     
-    -- Bonus de 100% Hyper Zone
     if is_hyper_zone then
         base = base + 3
     end
@@ -110,12 +116,10 @@ end
 function GarbageManager.sendGarbage(sender, receiver, amount)
     if amount <= 0 then return end
     
-    -- Invulnerabilidad total: En Zone Mode nada de basura entra al receptor
     if receiver and receiver.is_zone_active then
         return
     end
 
-    -- Cancelación activa (Offsetting)
     local rem = amount
     while rem > 0 and #sender.garbage_queue > 0 do
         if sender.garbage_queue[1] <= rem then 
@@ -134,7 +138,6 @@ function GarbageManager.sendGarbage(sender, receiver, amount)
 end
 
 function GarbageManager.pushToGrid(board)
-    -- Inmunidad: Mientras Zone esté activo la basura no ingresa al grid
     if board.is_zone_active or #board.garbage_queue == 0 then return end
     
     local lines = math.min(table.remove(board.garbage_queue, 1), 8)
