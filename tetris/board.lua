@@ -30,7 +30,41 @@ function Board.new(x, y, player_type, colors)
     self.grid = {}
     for i = 1, 40 do self.grid[i] = {0,0,0,0,0,0,0,0,0,0} end
     self.combo, self.b2b = -1, 0
-    self.zone_meter, self.is_zone_active, self.zone_lines = 0, false, 0
+    self.zone_meter = 0.0
+    self.is_zone_active = false
+    self.zone_tier = 1
+    self.zone_timer = 0.0
+    self.zone_max_time = 6.0
+    self.zone_lines = 0
+    self.zone_wave_timer = 0
+    self.ultimatris_halo = 0
+    
+    self.highest_row = 40
+    self.danger_level = 0.0
+    
+    -- SISTEMA DE DESTRUCCIÓN CINEMÁTICA EN CRISTAL (Zero-GC)
+    self.is_dying = false
+    self.death_timer = 0.0
+    self.death_duration = 1.45
+    
+    -- Pool estático de fragmentos poliédricos de cristal
+    self.shatter_shards = {}
+    for i = 1, 350 do
+        self.shatter_shards[i] = { 
+            active = false, x = 0, y = 0, 
+            vx = 0, vy = 0, rot = 0, vrot = 0, 
+            w = 10, h = 10, shard_type = 1, id = 1, 
+            alpha = 1.0, life = 1.0 
+        }
+    end
+    self.shatter_head = 1
+
+    -- Fisuras y grietas en la matriz previa al estallido
+    self.cracks = {}
+    for i = 1, 40 do
+        self.cracks[i] = { active = false, x1 = 0, y1 = 0, x2 = 0, y2 = 0, alpha = 1.0 }
+    end
+    
     self.garbage_queue = {}
     self.hold_piece, self.can_hold = nil, true
     self.popup_text, self.popup_timer, self.popup_color = "", 0, {1, 1, 1}
@@ -53,6 +87,65 @@ function Board.new(x, y, player_type, colors)
     return self
 end
 
+function Board:triggerDeath()
+    if self.is_dying then return end
+    self.is_dying = true
+    self.death_timer = self.death_duration
+    self.is_zone_active = false
+    
+    -- Generar red de grietas luminosas en la matriz
+    for i = 1, 40 do
+        local c = self.cracks[i]
+        c.active = true
+        c.x1 = self.x + math.random(10, 230)
+        c.y1 = self.y + math.random(80, 470)
+        c.x2 = c.x1 + math.random(-45, 45)
+        c.y2 = c.y1 + math.random(-55, 55)
+        c.alpha = 1.0
+    end
+
+    -- Descomponer cada bloque en múltiples fragmentos facetados angulares
+    self.shatter_head = 1
+    for r = 21, 40 do
+        for col = 1, 10 do
+            local id = self.grid[r][col]
+            if id ~= 0 then
+                local bx = self.x + (col - 1) * 24 + 12
+                local by = self.y + (r - 21) * 24 + 12
+                
+                -- Cada bloque se divide en 3 esquirlas de cristal de distinta forma geométrica
+                for shard_idx = 1, 3 do
+                    local s = self.shatter_shards[self.shatter_head]
+                    s.active = true
+                    s.x = bx + math.random(-6, 6)
+                    s.y = by + math.random(-6, 6)
+                    
+                    local angle = math.random() * math.pi * 2
+                    local speed = math.random(160, 520)
+                    s.vx = math.cos(angle) * speed + math.random(-60, 60)
+                    s.vy = math.sin(angle) * speed - math.random(120, 320)
+                    s.rot = math.random() * math.pi * 2
+                    s.vrot = (math.random() - 0.5) * 18.0
+                    s.w = math.random(6, 14)
+                    s.h = math.random(8, 18)
+                    s.shard_type = math.random(1, 4) -- 1: Triángulo, 2: Rombo, 3: Bisel, 4: Aguja
+                    s.id = id
+                    s.alpha = 1.0
+                    s.life = 1.0
+
+                    self.shatter_head = (self.shatter_head % 350) + 1
+                end
+                self.grid[r][col] = 0
+            end
+        end
+    end
+
+    _G.HitStopTimer = 0.35
+    self:triggerShake(32, 0.8)
+    AudioManager.playImmediateSFX("death", self.player_type == "bot")
+    AudioManager.triggerGlitch(0.9)
+end
+
 function Board:spawnTrail(x, y_start, y_end, id, shape)
     for i = 1, #self.trails do
         if not self.trails[i].active then
@@ -65,11 +158,64 @@ function Board:spawnTrail(x, y_start, y_end, id, shape)
 end
 
 function Board:enterZone()
-    if self.zone_meter >= 1.0 and not self.is_zone_active then
+    if self.is_dying then return end
+    if self.zone_meter >= 0.25 and not self.is_zone_active then
+        self.zone_tier = (self.zone_meter >= 0.999) and 2 or 1
         self.is_zone_active = true
+        self.zone_timer = self.zone_max_time * self.zone_meter
+        self.zone_lines = 0
+        self.zone_wave_timer = 0
         AudioManager.zone_active = true
-        AudioManager.playImmediateSFX("zone_enter", self.player_type == "bot")
+        
+        if self.zone_tier == 2 then
+            AudioManager.playImmediateSFX("zone_enter_hyper", self.player_type == "bot")
+            self:setPopup("HYPER ZONE (100%)", {1.0, 0.9, 0.3})
+            self:triggerShake(12, 0.45)
+            ParticleSystem.spawnSupernova(self, {1.0, 0.9, 0.3})
+        else
+            AudioManager.playImmediateSFX("zone_enter", self.player_type == "bot")
+            self:setPopup("ZONE ACTIVE", {0.1, 0.9, 1.0})
+            self:triggerShake(8, 0.3)
+        end
     end
+end
+
+function Board:checkPerfectClear()
+    for r = 21, 40 do
+        for c = 1, 10 do
+            if self.grid[r][c] ~= 0 then return false end
+        end
+    end
+    return true
+end
+
+function Board:exitZone()
+    local was_hyper = (self.zone_tier == 2)
+    self.is_zone_active = false
+    self.zone_tier = 1
+    self.zone_meter = 0.0
+    self.zone_timer = 0.0
+    AudioManager.zone_active = false
+
+    local is_pc = self:checkPerfectClear()
+    local attack, title, col = GarbageManager.calculateZoneBurst(self.zone_lines, is_pc, was_hyper)
+    
+    if attack > 0 and self.opponent then
+        GarbageManager.sendGarbage(self, self.opponent, attack)
+        self:setPopup(title, col)
+        
+        if is_pc or self.zone_lines >= 20 or was_hyper then
+            self.ultimatris_halo = 1.0
+            _G.HitStopTimer = 0.22
+            ParticleSystem.spawnSupernova(self, col)
+            AudioManager.playImmediateSFX("ultimatris", self.player_type == "bot")
+            self:triggerShake(22, 0.6)
+        else
+            self:triggerShake(14, 0.4)
+            AudioManager.playImmediateSFX("tetris", self.player_type == "bot")
+        end
+    end
+    self.zone_lines = 0
 end
 
 function Board:update(dt)
@@ -77,6 +223,57 @@ function Board:update(dt)
     ParticleSystem.update(self, dt)
     if self.popup_timer > 0 then self.popup_timer = self.popup_timer - dt end
     if self.lock_impact > 0 then self.lock_impact = math.max(0, self.lock_impact - dt * 4.0) end
+    if self.ultimatris_halo > 0 then self.ultimatris_halo = math.max(0, self.ultimatris_halo - dt * 2.0) end
+
+    -- Física cinemática de fragmentos de cristal
+    if self.is_dying then
+        self.death_timer = self.death_timer - dt
+        local prog = math.max(0, self.death_timer / self.death_duration)
+        
+        for i = 1, 40 do
+            local c = self.cracks[i]
+            if c.active then c.alpha = prog end
+        end
+
+        for i = 1, 350 do
+            local s = self.shatter_shards[i]
+            if s.active then
+                s.x = s.x + s.vx * dt
+                s.y = s.y + s.vy * dt
+                s.vy = s.vy + 720 * dt -- Gravedad pesada
+                s.vx = s.vx * (1.0 - 0.4 * dt) -- Fricción de aire
+                s.rot = s.rot + s.vrot * dt
+                s.alpha = prog * prog
+                if s.y > 660 then s.active = false end
+            end
+        end
+        return
+    end
+
+    local top_r = 40
+    for r = 21, 40 do
+        for c = 1, 10 do
+            if self.grid[r][c] ~= 0 then
+                top_r = math.min(top_r, r)
+                break
+            end
+        end
+    end
+    self.highest_row = top_r
+    local danger_stack = math.max(0, (28 - top_r) / 8.0)
+    self.danger_level = math.min(1.0, danger_stack)
+
+    if self.danger_level > 0.75 and math.random() < 0.04 then
+        AudioManager.triggerGlitch(0.06)
+    end
+
+    if self.is_zone_active then
+        self.zone_wave_timer = self.zone_wave_timer + dt
+        self.zone_timer = self.zone_timer - dt
+        if self.zone_timer <= 0 then
+            self:exitZone()
+        end
+    end
 
     self.eq_charge = math.max(0, self.eq_charge - dt * 0.35)
     self.eq_power = math.max(0, self.eq_power - dt * 0.4)
@@ -108,10 +305,120 @@ function Board:triggerShake(mag, dur)
     self.shake_time = dur
 end
 
+function Board:drawDangerAtmosphere()
+    if self.danger_level <= 0.05 then return end
+    
+    local pulse = _G.AudioBeatPulse or 0
+    local time = love.timer.getTime()
+    local intensity = self.danger_level
+    
+    love.graphics.push("all")
+    love.graphics.setBlendMode("add")
+
+    local laser_y = self.y + 2
+    local alpha_laser = (0.4 + math.sin(time * 16) * 0.35 + pulse * 0.25) * intensity
+    love.graphics.setColor(1.0, 0.1, 0.15, alpha_laser)
+    love.graphics.setLineWidth(2 + pulse * 2)
+    love.graphics.line(self.x + 2, laser_y, self.x + 238, laser_y)
+
+    love.graphics.setColor(1.0, 0.05, 0.1, (0.1 + pulse * 0.15) * intensity)
+    love.graphics.rectangle("fill", self.x, self.y, 240, 110 * intensity, 4)
+
+    if intensity > 0.5 and math.random() < (intensity * 0.5) then
+        local glitch_y = self.y + math.random(0, 160)
+        local shift_x = (math.random() - 0.5) * 14 * intensity
+        love.graphics.setColor(1.0, 0.15, 0.3, 0.45)
+        love.graphics.rectangle("fill", self.x + shift_x, glitch_y, 240, math.random(2, 6))
+    end
+
+    love.graphics.setBlendMode("alpha")
+    love.graphics.pop()
+end
+
+function Board:drawShatterAnimation()
+    if not self.is_dying then return end
+    love.graphics.push("all")
+    love.graphics.setBlendMode("add")
+
+    -- 1. Dibujar red de fisuras de energía fracturadas
+    love.graphics.setLineWidth(1.5)
+    for i = 1, 40 do
+        local c = self.cracks[i]
+        if c.active and c.alpha > 0 then
+            love.graphics.setColor(1.0, 0.25, 0.3, c.alpha * 0.85)
+            love.graphics.line(c.x1, c.y1, c.x2, c.y2)
+            love.graphics.setColor(1, 1, 1, c.alpha * 0.6)
+            love.graphics.circle("fill", c.x1, c.y1, 2)
+        end
+    end
+    
+    -- 2. Dibujar esquirlas poliédricas de cristal detalladas
+    for i = 1, 350 do
+        local s = self.shatter_shards[i]
+        if s.active and s.alpha > 0 then
+            local clr = self.colors[s.id] or {1, 1, 1}
+            local w, h = s.w, s.h
+            
+            love.graphics.push()
+            love.graphics.translate(s.x, s.y)
+            love.graphics.rotate(s.rot)
+            
+            if s.shard_type == 1 then
+                -- Esquirlas Triangulares Afiladas
+                love.graphics.setColor(clr[1], clr[2], clr[3], s.alpha * 0.4)
+                love.graphics.polygon("fill", -w/2, -h/2, w/2, -h/4, 0, h/2)
+                
+                love.graphics.setLineWidth(1.5)
+                love.graphics.setColor(clr[1] * 1.2, clr[2] * 1.2, clr[3] * 1.2, s.alpha * 0.9)
+                love.graphics.polygon("line", -w/2, -h/2, w/2, -h/4, 0, h/2)
+                
+                love.graphics.setColor(1, 1, 1, s.alpha * 0.7)
+                love.graphics.line(-w/4, -h/3, 0, h/3)
+                
+            elseif s.shard_type == 2 then
+                -- Diamantes / Rombo Facetado
+                love.graphics.setColor(clr[1], clr[2], clr[3], s.alpha * 0.45)
+                love.graphics.polygon("fill", 0, -h/2, w/2, 0, 0, h/2, -w/2, 0)
+                
+                love.graphics.setLineWidth(1.5)
+                love.graphics.setColor(1.0, 1.0, 1.0, s.alpha * 0.95)
+                love.graphics.polygon("line", 0, -h/2, w/2, 0, 0, h/2, -w/2, 0)
+                
+                love.graphics.setColor(clr[1], clr[2], clr[3], s.alpha * 0.8)
+                love.graphics.line(0, -h/2, 0, h/2)
+                
+            elseif s.shard_type == 3 then
+                -- Fragmentos Biselados
+                love.graphics.setColor(clr[1] * 0.8, clr[2] * 0.8, clr[3] * 0.8, s.alpha * 0.5)
+                love.graphics.polygon("fill", -w/2, -h/3, w/3, -h/2, w/2, h/2, -w/3, h/3)
+                
+                love.graphics.setLineWidth(1.5)
+                love.graphics.setColor(clr[1], clr[2], clr[3], s.alpha * 0.85)
+                love.graphics.polygon("line", -w/2, -h/3, w/3, -h/2, w/2, h/2, -w/3, h/3)
+                
+                love.graphics.setColor(1, 1, 1, s.alpha * 0.6)
+                love.graphics.circle("fill", 0, 0, 1.5)
+                
+            else
+                -- Agujas Láser de Cristal Fino
+                love.graphics.setColor(clr[1], clr[2], clr[3], s.alpha * 0.6)
+                love.graphics.rectangle("fill", -w/4, -h/2, w/2, h, 1)
+                love.graphics.setColor(1, 1, 1, s.alpha * 0.9)
+                love.graphics.line(0, -h/2, 0, h/2)
+            end
+
+            love.graphics.pop()
+        end
+    end
+    
+    love.graphics.setBlendMode("alpha")
+    love.graphics.pop()
+end
+
 function Board:drawEQBackground()
     local garbage_count = 0
     for _, lines in ipairs(self.garbage_queue) do garbage_count = garbage_count + lines end
-    if self.eq_charge <= 0.01 and garbage_count == 0 then return end
+    if self.eq_charge <= 0.01 and garbage_count == 0 and not self.is_zone_active then return end
 
     local pulse = _G.AudioBeatPulse or 0
     local time = love.timer.getTime()
@@ -129,9 +436,15 @@ function Board:drawEQBackground()
         for s = 0, 18 do
             if s <= bar_val then
                 local sy = self.y + 480 - (s * 25) - 22
-                local alpha = (0.15 + pulse * 0.25)
+                local alpha = (0.12 + pulse * 0.2)
                 
-                if is_danger then
+                if self.is_zone_active then
+                    if self.zone_tier == 2 then
+                        love.graphics.setColor(0.9, 0.7, 0.1, 0.15)
+                    else
+                        love.graphics.setColor(0.0, 0.5, 0.8, 0.12)
+                    end
+                elseif is_danger then
                     local r_pulse = 0.6 + math.sin(time * 12 + c) * 0.4
                     love.graphics.setColor(1.0, 0.1 * r_pulse, 0.1, alpha * 0.7)
                 elseif is_attacking then
@@ -186,7 +499,7 @@ function Board:drawTrails()
     love.graphics.pop()
 end
 
-function Board:drawBlock(bx, by, id, alpha)
+function Board:drawBlock(bx, by, id, alpha, col_idx, row_idx)
     local clr = self.colors[id] or {1, 1, 1}
     local pulse = _G.AudioBeatPulse or 0
     local energy = _G.TrackEnergyPunch or 0
@@ -196,15 +509,60 @@ function Board:drawBlock(bx, by, id, alpha)
     local ds = 24 * scale
     local off = (ds - 24) / 2
 
-    love.graphics.setColor(clr[1], clr[2], clr[3], a * 0.38)
-    love.graphics.rectangle("fill", bx - off, by - off, ds, ds, 4)
-    
-    love.graphics.setLineWidth(2)
-    love.graphics.setColor(clr[1], clr[2], clr[3], a * (0.85 + pulse * 0.25))
-    love.graphics.rectangle("line", bx - off, by - off, ds, ds, 4)
+    if self.is_zone_active and col_idx and row_idx then
+        local w_time = self.zone_wave_timer or 0
+        local diag_phase = (col_idx + (row_idx - 20)) * 0.55 - w_time * 8.0
+        local wave = 0.5 + 0.5 * math.sin(diag_phase)
+        local beam_wave = 0.5 + 0.5 * math.sin((col_idx - (row_idx - 20)) * 0.4 + w_time * 6.0)
 
-    love.graphics.setColor(1, 1, 1, a * (0.25 + pulse * 0.25))
-    love.graphics.rectangle("fill", bx + 3 - off, by + 3 - off, ds - 6, 4, 2)
+        if self.zone_tier == 2 then
+            local chroma_r = 0.5 + 0.5 * math.sin(diag_phase)
+            local chroma_g = 0.5 + 0.5 * math.sin(diag_phase + 2.094)
+            local chroma_b = 0.5 + 0.5 * math.sin(diag_phase + 4.188)
+
+            love.graphics.setColor(0.15 + chroma_r * 0.2, 0.12 + chroma_g * 0.15, 0.05 + chroma_b * 0.1, a * (0.4 + wave * 0.35))
+            love.graphics.rectangle("fill", bx - off, by - off, ds, ds, 4)
+
+            love.graphics.setLineWidth(1.8)
+            love.graphics.setColor(1.0, 0.85 + chroma_g * 0.15, 0.3 + chroma_b * 0.5, a * (0.5 + wave * 0.5))
+            love.graphics.line(bx - off + 2, by - off + ds - 2, bx - off + ds - 2, by - off + 2)
+            love.graphics.line(bx - off + 2, by - off + 2, bx - off + ds - 2, by - off + ds - 2)
+
+            love.graphics.setLineWidth(2.2)
+            love.graphics.setColor(chroma_r, chroma_g, chroma_b, a * (0.85 + wave * 0.15))
+            love.graphics.rectangle("line", bx - off, by - off, ds, ds, 4)
+
+            love.graphics.setColor(1, 1, 1, a * (0.45 + wave * 0.5))
+            love.graphics.rectangle("fill", bx + 4 - off, by + 4 - off, ds - 8, 4, 2)
+        else
+            love.graphics.setColor(clr[1] * 0.35 + 0.05, clr[2] * 0.5 + 0.15, clr[3] * 0.7 + 0.2, a * (0.35 + wave * 0.35))
+            love.graphics.rectangle("fill", bx - off, by - off, ds, ds, 4)
+
+            love.graphics.setLineWidth(1.5)
+            love.graphics.setColor(0.2, 0.95, 1.0, a * (0.4 + wave * 0.55))
+            love.graphics.line(bx - off + 2, by - off + ds - 2, bx - off + ds - 2, by - off + 2)
+
+            love.graphics.setLineWidth(2)
+            local shimmer_r = clr[1] * (0.6 + wave * 0.4)
+            local shimmer_g = clr[2] * (0.6 + beam_wave * 0.4)
+            local shimmer_b = clr[3] * (0.7 + wave * 0.3)
+            love.graphics.setColor(shimmer_r, shimmer_g, shimmer_b, a * (0.8 + wave * 0.2))
+            love.graphics.rectangle("line", bx - off, by - off, ds, ds, 4)
+
+            love.graphics.setColor(1, 1, 1, a * (0.3 + wave * 0.4))
+            love.graphics.rectangle("fill", bx + 3 - off, by + 3 - off, ds - 6, 4, 2)
+        end
+    else
+        love.graphics.setColor(clr[1], clr[2], clr[3], a * 0.38)
+        love.graphics.rectangle("fill", bx - off, by - off, ds, ds, 4)
+        
+        love.graphics.setLineWidth(2)
+        love.graphics.setColor(clr[1], clr[2], clr[3], a * (0.85 + pulse * 0.25))
+        love.graphics.rectangle("line", bx - off, by - off, ds, ds, 4)
+
+        love.graphics.setColor(1, 1, 1, a * (0.25 + pulse * 0.25))
+        love.graphics.rectangle("fill", bx + 3 - off, by + 3 - off, ds - 6, 4, 2)
+    end
 end
 
 function Board:draw()
@@ -214,11 +572,31 @@ function Board:draw()
     love.graphics.push("all")
     Shaker.apply(self)
     
-    love.graphics.setColor(0.01, 0.01, 0.03, 0.95)
+    if self.is_dying then
+        love.graphics.setColor(0.01, 0.01, 0.02, 0.92)
+        love.graphics.rectangle("fill", self.x, self.y, 240, 480, 4)
+        love.graphics.setColor(0.5, 0.1, 0.15, math.max(0, self.death_timer / self.death_duration))
+        love.graphics.rectangle("line", self.x - 2, self.y - 2, 244, 484, 4)
+        self:drawShatterAnimation()
+        ParticleSystem.draw(self)
+        love.graphics.pop()
+        return
+    end
+
+    if self.is_zone_active then
+        if self.zone_tier == 2 then
+            love.graphics.setColor(0.04, 0.02, 0.01, 0.98)
+        else
+            love.graphics.setColor(0.01, 0.03, 0.07, 0.96)
+        end
+    else
+        love.graphics.setColor(0.01, 0.01, 0.03, 0.95)
+    end
     love.graphics.rectangle("fill", self.x, self.y, 240, 480, 4)
     
     self:drawEQBackground()
     self:drawTrails()
+    self:drawDangerAtmosphere()
 
     love.graphics.setColor(1, 1, 1, 0.03 + pulse * 0.03)
     for c = 0, 10 do love.graphics.line(self.x + c*24, self.y, self.x + c*24, self.y + 480) end
@@ -227,12 +605,25 @@ function Board:draw()
     for r = 21, 40 do
         for c = 1, 10 do
             local id = self.grid[r][c]
-            if id ~= 0 then self:drawBlock(self.x + (c-1)*24, self.y + (r-21)*24, id) end
+            if id ~= 0 then 
+                self:drawBlock(self.x + (c-1)*24, self.y + (r-21)*24, id, 1.0, c, r) 
+            end
         end
     end
 
     love.graphics.setLineWidth(2 + pulse * 1.5 * energy)
-    if energy >= 0.9 then
+    if self.danger_level > 0.5 then
+        local flash_danger = 0.6 + math.sin(love.timer.getTime() * 12) * 0.4
+        love.graphics.setColor(1.0, 0.15 * flash_danger, 0.2, 0.9)
+    elseif self.ultimatris_halo > 0 then
+        love.graphics.setColor(1.0, 0.85, 0.2, 0.9 + pulse * 0.1)
+    elseif self.is_zone_active then
+        if self.zone_tier == 2 then
+            love.graphics.setColor(1.0, 0.85, 0.25, 0.95 + pulse * 0.05)
+        else
+            love.graphics.setColor(0.1, 0.85, 1.0, 0.85 + pulse * 0.15)
+        end
+    elseif energy >= 0.9 then
         local t = love.timer.getTime() * 5
         local r = 0.5 + 0.5 * math.sin(t)
         local g = 0.5 + 0.5 * math.sin(t + 2.094)
@@ -256,6 +647,7 @@ function Board:draw()
 end
 
 function Board:canMove(px, py, pr)
+    if self.is_dying then return false end
     if not self.active_piece or not self.active_piece.shape then return false end
     local shape = self.active_piece.shape[pr]
     for r = 1, #shape do
@@ -278,6 +670,20 @@ function Board:checkLines(is_tspin)
         if full then table.insert(lines, r) end
     end
     if #lines > 0 then
+        if self.is_zone_active then
+            self.zone_lines = self.zone_lines + #lines
+            local col = (self.zone_tier == 2) and {1.0, 0.9, 0.3} or {0.2, 1.0, 0.8}
+            self:setPopup("ZONE " .. self.zone_lines, col)
+            for _, r in ipairs(lines) do
+                ParticleSystem.spawnLineBlast(self, r, self.grid[r][1] or 1)
+                table.remove(self.grid, r)
+                table.insert(self.grid, 1, {0,0,0,0,0,0,0,0,0,0})
+            end
+            self:triggerShake(#lines * 4, 0.2)
+            AudioManager.playImmediateSFX("line_clear", self.player_type == "bot")
+            return
+        end
+
         self.combo = self.combo + 1
         local attack = GarbageManager.calculateAttack(#lines, is_tspin, false, self.combo, self.b2b, self)
         if #lines == 4 or is_tspin then self.b2b = self.b2b + 1 else self.b2b = 0 end
@@ -289,12 +695,12 @@ function Board:checkLines(is_tspin)
         end
         self:triggerShake(#lines * 7, 0.3)
     else 
-        self.combo = -1 
+        if not self.is_zone_active then self.combo = -1 end
     end
 end
 
 function Board:hold()
-    if not self.can_hold then return end
+    if self.is_dying or not self.can_hold then return end
     local current_id = self.active_piece.id
     if not self.hold_piece then
         self.hold_piece = Piece.new(current_id, self)
@@ -306,7 +712,7 @@ function Board:hold()
     end
     self.can_hold, self.active_piece.spawn_timer = false, 0
 
-    if not self.active_piece:canMove(self.active_piece.x, self.active_piece.y, 1) then
+    if not self.is_zone_active and not self.active_piece:canMove(self.active_piece.x, self.active_piece.y, 1) then
         _G.GameOverPending = self.player_type
     end
 end

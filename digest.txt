@@ -1,35 +1,37 @@
 Directory structure:
-└── MUTRIS_TXT/
+└── MUTRIS/
     ├── README.md
-    ├── audio_manager.txt
-    ├── conf.txt
-    ├── input.txt
-    ├── main.txt
-    ├── music_manager.txt
-    ├── track_editor.txt
-    ├── track_manager.txt
+    ├── audio_manager.lua
+    ├── conf.lua
+    ├── input.lua
+    ├── main.lua
+    ├── music_manager.lua
+    ├── settings_manager.lua
+    ├── track_editor.lua
+    ├── track_manager.lua
     ├── music/
     │   ├── alex_morgan_trance_euphoria.json
     │   ├── base_fondo.json
     │   └── eliveta_uplifting_trance.json
     └── tetris/
-        ├── ai_bot.txt
-        ├── board.txt
-        ├── fog_layer.txt
-        ├── font_cache.txt
-        ├── game_states.txt
-        ├── garbage_manager.txt
-        ├── hud_center.txt
-        ├── hud_panels.txt
-        ├── particle_system.txt
-        ├── piece.txt
-        ├── pps_counter.txt
-        ├── shaker.txt
-        ├── telemetry.txt
+        ├── ai_bot.lua
+        ├── bloom_shader.lua
+        ├── board.lua
+        ├── fog_layer.lua
+        ├── font_cache.lua
+        ├── game_states.lua
+        ├── garbage_manager.lua
+        ├── hud_center.lua
+        ├── hud_panels.lua
+        ├── particle_system.lua
+        ├── piece.lua
+        ├── pps_counter.lua
+        ├── shaker.lua
+        ├── telemetry.lua
         ├── randomizers/
-        │   └── 7bag.txt
+        │   └── 7bag.lua
         └── rotation_systems/
-            └── srs.txt
+            └── srs.lua
 
 ================================================
 FILE: README.md
@@ -372,8 +374,71 @@ AIBot:evaluate() escaneaba el tablero completo dos veces por cada candidato de c
 | `tetris/telemetry.txt` | **Modificado** | Exposición del identificador de versión en el HUD de combate. |
 
 
+
+
+
+
+# 🕹️ MUTRIS v0.9.5 — ETHEREAL TRANSCENDENCE & COMBAT ENGINE
+## COMPENDIO TÉCNICO DE ARQUITECTURA, ZERO-GC, FÍSICA SRS & INYECCIÓN ACÚSTICA POR HARDWARE
+### 🛠️ ESTADO DE SISTEMA: FASE 8 (DESTRUCCIÓN CINEMÁTICA, DANGER GLITCH & HYPER ZONE) — VERSIÓN ESTABLE
+
+---
+
+> ⚠️ **REGLA DE ORO DE DESARROLLO PERMANENTE:**
+> **EL TÍTULO DEL JUEGO Y EL NÚMERO DE VERSIÓN (`MUTRIS v0.9.5`) DEBEN PERMANECER SIEMPRE VISIBLES EN PANTALLA EN TODOS LOS ESTADOS (MENÚ, GAMEPLAY, EDITOR, SETTINGS Y GAME OVER).** Esta directiva es obligatoria para garantizar la trazabilidad visual en capturas de pantalla, pruebas de telemetría y reportes de rendimiento.
+
+---
+
+## 💎 NOVEDADES Y ARQUITECTURA DE LA VERSIÓN v0.9.5
+
+### 1. Sistema de Muerte e Implosión en Cristal Poliédrico (`board.lua`, `audio_manager.lua`)
+* **Secuencia Cinemática de Derrota:** Al perder por top-out, la matriz no desaparece abruptamente:
+  1. **Fisuras de Energía:** Se genera una red de 40 grietas luminosas interconectadas que parpadean sobre los bloques.
+  2. **Micro-Hitstop (0.35s):** Congelamiento de impacto cinemático que da peso físico a la derrota.
+  3. **Desintegración en 350 Fragmentos:** Cada bloque se divide en esquirlas poliédricas con 4 geometrías distintas (triángulos afilados, rombos facetados, bloques biselados y agujas láser) con física de rotación y gravedad pesada (*Zero-GC Pool*).
+  4. **Audio Sub-Bass Crunch:** Caída tonal senoidal profunda combinada con distorsión analógica destructiva.
+
+### 2. HUD de Tensión Crítica & Micro-Glitches Horizontales (`board.lua`)
+* **Láser de Alarma en el Techo:** Línea neón roja de advertencia en la fila 21 que se activa cuando la pila supera los 13 bloques, parpadeando con el compás de la música.
+* **Scanline Tearing (Desplazamiento RGB):** Al acercarse a 3 bloques del límite superior, el marco del tablero sufre micro-cortes y saltos horizontales aleatorios modulados por la intensidad del peligro (`danger_level`).
+* **Audio Glitch Clicks:** Micro-stutters periódicos en el audio al estar en peligro extremo.
+
+### 3. Mecánica Zone Mode de 2 Niveles & Almacenamiento Estricto (`board.lua`, `garbage_manager.lua`)
+* **Invulnerabilidad Total en Zone:** Inmunidad absoluta contra Game Over al spawnear piezas y bloqueo total de basura entrante mientras la Zona esté activa.
+* **Carga Balanceada del Medidor:** Acumulación calibrada a `0.038` por línea para premiar jugadas estratégicas.
+* **Almacenamiento de Ataque Estricto:** Durante Zone Mode **no se fuga daño al rival**; el 100% del ataque se acumula en el contador y detona en un único estallido al expirar la Zona.
+* **Doble Nivel Visual (2 Skins de Zone):**
+  * **Tier 1 (25% - 99%):** *Holo-Cyan Matrix* con ondas diagonales continuas `sin((c + r) * 0.55 - time * 8.0)`.
+  * **Tier 2 (100% Clavado - Hyper Zone):** Solo se activa con el medidor al máximo (`zone_meter >= 1.0`). Transforma los bloques en una piel *Gold-Diamond Prism* con rejilla láser en cruz, bordes iridiscentes arcoíris y SFX de activación con acorde ascendente extendido.
+
+### 4. IA Master con Radar de Downstacking Quirúrgico (`ai_bot.lua`)
+* **Hole-Seeking Algorithm:** La IA detecta la columna exacta de los pozos de basura (`col 1..10`).
+* **Anti-Obstruction Penalty:** Si la IA está bajo peligro, castiga severamente (`-1500 pts`) colocar piezas que tapen la salida de basura sin limpiar líneas.
+* **Aplanamiento Forzado de Grilla:** Máxima prioridad a limpiezas continuas de líneas simples/dobles para reducir la altura de la torre y contraatacar.
+
+### 5. Laboratorio de Configuración DAS/ARR & Audio (`settings_manager.lua`, `game_states.lua`)
+* **Calibración Competitiva en Vivo:** Sliders interactivos para calibrar DAS (50 a 200 ms), ARR (0 a 25 ms), volumen SFX y BGM.
+* **Persistencia JSON Local:** Guardado y carga automática en `settings.json`.
+
+---
+
+## 🗂️ REGISTRO DE ARCHIVOS MODIFICADOS Y CREADOS
+
+| Archivo | Estado | Descripción del Cambio |
+| :--- | :--- | :--- |
+| `main.lua` | **Modificado** | Control de Hitstop, enlace de muerte cinemática, ruteo de settings y watermark persistente. |
+| `tetris/board.lua` | **Modificado** | Shards de cristal poliédrico, fisuras, 2 skins de Zone (Tier 1 y Tier 2), láser de alarma y scanline tearing. |
+| `tetris/ai_bot.lua` | **Modificado** | Heurística de Downstacking con radar de pozos de basura y anti-obstrucción. |
+| `tetris/garbage_manager.lua` | **Modificado** | Almacenamiento 100% estricto de ataques Zone, cálculo de Hyper Zone y ganancia balanceada. |
+| `audio_manager.lua` | **Modificado** | SFX de muerte digital destructiva y activación Hyper Zone 100%. |
+| `tetris/hud_panels.lua` | **Modificado** | Centrado milimétrico por Tetromino (`PREVIEW_CONFIG`) y badge dorado `[Q] 100%`. |
+| `tetris/bloom_shader.lua` | **Modificado** | Calibración anti-burnout con aberración cromática nítida. |
+| `settings_manager.lua` | **Nuevo** | Módulo de guardado y lectura de parámetros competitivos (`settings.json`). |
+| `tetris/game_states.lua` | **Modificado** | Pantalla interactiva de ajustes DAS/ARR con sliders en tiempo real. |
+
+
 ================================================
-FILE: audio_manager.txt
+FILE: audio_manager.lua
 ================================================
 ---@diagnostic disable: undefined-global
 local AudioManager = {}
@@ -510,7 +575,7 @@ function AudioManager.playHatClosed(volume)
 end
 
 function AudioManager.triggerGlitch(duration)
-    AudioManager.glitch_timer = duration
+    AudioManager.glitch_timer = duration or 0
 end
 
 function AudioManager.playImmediateSFX(type, is_bot, row_y)
@@ -565,8 +630,14 @@ function AudioManager.playImmediateSFX(type, is_bot, row_y)
         
     elseif type == "zone_enter" then
         local low_note = _G.BG_SCALE and _G.BG_SCALE[1] or 32.70
-        AudioManager.playTone(low_note, 1.8, 0.9, "sine", false, 2, 1.2, true)
+        AudioManager.playTone(low_note, 1.8, 0.95, "sine", false, 2, 1.2, true)
         AudioManager.playNoise(0.9, vol * 0.45, 6, 0)
+
+    elseif type == "zone_enter_hyper" then
+        local low_note = _G.BG_SCALE and _G.BG_SCALE[1] or 32.70
+        AudioManager.playTone(low_note * 0.5, 2.2, 1.1, "sine", false, 3, 0.9, true)
+        AudioManager.playArpeggio({130.81, 164.81, 196.00, 261.63, 329.63, 523.25}, "triangle", 1.2, 2, 0.025, 1)
+        AudioManager.playNoise(1.1, 0.6, 4, 1)
         
     elseif type == "tetris" then
         local n1 = notes[1] or 130.81
@@ -575,6 +646,22 @@ function AudioManager.playImmediateSFX(type, is_bot, row_y)
         local n4 = notes[4] or 233.08
         AudioManager.playArpeggio({n1, n2, n3 * 2, n4 * 2, n1 * 4}, "sine", vol * 1.35, energy * 3, 0.028, 1)
         AudioManager.playNoise(0.9, vol * 0.55, 5, 0)
+
+    elseif type == "ultimatris" or type == "perfect_clear" then
+        local root = notes[1] or 130.81
+        local third = notes[2] or 164.81
+        local fifth = notes[3] or 196.00
+        AudioManager.playArpeggio({
+            root * 2, third * 2, fifth * 2, 
+            root * 4, third * 4, fifth * 4, root * 8
+        }, "sine", 1.6, 4, 0.032, 1)
+        AudioManager.playNoise(1.2, 0.65, 4, 2)
+
+    elseif type == "death" then
+        -- Efecto de colapso/implosiÃ³n digital (Sub-bass pitch dive + Crunch destructivo)
+        AudioManager.playTone(55.0, 1.6, 1.2, "saw", true, 5, 1.8, true)
+        AudioManager.playNoise(1.4, 0.85, 3, 4)
+        AudioManager.playTone(32.7, 2.0, 1.0, "sine", false, 6, 1.1, true)
     end
 end
 
@@ -632,7 +719,7 @@ return AudioManager
 
 
 ================================================
-FILE: conf.txt
+FILE: conf.lua
 ================================================
 -- conf.lua
 -- ConfiguraciÃ³n del motor LÃ–VE2D optimizada para hardware limitado
@@ -655,12 +742,11 @@ end
 
 
 ================================================
-FILE: input.txt
+FILE: input.lua
 ================================================
 ---@diagnostic disable: undefined-global
 local Input = {}
-
-local DAS, ARR = 0.094, 0.008 
+local SettingsManager = require "settings_manager"
 
 function Input.init(player_ref)
     Input.player = player_ref
@@ -707,6 +793,9 @@ function Input.update(dt)
     local p = Input.player.active_piece
     if p.locked then return end
 
+    local das = SettingsManager.settings.das or 0.094
+    local arr = math.max(0.001, SettingsManager.settings.arr or 0.008)
+
     local move_left_held = love.keyboard.isDown("kp4") or love.keyboard.isDown("left") or 
                            isGamepadDown("dpleft") or isGamepadAxisDown("leftx", -0.5, false)
     if move_left_held then
@@ -716,9 +805,9 @@ function Input.update(dt)
             Input.timers.left = 0
         else
             Input.timers.left = Input.timers.left + dt
-            while Input.timers.left >= DAS do
+            while Input.timers.left >= das do
                 p:move(-1, 0)
-                Input.timers.left = Input.timers.left - ARR
+                Input.timers.left = Input.timers.left - arr
             end
         end
     else
@@ -734,9 +823,9 @@ function Input.update(dt)
             Input.timers.right = 0
         else
             Input.timers.right = Input.timers.right + dt
-            while Input.timers.right >= DAS do
+            while Input.timers.right >= das do
                 p:move(1, 0)
-                Input.timers.right = Input.timers.right - ARR
+                Input.timers.right = Input.timers.right - arr
             end
         end
     else
@@ -791,7 +880,7 @@ return Input
 
 
 ================================================
-FILE: main.txt
+FILE: main.lua
 ================================================
 ---@diagnostic disable: undefined-global
 _G.ENGINE_VERSION = "MUTRIS v0.9.0"
@@ -806,10 +895,13 @@ local TrackEditor = require "track_editor"
 local GameStates = require "tetris.game_states"
 local FogLayer = require "tetris.fog_layer"
 local FontCache = require "tetris.font_cache"
+local BloomShader = require "tetris.bloom_shader"
+local SettingsManager = require "settings_manager"
 
 _G.RestartHalo = 0
 _G.Winner = nil 
 _G.GameOverPending = nil
+_G.HitStopTimer = 0
 _G.SetGameState = function(state) game_state = state end
 
 local player, bot, game_state, selected_diff = nil, nil, "menu", 1
@@ -821,10 +913,13 @@ local difficulties = {
 function love.load()
     love.window.setTitle("MUTRIS - " .. _G.ENGINE_VERSION)
     love.window.setMode(800, 600, {resizable = false, vsync = true})
+    SettingsManager.init()
     AudioManager.init()
     TrackManager.init()
     FogLayer.init()
+    BloomShader.init()
     _G.RealMatchTimer, _G.TrackEnergyPunch, _G.AudioBeatPulse = 0, 0, 0
+    _G.HitStopTimer = 0
     _G.Stars = {}
     for i = 1, 150 do
         _G.Stars[i] = { x = math.random(800), y = math.random(600), s = math.random(1, 2), v = math.random(10, 40) }
@@ -833,6 +928,7 @@ end
 
 function GlobalRestart()
     _G.RestartHalo, _G.Winner, _G.GameOverPending = 1.0, nil, nil
+    _G.HitStopTimer = 0
     local d = difficulties[selected_diff]
     player = Board.new(80, 50, "human")
     bot = Board.new(480, 50, "bot")
@@ -869,8 +965,14 @@ end
 
 function love.update(dt)
     if _G.RestartHalo > 0 then _G.RestartHalo = math.max(0, _G.RestartHalo - dt * 2.0) end
+    if _G.HitStopTimer > 0 then 
+        _G.HitStopTimer = math.max(0, _G.HitStopTimer - dt) 
+        if player then player:update(dt) end
+        if bot then bot:update(dt) end
+        return 
+    end
+
     local energy = _G.TrackEnergyPunch or 0
-    
     for _, s in ipairs(_G.Stars) do
         s.y = s.y + s.v * dt * (1 + energy * 8) 
         if s.y > 600 then s.y, s.x = 0, math.random(800) end
@@ -886,43 +988,68 @@ function love.update(dt)
     if game_state == "play" then
         _G.RealMatchTimer = _G.RealMatchTimer + dt
         Input.update(dt)
-        AudioManager.update(dt, { danger_level = 0, drop_intensity = 0 })
+        
+        local player_danger = (player and player.danger_level) or 0
+        local bot_danger = (bot and bot.danger_level) or 0
+        AudioManager.update(dt, { danger_level = math.max(player_danger, bot_danger), drop_intensity = 0 })
         MusicManager.update(dt)
 
+        -- Chequeo de Game Over y detonaciÃ³n de la secuencia de muerte
         if _G.GameOverPending then
-            game_state, _G.Winner = "over", (_G.GameOverPending == "human") and "BOT" or "PLAYER"
+            local loser = _G.GameOverPending
             _G.GameOverPending = nil
+            if loser == "human" and player and not player.is_dying then
+                player:triggerDeath()
+                _G.Winner = "BOT"
+            elseif loser == "bot" and bot and not bot.is_dying then
+                bot:triggerDeath()
+                _G.Winner = "PLAYER"
+            end
         end
 
-        if game_state == "play" and player and player.active_piece then
+        -- TransiciÃ³n a pantalla de Game Over cuando termina la animaciÃ³n de muerte
+        if player and player.is_dying and player.death_timer <= 0 then
+            game_state = "over"
+        elseif bot and bot.is_dying and bot.death_timer <= 0 then
+            game_state = "over"
+        end
+
+        if game_state == "play" and player and player.active_piece and not player.is_dying then
             player:update(dt)
             player.active_piece:update(dt, Input.getSoftDropFactor())
             if player.active_piece.locked then
                 require("tetris.garbage_manager").pushToGrid(player)
                 player.active_piece = Piece.new(player.bag:next(), player)
-                if not player.active_piece:canMove(player.active_piece.x, player.active_piece.y, 1) then 
-                    game_state, _G.Winner = "over", "BOT"
+                if not player.is_zone_active and not player.active_piece:canMove(player.active_piece.x, player.active_piece.y, 1) then 
+                    player:triggerDeath()
+                    _G.Winner = "BOT"
                 end
             end
+        elseif player and player.is_dying then
+            player:update(dt)
         end
 
-        if game_state == "play" and bot and bot.active_piece then
+        if game_state == "play" and bot and bot.active_piece and not bot.is_dying then
             bot:update(dt)
             if bot.ai then bot.ai:update(dt) end
             bot.active_piece:update(dt, 0.8)
             if bot.active_piece.locked then
                 require("tetris.garbage_manager").pushToGrid(bot)
                 bot.active_piece = Piece.new(bot.bag:next(), bot)
-                if not bot.active_piece:canMove(bot.active_piece.x, bot.active_piece.y, 1) then 
-                    game_state, _G.Winner = "over", "PLAYER"
+                if not bot.is_zone_active and not bot.active_piece:canMove(bot.active_piece.x, bot.active_piece.y, 1) then 
+                    bot:triggerDeath()
+                    _G.Winner = "PLAYER"
                 end
             end
+        elseif bot and bot.is_dying then
+            bot:update(dt)
         end
     end
 end
 
 function love.draw()
-    love.graphics.push("all")
+    BloomShader.beginDraw()
+    
     local pulse = _G.AudioBeatPulse or 0
     love.graphics.clear(0.002, 0.002, 0.008)
 
@@ -935,16 +1062,22 @@ function love.draw()
 
     if game_state == "menu" then
         GameStates.drawMenu(love.timer.getTime(), selected_diff, difficulties)
+    elseif game_state == "settings" then
+        GameStates.drawSettings(love.timer.getTime())
     elseif game_state == "editor" then
         TrackEditor.draw()
     elseif game_state == "play" then
         if player then 
             player:draw() 
-            if player.active_piece then player.active_piece:draw(player.x, player.y) end 
+            if player.active_piece and not player.is_dying then 
+                player.active_piece:draw(player.x, player.y) 
+            end 
         end
         if bot then 
             bot:draw() 
-            if bot.active_piece then bot.active_piece:draw(bot.x, bot.y) end 
+            if bot.active_piece and not bot.is_dying then 
+                bot.active_piece:draw(bot.x, bot.y) 
+            end 
         end
         require("tetris.hud_center").draw(player, bot)
         local success, Telemetry = pcall(require, "tetris.telemetry")
@@ -953,7 +1086,6 @@ function love.draw()
         GameStates.drawGameOver()
     end
 
-    -- WATERMARK DE VERSIÃ“N PERMANENTE (SIEMPRE VISIBLE EN PANTALLA)
     love.graphics.setFont(FontCache.get(10))
     love.graphics.setColor(1, 1, 1, 0.35 + pulse * 0.15)
     love.graphics.print(_G.ENGINE_VERSION, 10, 582)
@@ -962,18 +1094,26 @@ function love.draw()
         love.graphics.setColor(1, 1, 1, _G.RestartHalo * 0.5)
         love.graphics.rectangle("fill", 0, 0, 800, 600)
     end
-    love.graphics.pop()
+
+    local is_any_zone = (player and player.is_zone_active) or (bot and bot.is_zone_active)
+    BloomShader.endDraw(is_any_zone)
 end
 
 function love.mousepressed(x, y, button)
     if game_state == "editor" then
         TrackEditor.mousepressed(x, y, button)
+    elseif game_state == "settings" and button == 1 then
+        GameStates.handleSettingsMouse(x, y)
     elseif game_state == "menu" and button == 1 then
-        if x >= 275 and x <= 525 and y >= 245 and y <= 280 then
+        if x >= 275 and x <= 525 and y >= 222 and y <= 254 then
             local cur = TrackManager.getCurrentTrack()
             if cur and cur.file_path ~= "" then
                 TrackEditor.enterBatch({cur.file_path})
             end
+            return
+        end
+        if x >= 275 and x <= 525 and y >= 435 and y <= 470 then
+            game_state = "settings"
             return
         end
         if x >= 275 and x <= 525 and y >= 485 and y <= 530 then
@@ -983,9 +1123,20 @@ function love.mousepressed(x, y, button)
     end
 end
 
+function love.mousereleased(x, y, button)
+    if game_state == "settings" then
+        SettingsManager.save()
+    end
+end
+
 function love.keypressed(key)
     if game_state == "editor" then
         TrackEditor.keypressed(key)
+    elseif game_state == "settings" then
+        if key == "escape" or key == "return" then
+            SettingsManager.save()
+            game_state = "menu"
+        end
     elseif game_state == "menu" then
         if key == "up" then selected_diff = math.max(1, selected_diff - 1)
         elseif key == "down" then selected_diff = math.min(#difficulties, selected_diff + 1)
@@ -1003,6 +1154,11 @@ end
 function love.gamepadpressed(joystick, button)
     if game_state == "play" then
         Input.gamepadpressed(joystick, button)
+    elseif game_state == "settings" then
+        if button == "b" or button == "start" then
+            SettingsManager.save()
+            game_state = "menu"
+        end
     elseif game_state == "menu" then
         if button == "start" or button == "a" then GlobalRestart() end
     elseif game_state == "over" then
@@ -1012,7 +1168,7 @@ end
 
 
 ================================================
-FILE: music_manager.txt
+FILE: music_manager.lua
 ================================================
 ---@diagnostic disable: undefined-global
 local MusicManager = {}
@@ -1068,13 +1224,63 @@ return MusicManager
 
 
 ================================================
-FILE: track_editor.txt
+FILE: settings_manager.lua
+================================================
+---@diagnostic disable: undefined-global
+local SettingsManager = {}
+
+SettingsManager.settings = {
+    das = 0.094,       -- DAS en segundos (94 ms)
+    arr = 0.008,       -- ARR en segundos (8 ms)
+    sfx_vol = 1.0,     -- Volumen SFX (0.0 a 1.0)
+    bgm_vol = 0.85     -- Volumen BGM (0.0 a 1.0)
+}
+
+local function serializeJSON(t)
+    local s = "{\n"
+    for k, v in pairs(t) do
+        s = s .. '  "' .. tostring(k) .. '": ' .. tostring(v) .. ",\n"
+    end
+    s = s:sub(1, -3) .. "\n}"
+    return s
+end
+
+local function parseSimpleJSON(str)
+    local t = {}
+    for k, v in str:gmatch('"([%w_]+)":%s*([%d%.]+)') do
+        t[k] = tonumber(v)
+    end
+    return t
+end
+
+function SettingsManager.init()
+    if love.filesystem.getInfo("settings.json") then
+        local contents = love.filesystem.read("settings.json")
+        if contents then
+            local data = parseSimpleJSON(contents)
+            if data.das then SettingsManager.settings.das = data.das end
+            if data.arr then SettingsManager.settings.arr = data.arr end
+            if data.sfx_vol then SettingsManager.settings.sfx_vol = data.sfx_vol end
+            if data.bgm_vol then SettingsManager.settings.bgm_vol = data.bgm_vol end
+        end
+    end
+end
+
+function SettingsManager.save()
+    love.filesystem.write("settings.json", serializeJSON(SettingsManager.settings))
+end
+
+return SettingsManager
+
+
+================================================
+FILE: track_editor.lua
 ================================================
 Error reading file with 'cp1252': 'charmap' codec can't decode byte 0x81 in position 3692: character maps to <undefined>
 
 
 ================================================
-FILE: track_manager.txt
+FILE: track_manager.lua
 ================================================
 ---@diagnostic disable: undefined-global
 local TrackManager = {}
@@ -1311,511 +1517,111 @@ FILE: music/eliveta_uplifting_trance.json
 
 
 ================================================
-FILE: tetris/ai_bot.txt
+FILE: tetris/ai_bot.lua
+================================================
+Error reading file with 'cp1252': 'charmap' codec can't decode byte 0x81 in position 7657: character maps to <undefined>
+
+
+================================================
+FILE: tetris/bloom_shader.lua
 ================================================
 ---@diagnostic disable: undefined-global
-local AIBot = {}
-AIBot.__index = AIBot
+local BloomShader = {}
 
-function AIBot.new(board, profile)
-    local self = setmetatable({}, AIBot)
-    self.board = board
-    self.base_pps = profile.pps == 6.0 and 12.0 or (profile.pps or 3.0)
-    self.pps = self.base_pps
-    self.move_timer = 0
-    self.target_x, self.target_rot = nil, nil
-    self.is_thinking = false
-    self.just_locked = false 
+local shader_code = [[
+    extern number u_energy;
+    extern number u_pulse;
+    extern number u_zone;
 
-    -- Buffers reutilizables para evaluate() (polÃ­tica Zero-GC: nada de tablas
-    -- nuevas dentro del loop de bÃºsqueda, que corre hasta ~56 veces por think()).
-    self._overlay = {}
-    for i = 1, 400 do self._overlay[i] = false end
-    self._heights = {}
-    self._top_found = {}
-    for i = 1, 10 do self._heights[i], self._top_found[i] = 0, false end
-
-    return self
-end
-
-function AIBot:update(dt)
-    -- Seguridad: Si no hay pieza o estÃ¡ bloqueada, no hacer nada
-    if not self.board.active_piece or self.board.active_piece.locked or self.just_locked then 
-        if self.board.active_piece and not self.board.active_piece.locked then
-            self.just_locked = false 
-        end
-        return 
-    end
-    
-    local active_punch = _G.TrackEnergyPunch or 0
-    self.pps = self.base_pps + (active_punch * 8.0)
-
-    self.move_timer = self.move_timer + dt
-    if self.move_timer >= (1 / self.pps) then
-        if not self.is_thinking then self:think() else self:executeMove() end
-        self.move_timer = 0
-    end
-end
-
-function AIBot:think()
-    local p = self.board.active_piece
-    -- Doble comprobaciÃ³n de seguridad para evitar el error 'canMove' nil
-    if not p or p.locked or type(p.canMove) ~= "function" then return end
-    
-    local best_score = -2000000
-    local max_rot = #p.shape
-    
-    for r = 1, max_rot do
-        for x = -2, 11 do
-            if p:canMove(x, p.y, r) then
-                local gy = p.y
-                while p:canMove(x, gy + 1, r) do gy = gy + 1 end
-                local score = self:evaluate(x, gy, r)
-                
-                -- Bonus agresivo: Si es una pieza T, intentar buscar T-Spins
-                if p.id == 6 and score > -500000 then
-                    -- Simulamos la rotaciÃ³n para ver si activarÃ­a el T-Spin
-                    local old_x, old_y, old_r = p.x, p.y, p.rotation
-                    p.x, p.y, p.rotation = x, gy, r
-                    if p:checkTSpin() then score = score + 1500 end
-                    p.x, p.y, p.rotation = old_x, old_y, old_r
-                end
-
-                if score > best_score then
-                    best_score = score
-                    self.target_x, self.target_rot = x, r
-                end
-            end
-        end
-    end
-    self.is_thinking = true
-end
-
--- EvalÃºa quÃ© tan buena es la posiciÃ³n (px, py, pr) para la pieza activa.
--- Produce EXACTAMENTE los mismos puntajes que la versiÃ³n original (misma
--- fÃ³rmula de altura/holes/bumpiness/lÃ­neas), pero evita:
---   1. Recorrer la forma completa de la pieza (hasta 16 celdas) por cada una
---      de las 400 celdas del tablero -- ahora la posiciÃ³n de la pieza se
---      "estampa" una sola vez en un buffer plano reutilizable.
---   2. Escanear el tablero dos veces (una para heights/holes, otra para
---      lÃ­neas completas) -- ahora se hace en un Ãºnico recorrido.
-function AIBot:evaluate(px, py, pr)
-    local grid = self.board.grid
-    local shape = self.board.active_piece.shape[pr]
-
-    local overlay = self._overlay
-    for i = 1, 400 do overlay[i] = false end
-    for sr = 1, #shape do
-        local srow = shape[sr]
-        for sc = 1, #srow do
-            if srow[sc] ~= 0 then
-                local tr, tc = py + sr - 1, px + sc - 1
-                if tr >= 1 and tr <= 40 and tc >= 1 and tc <= 10 then
-                    overlay[(tr - 1) * 10 + tc] = true
-                end
-            end
-        end
-    end
-
-    local heights = self._heights
-    local top_found = self._top_found
-    for c = 1, 10 do heights[c], top_found[c] = 0, false end
-
-    local holes = 0
-    local lines_cleared = 0
-
-    for r = 1, 40 do
-        local row_full = true
-        local base = (r - 1) * 10
-        for c = 1, 10 do
-            local occupied = (grid[r][c] ~= 0) or overlay[base + c]
-            if occupied then
-                if not top_found[c] then
-                    heights[c] = 41 - r
-                    top_found[c] = true
-                end
-            else
-                row_full = false
-                if top_found[c] then holes = holes + 1 end
-            end
-        end
-        if row_full then lines_cleared = lines_cleared + 1 end
-    end
-
-    local max_h, bumpiness = 0, 0
-    for i = 1, 10 do
-        if heights[i] > max_h then max_h = heights[i] end
-        if i < 10 then bumpiness = bumpiness + math.abs(heights[i] - heights[i + 1]) end
-    end
-
-    local score = 0
-    score = score - (max_h * max_h * 5.0)    -- Penalizar altura
-    score = score - (holes * 250.0)         -- Penalizar huecos (MUCHO)
-    score = score - (bumpiness * 15.0)      -- Penalizar irregularidad
-
-    if lines_cleared == 4 then
-        score = score + 1000.0              -- Prioridad a Tetris
-    elseif lines_cleared > 0 then
-        score = score + (lines_cleared * 50.0)
-    end
-
-    return score
-end
-
-function AIBot:executeMove()
-    local p = self.board.active_piece
-    if not p or p.locked or not self.target_x then 
-        self.is_thinking = false
-        return 
-    end
-    
-    local max_rot = #p.shape
-    local real_target_rot = ((self.target_rot - 1) % max_rot) + 1
-    
-    -- Ejecutar rotaciÃ³n
-    if p.rotation ~= real_target_rot then
-        p:rotate(1)
-    -- Ejecutar movimiento lateral
-    elseif p.x < self.target_x then
-        p:move(1, 0)
-    elseif p.x > self.target_x then
-        p:move(-1, 0)
-    -- Si estÃ¡ en posiciÃ³n, Hard Drop
-    else
-        local startY = p.y
-        while p:move(0, 1, true) do end
-        local endY = p.y
-        self.board:spawnTrail(p.x, startY, endY, p.id, p.shape[p.rotation])
-        p:lock()
-        self.is_thinking = false
-        self.just_locked = true 
-    end
-end
-
-return AIBot
-
-
-================================================
-FILE: tetris/board.txt
-================================================
----@diagnostic disable: undefined-global, param-type-mismatch
-local Board = {}
-Board.__index = Board
-
-local Piece = require "tetris.piece"
-local GarbageManager = require "tetris.garbage_manager"
-local AudioManager = require "audio_manager"
-local SRS = require "tetris.rotation_systems.srs"
-local PPSCounter = require "tetris.pps_counter"
-local Shaker = require "tetris.shaker"
-local HUDPanels = require "tetris.hud_panels"
-local ParticleSystem = require "tetris.particle_system"
-local FontCache = require "tetris.font_cache"
-
-function Board.new(x, y, player_type, colors)
-    local self = setmetatable({}, Board)
-    self.x, self.y, self.player_type = x, y, player_type
-    
-    self.colors = colors or {
-        {0.1, 0.9, 1.0}, -- I: Cyan
-        {0.2, 0.4, 1.0}, -- J: Blue
-        {1.0, 0.6, 0.1}, -- L: Orange
-        {1.0, 0.9, 0.2}, -- O: Yellow
-        {0.3, 1.0, 0.5}, -- S: Green
-        {0.8, 0.3, 1.0}, -- T: Purple
-        {1.0, 0.2, 0.4}, -- Z: Red
-        {0.6, 0.6, 0.7}  -- Garbage: Grey
-    }
-    
-    self.grid = {}
-    for i = 1, 40 do self.grid[i] = {0,0,0,0,0,0,0,0,0,0} end
-    self.combo, self.b2b = -1, 0
-    self.zone_meter, self.is_zone_active, self.zone_lines = 0, false, 0
-    self.garbage_queue = {}
-    self.hold_piece, self.can_hold = nil, true
-    self.popup_text, self.popup_timer, self.popup_color = "", 0, {1, 1, 1}
-
-    self.lock_impact = 0
-    self.trail_duration = 0.45
-    self.trails = {}
-    for i = 1, 8 do 
-        self.trails[i] = { active = false, x = 0, y_start = 0, y_end = 0, id = 0, timer = 0, shape = nil }
-    end
-
-    self.eq_charge = 0 
-    self.eq_power = 0  
-    self.eq_flash = 0  
-    self.eq_bars = {} 
-    for i = 1, 10 do self.eq_bars[i] = 0 end
-
-    ParticleSystem.init(self)
-    PPSCounter.init(self)
-    return self
-end
-
-function Board:spawnTrail(x, y_start, y_end, id, shape)
-    for i = 1, #self.trails do
-        if not self.trails[i].active then
-            local t = self.trails[i]
-            t.active, t.x, t.y_start, t.y_end = true, x, y_start, y_end
-            t.id, t.shape, t.timer = id, shape, self.trail_duration
-            break
-        end
-    end
-end
-
-function Board:enterZone()
-    if self.zone_meter >= 1.0 and not self.is_zone_active then
-        self.is_zone_active = true
-        AudioManager.zone_active = true
-        AudioManager.playImmediateSFX("zone_enter", self.player_type == "bot")
-    end
-end
-
-function Board:update(dt)
-    Shaker.update(self, dt)
-    ParticleSystem.update(self, dt)
-    if self.popup_timer > 0 then self.popup_timer = self.popup_timer - dt end
-    if self.lock_impact > 0 then self.lock_impact = math.max(0, self.lock_impact - dt * 4.0) end
-
-    self.eq_charge = math.max(0, self.eq_charge - dt * 0.35)
-    self.eq_power = math.max(0, self.eq_power - dt * 0.4)
-    self.eq_flash = math.max(0, self.eq_flash - dt * 2.5)
-
-    local pulse = _G.AudioBeatPulse or 0
-    for i = 1, 10 do
-        local target = (0.1 + pulse * 0.6 + math.random() * 0.2) * self.eq_charge
-        self.eq_bars[i] = self.eq_bars[i] + (target - self.eq_bars[i]) * 10 * dt
-    end
-
-    for i = 1, #self.trails do
-        local t = self.trails[i]
-        if t.active then 
-            t.timer = t.timer - dt 
-            if t.timer <= 0 then t.active = false end 
-        end
-    end
-    PPSCounter.update(self)
-end
-
-function Board:setPopup(text, color)
-    self.popup_text, self.popup_timer, self.popup_color = text, 1.3, color or {1, 1, 1}
-end
-
-function Board:triggerShake(mag, dur)
-    local energy = _G.TrackEnergyPunch or 0
-    self.shake_mag = mag * (1 + energy * 1.5)
-    self.shake_time = dur
-end
-
-function Board:drawEQBackground()
-    local garbage_count = 0
-    for _, lines in ipairs(self.garbage_queue) do garbage_count = garbage_count + lines end
-    if self.eq_charge <= 0.01 and garbage_count == 0 then return end
-
-    local pulse = _G.AudioBeatPulse or 0
-    local time = love.timer.getTime()
-    local is_danger = garbage_count > 0
-    local is_attacking = self.eq_power > 0.1
-
-    love.graphics.push("all")
-    love.graphics.setBlendMode("add")
-    
-    for c = 1, 10 do
-        local bar_val = self.eq_bars[c] * 19
-        if is_danger then bar_val = math.max(bar_val, math.min(garbage_count * 2.0, 18)) end
-        local bx = self.x + (c - 1) * 24 + 4
+    vec4 effect(vec4 color, Image texture, vec2 texture_coords, vec2 screen_coords) {
+        vec4 base = Texel(texture, texture_coords);
         
-        for s = 0, 18 do
-            if s <= bar_val then
-                local sy = self.y + 480 - (s * 25) - 22
-                local alpha = (0.15 + pulse * 0.25)
-                
-                if is_danger then
-                    local r_pulse = 0.6 + math.sin(time * 12 + c) * 0.4
-                    love.graphics.setColor(1.0, 0.1 * r_pulse, 0.1, alpha * 0.7)
-                elseif is_attacking then
-                    love.graphics.setColor(0.9, 0.2, 1.0, alpha)
-                else
-                    love.graphics.setColor(0.2, 0.6, 1.0, alpha * self.eq_charge)
-                end
+        // AberraciÃ³n cromÃ¡tica sutil y limpia (sin destruir la nitidez del texto)
+        if (u_energy > 0.4 || u_zone > 0.05) {
+            number shift = 0.0006 * (u_energy * 0.4 + u_zone * 0.6);
+            base.r = Texel(texture, texture_coords + vec2(shift, 0.0)).r;
+            base.b = Texel(texture, texture_coords - vec2(shift, 0.0)).b;
+        }
 
-                love.graphics.rectangle("fill", bx, sy, 16, 8, 2)
-            end
-        end
-    end
-    love.graphics.setBlendMode("alpha")
-    love.graphics.pop()
-end
+        // Muestreo gaussiano suave de bajo costo
+        number blur = 0.0010 + (u_energy * 0.0006) + (u_zone * 0.0008);
+        vec4 glow = vec4(0.0);
+        glow += Texel(texture, texture_coords + vec2(-blur, -blur)) * 0.12;
+        glow += Texel(texture, texture_coords + vec2( blur, -blur)) * 0.12;
+        glow += Texel(texture, texture_coords + vec2(-blur,  blur)) * 0.12;
+        glow += Texel(texture, texture_coords + vec2( blur,  blur)) * 0.12;
+        glow += Texel(texture, texture_coords + vec2( 0.0,   blur)) * 0.13;
+        glow += Texel(texture, texture_coords + vec2( 0.0,  -blur)) * 0.13;
+        glow += Texel(texture, texture_coords + vec2( blur,   0.0)) * 0.13;
+        glow += Texel(texture, texture_coords + vec2(-blur,   0.0)) * 0.13;
 
-function Board:drawTrails()
-    local pulse = _G.AudioBeatPulse or 0
-    local energy = _G.TrackEnergyPunch or 0
-    love.graphics.push("all")
-    love.graphics.setBlendMode("add")
+        // Solo resaltar picos de luz muy altos para evitar quemar los bloques
+        number lum = dot(glow.rgb, vec3(0.299, 0.587, 0.114));
+        vec4 highlights = glow * smoothstep(0.60, 0.98, lum);
 
-    for i = 1, #self.trails do
-        local t = self.trails[i]
-        if t.active and t.shape then
-            local progress = t.timer / self.trail_duration
-            local clr = self.colors[t.id] or {0.5, 0.8, 1}
-            local alpha = (progress * progress) * (0.35 + energy * 0.35 + pulse * 0.15)
-            
-            for r = 1, #t.shape do
-                for c = 1, #t.shape[r] do
-                    if t.shape[r][c] ~= 0 then
-                        local col_x = self.x + (t.x + c - 2) * 24
-                        local top_y = self.y + (t.y_start + r - 22) * 24
-                        local bot_y = self.y + (t.y_end + r - 22) * 24
-                        local beam_h = math.max(0, bot_y - top_y)
-                        
-                        if beam_h > 0 then
-                            love.graphics.setColor(clr[1], clr[2], clr[3], alpha * 0.4)
-                            love.graphics.rectangle("fill", col_x + 2, top_y, 20, beam_h)
-                            
-                            love.graphics.setColor(1, 1, 1, alpha * 0.6)
-                            love.graphics.rectangle("fill", col_x + 8, top_y, 8, beam_h)
-                        end
-                    end
-                end
-            end
-        end
-    end
+        number bloom_amount = 0.20 + (u_energy * 0.20) + (u_pulse * 0.10) + (u_zone * 0.20);
+        vec4 result = base + highlights * bloom_amount;
 
-    love.graphics.setBlendMode("alpha")
-    love.graphics.pop()
-end
+        // Tinte frÃ­o etÃ©reo en Zone sin sobreexposiciÃ³n
+        if (u_zone > 0.01) {
+            result.rgb = mix(result.rgb, vec3(result.r * 0.85, result.g * 1.05, result.b * 1.25), u_zone * 0.25);
+        }
 
-function Board:drawBlock(bx, by, id, alpha)
-    local clr = self.colors[id] or {1, 1, 1}
-    local pulse = _G.AudioBeatPulse or 0
-    local energy = _G.TrackEnergyPunch or 0
-    local a = alpha or 1.0
+        return result * color;
+    }
+]]
+
+function BloomShader.init()
+    BloomShader.supported = false
+    local status_canvas, canvas = pcall(love.graphics.newCanvas, 800, 600)
+    local status_shader, shader = pcall(love.graphics.newShader, shader_code)
     
-    local scale = 1 + (self.lock_impact * 0.08) + (pulse * 0.02 * energy)
-    local ds = 24 * scale
-    local off = (ds - 24) / 2
-
-    love.graphics.setColor(clr[1], clr[2], clr[3], a * 0.38)
-    love.graphics.rectangle("fill", bx - off, by - off, ds, ds, 4)
-    
-    love.graphics.setLineWidth(2)
-    love.graphics.setColor(clr[1], clr[2], clr[3], a * (0.85 + pulse * 0.25))
-    love.graphics.rectangle("line", bx - off, by - off, ds, ds, 4)
-
-    love.graphics.setColor(1, 1, 1, a * (0.25 + pulse * 0.25))
-    love.graphics.rectangle("fill", bx + 3 - off, by + 3 - off, ds - 6, 4, 2)
-end
-
-function Board:draw()
-    local energy = _G.TrackEnergyPunch or 0
-    local pulse = _G.AudioBeatPulse or 0
-    
-    love.graphics.push("all")
-    Shaker.apply(self)
-    
-    love.graphics.setColor(0.01, 0.01, 0.03, 0.95)
-    love.graphics.rectangle("fill", self.x, self.y, 240, 480, 4)
-    
-    self:drawEQBackground()
-    self:drawTrails()
-
-    love.graphics.setColor(1, 1, 1, 0.03 + pulse * 0.03)
-    for c = 0, 10 do love.graphics.line(self.x + c*24, self.y, self.x + c*24, self.y + 480) end
-    for r = 0, 20 do love.graphics.line(self.x, self.y + r*24, self.x + 240, self.y + r*24) end
-
-    for r = 21, 40 do
-        for c = 1, 10 do
-            local id = self.grid[r][c]
-            if id ~= 0 then self:drawBlock(self.x + (c-1)*24, self.y + (r-21)*24, id) end
-        end
-    end
-
-    love.graphics.setLineWidth(2 + pulse * 1.5 * energy)
-    if energy >= 0.9 then
-        local t = love.timer.getTime() * 5
-        local r = 0.5 + 0.5 * math.sin(t)
-        local g = 0.5 + 0.5 * math.sin(t + 2.094)
-        local b = 0.5 + 0.5 * math.sin(t + 4.188)
-        love.graphics.setColor(r, g, b, 0.8 + pulse * 0.2)
-    else
-        love.graphics.setColor(0, 0.5, 1, 0.4 + pulse * 0.3)
-    end
-    love.graphics.rectangle("line", self.x - 2, self.y - 2, 244, 484, 4)
-
-    if self.popup_timer > 0 then
-        local alpha = math.min(1, self.popup_timer * 3)
-        love.graphics.setColor(self.popup_color[1], self.popup_color[2], self.popup_color[3], alpha)
-        love.graphics.setFont(FontCache.get(20 + energy * 8))
-        love.graphics.printf(self.popup_text, self.x, self.y + 180, 240, "center")
-    end
-
-    HUDPanels.draw(self)
-    ParticleSystem.draw(self)
-    love.graphics.pop()
-end
-
-function Board:canMove(px, py, pr)
-    if not self.active_piece or not self.active_piece.shape then return false end
-    local shape = self.active_piece.shape[pr]
-    for r = 1, #shape do
-        for c = 1, #shape[r] do
-            if shape[r][c] ~= 0 then
-                local tx, ty = px + c - 1, py + r - 1
-                if tx < 1 or tx > 10 or ty > 40 then return false end
-                if ty >= 1 and self.grid[ty] and self.grid[ty][tx] ~= 0 then return false end
-            end
-        end
-    end
-    return true
-end
-
-function Board:checkLines(is_tspin)
-    local lines = {}
-    for r = 21, 40 do
-        local full = true
-        for c = 1, 10 do if self.grid[r][c] == 0 then full = false; break end end
-        if full then table.insert(lines, r) end
-    end
-    if #lines > 0 then
-        self.combo = self.combo + 1
-        local attack = GarbageManager.calculateAttack(#lines, is_tspin, false, self.combo, self.b2b, self)
-        if #lines == 4 or is_tspin then self.b2b = self.b2b + 1 else self.b2b = 0 end
-        GarbageManager.sendGarbage(self, self.opponent, attack)
-        for _, r in ipairs(lines) do
-            ParticleSystem.spawnLineBlast(self, r, self.grid[r][1] or 1)
-            table.remove(self.grid, r)
-            table.insert(self.grid, 1, {0,0,0,0,0,0,0,0,0,0})
-        end
-        self:triggerShake(#lines * 7, 0.3)
-    else 
-        self.combo = -1 
+    if status_canvas and status_shader then
+        BloomShader.canvas = canvas
+        BloomShader.shader = shader
+        BloomShader.supported = true
     end
 end
 
-function Board:hold()
-    if not self.can_hold then return end
-    local current_id = self.active_piece.id
-    if not self.hold_piece then
-        self.hold_piece = Piece.new(current_id, self)
-        self.active_piece = Piece.new(self.bag:next(), self)
-    else
-        local next_id = self.hold_piece.id
-        self.hold_piece = Piece.new(current_id, self)
-        self.active_piece = Piece.new(next_id, self)
-    end
-    self.can_hold, self.active_piece.spawn_timer = false, 0
-
-    if not self.active_piece:canMove(self.active_piece.x, self.active_piece.y, 1) then
-        _G.GameOverPending = self.player_type
+function BloomShader.beginDraw()
+    if BloomShader.supported and BloomShader.canvas then
+        love.graphics.setCanvas(BloomShader.canvas)
+        love.graphics.clear(0, 0, 0, 0)
     end
 end
 
-return Board
+function BloomShader.endDraw(is_zone)
+    if BloomShader.supported and BloomShader.canvas and BloomShader.shader then
+        love.graphics.setCanvas()
+        love.graphics.push("all")
+        love.graphics.setColor(1, 1, 1, 1)
+        
+        local energy = _G.TrackEnergyPunch or 0
+        local pulse = _G.AudioBeatPulse or 0
+        local zone = is_zone and 1.0 or 0.0
+
+        BloomShader.shader:send("u_energy", energy)
+        BloomShader.shader:send("u_pulse", pulse)
+        BloomShader.shader:send("u_zone", zone)
+
+        love.graphics.setShader(BloomShader.shader)
+        love.graphics.draw(BloomShader.canvas, 0, 0)
+        love.graphics.setShader()
+        love.graphics.pop()
+    end
+end
+
+return BloomShader
 
 
 ================================================
-FILE: tetris/fog_layer.txt
+FILE: tetris/board.lua
+================================================
+Error reading file with 'cp1252': 'charmap' codec can't decode byte 0x81 in position 1493: character maps to <undefined>
+
+
+================================================
+FILE: tetris/fog_layer.lua
 ================================================
 ---@diagnostic disable: undefined-global
 local FogLayer = {}
@@ -1880,7 +1686,7 @@ return FogLayer
 
 
 ================================================
-FILE: tetris/font_cache.txt
+FILE: tetris/font_cache.lua
 ================================================
 ---@diagnostic disable: undefined-global
 -- FontCache: evita crear una Font nueva (costosa, genera basura) en cada frame.
@@ -1910,11 +1716,12 @@ return FontCache
 
 
 ================================================
-FILE: tetris/game_states.txt
+FILE: tetris/game_states.lua
 ================================================
 ---@diagnostic disable: undefined-global
 local TrackManager = require "track_manager" 
 local FontCache = require "tetris.font_cache"
+local SettingsManager = require "settings_manager"
 
 local GameStates = {}
 
@@ -1922,57 +1729,67 @@ function GameStates.drawMenu(timer, selected, diffs)
     local mx, my = love.mouse.getPosition()
     local title_scale = 2 + math.sin(timer * 12) * 0.05
     love.graphics.setColor(1, 1, 1, 0.9)
-    love.graphics.printf("MUTRIS", 0, 52, 800 / title_scale, "center", 0, title_scale, title_scale)
+    love.graphics.printf("MUTRIS", 0, 42, 800 / title_scale, "center", 0, title_scale, title_scale)
     
-    -- SubtÃ­tulo con versiÃ³n explÃ­cita
     love.graphics.setFont(FontCache.get(11))
     love.graphics.setColor(0, 0.8, 1, 0.7)
-    love.graphics.printf(_G.ENGINE_VERSION or "ETHEREAL ENGINE", 0, 115, 800, "center")
+    love.graphics.printf(_G.ENGINE_VERSION or "ETHEREAL ENGINE", 0, 105, 800, "center")
 
     local current_track = TrackManager.getCurrentTrack() or {
         name = "SYSTEM EMPTY", file_path = "", bpm = 120, root_note = "C", mode = "MINOR"
     }
     love.graphics.setFont(FontCache.get(12))
     love.graphics.setColor(0, 0.8, 1, 0.8)
-    love.graphics.printf("< PREV TRACK  |  DRAG & DROP MP3 TO BATCH  |  NEXT TRACK >", 0, 160, 800, "center")
+    love.graphics.printf("< PREV TRACK  |  DRAG & DROP MP3 TO BATCH  |  NEXT TRACK >", 0, 145, 800, "center")
     
-    love.graphics.setFont(FontCache.get(16))
+    love.graphics.setFont(FontCache.get(15))
     love.graphics.setColor(1, 1, 1, 0.95)
-    love.graphics.printf(current_track.name, 0, 185, 800, "center")
+    love.graphics.printf(current_track.name, 0, 168, 800, "center")
     
     love.graphics.setFont(FontCache.get(12))
     love.graphics.setColor(0.5, 0.5, 0.6)
     if current_track.file_path ~= "" then
-        love.graphics.printf("BPM: " .. current_track.bpm .. "   |   KEY: " .. current_track.root_note .. " (" .. current_track.mode .. ")", 0, 215, 800, "center")
+        love.graphics.printf("BPM: " .. current_track.bpm .. "   |   KEY: " .. current_track.root_note .. " (" .. current_track.mode .. ")", 0, 195, 800, "center")
         
-        local hover_lab = (mx >= 275 and mx <= 525 and my >= 245 and my <= 280)
+        local hover_lab = (mx >= 275 and mx <= 525 and my >= 222 and my <= 254)
         love.graphics.setColor(hover_lab and {0, 0.7, 1, 0.35} or {0, 0.4, 0.6, 0.12})
-        love.graphics.rectangle("fill", 275, 245, 250, 35, 4)
+        love.graphics.rectangle("fill", 275, 222, 250, 32, 4)
         love.graphics.setColor(0, 0.8, 1, hover_lab and 0.9 or (0.5 + math.sin(timer * 8) * 0.15) + 0.3)
-        love.graphics.rectangle("line", 275, 245, 250, 35, 4)
+        love.graphics.rectangle("line", 275, 222, 250, 32, 4)
         love.graphics.setColor(1, 1, 1, hover_lab and 1.0 or 0.8)
-        love.graphics.printf("CONFIG SOUNDTRACK (LAB)", 275, 256, 250, "center")
+        love.graphics.printf("CONFIG SOUNDTRACK (LAB)", 275, 230, 250, "center")
     else
-        love.graphics.printf("SYSTEM EMPTY", 0, 215, 800, "center")
+        love.graphics.printf("SYSTEM EMPTY", 0, 195, 800, "center")
     end
 
     for i, d in ipairs(diffs) do
         local sel = (i == selected)
-        local y_pos = 300 + (i * 42)
+        local y_pos = 270 + (i * 38)
         local hover = (mx >= 300 and mx <= 500 and my >= y_pos and my <= y_pos + 30)
         if sel then
             love.graphics.setColor(d.color[1], d.color[2], d.color[3], 0.8 + math.sin(timer * 20) * 0.2)
             love.graphics.push()
-            love.graphics.translate(400, 305 + (i * 42))
+            love.graphics.translate(400, 275 + (i * 38))
             love.graphics.scale(1 + math.sin(timer * 15) * 0.05, 1 + math.sin(timer * 15) * 0.05)
             love.graphics.printf(">> " .. d.name .. " <<", -400, -7, 800, "center")
             love.graphics.pop()
         else
             love.graphics.setColor(d.color[1], d.color[2], d.color[3], hover and 0.7 or 0.22)
-            love.graphics.printf(d.name, 0, 305 + (i * 42), 800, "center")
+            love.graphics.printf(d.name, 0, 275 + (i * 38), 800, "center")
         end
     end
 
+    -- BOTÃ“N SETTINGS (CALIBRACIÃ“N DAS/ARR)
+    local hover_opt = (mx >= 275 and mx <= 525 and my >= 435 and my <= 470)
+    love.graphics.setColor(hover_opt and {0.1, 0.4, 0.7, 0.35} or {0.03, 0.08, 0.15, 0.25})
+    love.graphics.rectangle("fill", 275, 435, 250, 35, 4)
+    love.graphics.setColor(0, 0.7, 1, hover_opt and 0.9 or 0.4)
+    love.graphics.rectangle("line", 275, 435, 250, 35, 4)
+    love.graphics.setColor(1, 1, 1, hover_opt and 1.0 or 0.8)
+    love.graphics.setFont(FontCache.get(12))
+    love.graphics.printf("DAS / ARR SETTINGS", 275, 444, 250, "center")
+
+    -- BOTÃ“N START MATCH
     local hover_start = (mx >= 275 and mx <= 525 and my >= 485 and my <= 530)
     love.graphics.setColor(hover_start and {0, 0.9, 0.4, 0.45} or {0.04, 0.25, 0.1, 0.22})
     love.graphics.rectangle("fill", 275, 485, 250, 45, 4)
@@ -1981,6 +1798,82 @@ function GameStates.drawMenu(timer, selected, diffs)
     love.graphics.setColor(1, 1, 1)
     love.graphics.setFont(FontCache.get(14))
     love.graphics.printf("START MATCH", 275, 499, 250, "center")
+end
+
+function GameStates.drawSettings(timer)
+    local mx, my = love.mouse.getPosition()
+    love.graphics.setColor(1, 1, 1, 0.9)
+    love.graphics.setFont(FontCache.get(22))
+    love.graphics.printf("CALIBRATION & SETTINGS", 0, 50, 800, "center")
+    
+    love.graphics.setFont(FontCache.get(12))
+    love.graphics.setColor(0.5, 0.7, 0.9, 0.7)
+    love.graphics.printf("COMPETITIVE DAS / ARR & AUDIO ENGINE TUNING", 0, 85, 800, "center")
+
+    local s = SettingsManager.settings
+    local rows = {
+        { id = "das", label = "DAS (Delayed Auto-Shift)", val = string.format("%d ms", math.floor(s.das * 1000 + 0.5)), min = 50, max = 200, cur = s.das * 1000 },
+        { id = "arr", label = "ARR (Auto-Repeat Rate)", val = string.format("%d ms", math.floor(s.arr * 1000 + 0.5)), min = 0, max = 25, cur = s.arr * 1000 },
+        { id = "sfx", label = "SFX Volume", val = string.format("%d%%", math.floor(s.sfx_vol * 100)), min = 0, max = 100, cur = s.sfx_vol * 100 },
+        { id = "bgm", label = "BGM Volume", val = string.format("%d%%", math.floor(s.bgm_vol * 100)), min = 0, max = 100, cur = s.bgm_vol * 100 }
+    }
+
+    for i, r in ipairs(rows) do
+        local y = 145 + (i - 1) * 75
+        love.graphics.setFont(FontCache.get(13))
+        love.graphics.setColor(0.8, 0.9, 1, 0.9)
+        love.graphics.print(r.label, 200, y)
+
+        love.graphics.setColor(0.02, 0.05, 0.1, 0.8)
+        love.graphics.rectangle("fill", 200, y + 25, 400, 18, 3)
+        love.graphics.setColor(0, 0.6, 1, 0.3)
+        love.graphics.rectangle("line", 200, y + 25, 400, 18, 3)
+
+        local pct = (r.cur - r.min) / (r.max - r.min)
+        pct = math.max(0, math.min(1, pct))
+        love.graphics.setColor(0, 0.85, 1, 0.75)
+        love.graphics.rectangle("fill", 202, y + 27, 396 * pct, 14, 2)
+
+        love.graphics.setFont(FontCache.get(11))
+        love.graphics.setColor(1, 1, 1, 0.9)
+        love.graphics.printf(r.val, 200, y + 26, 400, "center")
+    end
+
+    -- BOTÃ“N VOLVER
+    local hover_back = (mx >= 300 and mx <= 500 and my >= 490 and my <= 535)
+    love.graphics.setColor(hover_back and {0, 0.7, 1, 0.35} or {0.04, 0.1, 0.2, 0.3})
+    love.graphics.rectangle("fill", 300, 490, 200, 45, 4)
+    love.graphics.setColor(0, 0.8, 1, hover_back and 0.9 or 0.4)
+    love.graphics.rectangle("line", 300, 490, 200, 45, 4)
+    love.graphics.setColor(1, 1, 1)
+    love.graphics.setFont(FontCache.get(13))
+    love.graphics.printf("SAVE & RETURN", 300, 504, 200, "center")
+end
+
+function GameStates.handleSettingsMouse(mx, my)
+    local s = SettingsManager.settings
+    local rows = {
+        { id = "das", min = 50, max = 200, setter = function(v) s.das = v / 1000 end },
+        { id = "arr", min = 0, max = 25, setter = function(v) s.arr = v / 1000 end },
+        { id = "sfx", min = 0, max = 100, setter = function(v) s.sfx_vol = v / 100 end },
+        { id = "bgm", min = 0, max = 100, setter = function(v) s.bgm_vol = v / 100 end }
+    }
+
+    for i, r in ipairs(rows) do
+        local y = 145 + (i - 1) * 75 + 25
+        if mx >= 200 and mx <= 600 and my >= y and my <= y + 18 then
+            local pct = (mx - 200) / 400
+            local val = r.min + pct * (r.max - r.min)
+            r.setter(val)
+            SettingsManager.save()
+            return
+        end
+    end
+
+    if mx >= 300 and mx <= 500 and my >= 490 and my <= 535 then
+        SettingsManager.save()
+        _G.SetGameState("menu")
+    end
 end
 
 function GameStates.drawGameOver()
@@ -2008,8 +1901,9 @@ return GameStates
 
 
 ================================================
-FILE: tetris/garbage_manager.txt
+FILE: tetris/garbage_manager.lua
 ================================================
+---@diagnostic disable: undefined-global
 local GarbageManager = {}
 
 local ATTACK_TABLE = {
@@ -2018,26 +1912,40 @@ local ATTACK_TABLE = {
 }
 local COMBO_TABLE = {0, 0, 1, 1, 1, 2, 2, 3, 3, 4, 4, 4, 5}
 
+local ZONE_ATTACK_TIERS = {
+    [1] = 1, [2] = 2, [3] = 3, [4] = 5,
+    [5] = 7, [6] = 9, [7] = 11, [8] = 13,       -- Octoris
+    [9] = 15, [10] = 17, [11] = 19, [12] = 21,   -- Dodecatris
+    [13] = 23, [14] = 25, [15] = 27, [16] = 30,   -- Decahexatris
+    [18] = 36, [20] = 44, [21] = 50              -- Ultimatris
+}
+
 function GarbageManager.calculateAttack(lines, is_tspin, is_mini, combo, b2b, board)
     local attack = 0
     local message = ""
     local color = {1, 1, 1}
 
-    -- HEAT SYSTEM (VISUAL)
     local charge_boost = (lines / 4) * 0.4
     if is_tspin or lines == 4 then 
         charge_boost = 1.0 
-        board.eq_power = 1.0  -- Activa paleta Hyper-Attack
-        board.eq_flash = 1.0  -- Impacto visual
+        board.eq_power = 1.0
+        board.eq_flash = 1.0
     end
 
-    -- Los combos disparan pequeÃ±as rÃ¡fagas de brillo
     if combo > 0 then
         charge_boost = charge_boost + (combo * 0.18)
         board.eq_power = math.max(board.eq_power, 0.5)
     end
 
     board.eq_charge = math.min(1.0, board.eq_charge + charge_boost)
+
+    -- Carga del medidor Zone calibrada (apenas mÃ¡s lenta y balanceada)
+    if not board.is_zone_active then
+        local zone_gain = lines * 0.038
+        if is_tspin then zone_gain = zone_gain + 0.06 end
+        if lines == 4 then zone_gain = zone_gain + 0.05 end
+        board.zone_meter = math.min(1.0, board.zone_meter + zone_gain)
+    end
 
     if is_tspin then
         if lines == 1 then attack, message, color = 2, "T-SPIN SINGLE", {0.8, 0.2, 1}
@@ -2065,23 +1973,75 @@ function GarbageManager.calculateAttack(lines, is_tspin, is_mini, combo, b2b, bo
     return attack
 end
 
+function GarbageManager.calculateZoneBurst(lines_cleared, is_perfect_clear, is_hyper_zone)
+    if is_perfect_clear then
+        return 50, "PERFECT CLEAR ZONE!", {1.0, 0.85, 0.2}
+    end
+
+    if lines_cleared <= 0 then 
+        return 0, "ZONE END", {0.5, 0.8, 1} 
+    end
+
+    local base = ZONE_ATTACK_TIERS[lines_cleared] or math.floor(lines_cleared * 2.3)
+    
+    -- Bonus de 100% Hyper Zone
+    if is_hyper_zone then
+        base = base + 3
+    end
+
+    local name = "ZONE " .. lines_cleared
+    local color = {0, 0.9, 1}
+
+    if lines_cleared >= 20 then 
+        name, color = "ULTIMATRIS (" .. lines_cleared .. ")", {1.0, 0.85, 0.2}
+    elseif lines_cleared >= 16 then 
+        name, color = "DECAHEXATRIS (" .. lines_cleared .. ")", {1, 0.2, 0.8}
+    elseif lines_cleared >= 12 then 
+        name, color = "DODECATRIS (" .. lines_cleared .. ")", {0.8, 0.2, 1}
+    elseif lines_cleared >= 8 then 
+        name, color = "OCTORIS (" .. lines_cleared .. ")", {0.2, 1, 0.5}
+    elseif lines_cleared >= 4 then 
+        name, color = "TETRIS ZONE (" .. lines_cleared .. ")", {0, 0.8, 1}
+    end
+
+    if is_hyper_zone then
+        name = "â˜… HYPER " .. name
+        color = {1.0, 0.9, 0.3}
+    end
+
+    return base, name, color
+end
+
 function GarbageManager.sendGarbage(sender, receiver, amount)
     if amount <= 0 then return end
+    
+    -- Invulnerabilidad total: En Zone Mode nada de basura entra al receptor
+    if receiver and receiver.is_zone_active then
+        return
+    end
+
+    -- CancelaciÃ³n activa (Offsetting)
     local rem = amount
     while rem > 0 and #sender.garbage_queue > 0 do
-        if sender.garbage_queue[1] <= rem then rem = rem - table.remove(sender.garbage_queue, 1)
-        else sender.garbage_queue[1] = sender.garbage_queue[1] - rem; rem = 0 end
+        if sender.garbage_queue[1] <= rem then 
+            rem = rem - table.remove(sender.garbage_queue, 1)
+        else 
+            sender.garbage_queue[1] = sender.garbage_queue[1] - rem
+            rem = 0 
+        end
     end
-    if rem > 0 then 
+
+    if rem > 0 and receiver then 
         table.insert(receiver.garbage_queue, rem)
         receiver:triggerShake(rem * 4, 0.25)
-        -- Cuando recibimos ataque, la energÃ­a se vuelve "inestable" (Rojo Danger)
         receiver.eq_charge = math.min(1.0, receiver.eq_charge + 0.4)
     end
 end
 
 function GarbageManager.pushToGrid(board)
-    if #board.garbage_queue == 0 then return end
+    -- Inmunidad: Mientras Zone estÃ© activo la basura no ingresa al grid
+    if board.is_zone_active or #board.garbage_queue == 0 then return end
+    
     local lines = math.min(table.remove(board.garbage_queue, 1), 8)
     local hole = math.random(1, 10)
     for i = 1, lines do
@@ -2090,8 +2050,11 @@ function GarbageManager.pushToGrid(board)
         for c = 1, 10 do row[c] = (c == hole) and 0 or 8 end
         table.insert(board.grid, row)
     end
+    
     local AudioManager = require "audio_manager"
-    AudioManager.triggerGlitch(lines * 0.08)
+    if AudioManager and AudioManager.triggerGlitch then
+        AudioManager.triggerGlitch(lines * 0.08)
+    end
     board:triggerShake(lines * 5, 0.3)
 end
 
@@ -2099,33 +2062,60 @@ return GarbageManager
 
 
 ================================================
-FILE: tetris/hud_center.txt
+FILE: tetris/hud_center.lua
 ================================================
+---@diagnostic disable: undefined-global
 local HUDCenter = {}
 local FontCache = require "tetris.font_cache"
 
 function HUDCenter.draw(player, bot)
     love.graphics.push("all")
     local active_punch = _G.TrackEnergyPunch or 0
-    local scale = 1 + (_G.AudioBeatPulse or 0) * (0.04 + active_punch * 0.03)
+    local pulse = _G.AudioBeatPulse or 0
+    local scale = 1 + pulse * (0.04 + active_punch * 0.03)
     
     love.graphics.translate(400, 260)
     love.graphics.scale(scale, scale)
+
+    -- Placa central oscura con borde neÃ³n traslÃºcido para aislar del fondo
+    love.graphics.setColor(0.01, 0.02, 0.05, 0.85)
+    love.graphics.rectangle("fill", -52, -18, 104, 36, 6)
+    love.graphics.setLineWidth(1.5)
+    love.graphics.setColor(0, 0.7, 1, 0.25 + pulse * 0.2)
+    love.graphics.rectangle("line", -52, -18, 104, 36, 6)
+
+    -- Separador VS NeÃ³n
     love.graphics.setFont(FontCache.get(10))
+    love.graphics.setColor(1, 1, 1, 0.4 + pulse * 0.4)
+    love.graphics.printf("VS", -15, -6, 30, "center")
 
-    -- Marcador Humano (Cian / Alerta Roja)
-    local p1_better = (player.current_pps_display or 0) >= (bot.current_pps_display or 0)
-    love.graphics.setColor(p1_better and {0, 0.9, 1, 0.9} or {1, 0.2, 0.2, 0.5})
-    love.graphics.printf(string.format("%.1f", player.current_pps_display or 0), -50, -15, 45, "right")
+    -- Marcador Humano (P1 - Cian / Alerta Roja)
+    local p1_val = (player and player.current_pps_display) or 0
+    local bot_val = (bot and bot.current_pps_display) or 0
+    local p1_better = p1_val >= bot_val
 
-    -- Separador VS
-    love.graphics.setColor(1, 1, 1, 0.15 + (_G.AudioBeatPulse or 0) * 0.25)
-    love.graphics.printf("VS", -20, -7, 40, "center")
+    love.graphics.setFont(FontCache.get(12))
+    if p1_better then
+        love.graphics.setColor(0, 0.95, 1, 0.95)
+    else
+        love.graphics.setColor(1, 0.35, 0.35, 0.85)
+    end
+    love.graphics.printf(string.format("%.1f", p1_val), -48, -7, 32, "center")
 
-    -- Marcador Bot (Alerta Roja / Gris)
-    local bot_better = (bot.current_pps_display or 0) > (player.current_pps_display or 0)
-    love.graphics.setColor(bot_better and {1, 0.2, 0.2, 0.9} or {0.5, 0.5, 0.6, 0.5})
-    love.graphics.printf(string.format("%.1f", bot.current_pps_display or 0), 5, -15, 45, "left")
+    -- Marcador Bot (AI - Alerta Roja / Verde / Violeta)
+    local bot_better = bot_val > p1_val
+    if bot_better then
+        love.graphics.setColor(1, 0.25, 0.3, 0.95)
+    else
+        love.graphics.setColor(0.5, 0.6, 0.75, 0.8)
+    end
+    love.graphics.printf(string.format("%.1f", bot_val), 16, -7, 32, "center")
+
+    -- SubtÃ­tulo PPS
+    love.graphics.setFont(FontCache.get(8))
+    love.graphics.setColor(0.5, 0.6, 0.7, 0.6)
+    love.graphics.printf("PPS", -20, 9, 40, "center")
+
     love.graphics.pop()
 end
 
@@ -2133,54 +2123,64 @@ return HUDCenter
 
 
 ================================================
-FILE: tetris/hud_panels.txt
+FILE: tetris/hud_panels.lua
 ================================================
+---@diagnostic disable: undefined-global
 local HUDPanels = {}
 local SRS = require "tetris.rotation_systems.srs"
 local FontCache = require "tetris.font_cache"
 
+local PREVIEW_CONFIG = {
+    [1] = { ox = 6,  oy = 18, scale = 0.55 },
+    [2] = { ox = 12, oy = 18, scale = 0.55 },
+    [3] = { ox = 12, oy = 18, scale = 0.55 },
+    [4] = { ox = 19, oy = 24, scale = 0.55 },
+    [5] = { ox = 12, oy = 18, scale = 0.55 },
+    [6] = { ox = 12, oy = 18, scale = 0.55 },
+    [7] = { ox = 12, oy = 18, scale = 0.55 }
+}
+
 function HUDPanels.draw(board)
     love.graphics.push("all")
     local is_human = (board.player_type == "human")
-    local hold_x = is_human and (board.x - 75) or (board.x + 255)
-    local next_x = is_human and (board.x + 255) or (board.x - 75)
+    
+    local hold_x = is_human and (board.x - 72) or (board.x + 248)
+    local next_x = is_human and (board.x + 244) or (board.x - 68)
     local panel_y = board.y + 10
     
-    local energy = _G.TrackEnergyPunch or 0
     local pulse = _G.AudioBeatPulse or 0
     
-    -- ConfiguraciÃ³n de estilo NeÃ³n para los paneles
     local function drawNeonPanel(x, y, label)
-        local p_size = 65 + (pulse * 2 * energy)
-        local offset = (p_size - 65) / 2
+        local p_w = 64
+        local p_h = 64
         
-        -- Fondo
-        love.graphics.setColor(0, 0, 0, 0.8)
-        love.graphics.rectangle("fill", x - offset, y - offset, p_size, p_size, 4)
+        love.graphics.setColor(0.02, 0.03, 0.06, 0.88)
+        love.graphics.rectangle("fill", x, y, p_w, p_h, 4)
         
-        -- Borde NeÃ³n
-        love.graphics.setLineWidth(1 + pulse * 2)
-        love.graphics.setColor(0, 0.6, 1, 0.3 + pulse * 0.4)
-        love.graphics.rectangle("line", x - offset, y - offset, p_size, p_size, 4)
+        love.graphics.setLineWidth(1.5)
+        love.graphics.setColor(0, 0.6, 1, 0.35 + pulse * 0.3)
+        love.graphics.rectangle("line", x, y, p_w, p_h, 4)
         
-        -- Etiqueta
-        love.graphics.setFont(FontCache.get(10))
-        love.graphics.setColor(1, 1, 1, 0.6)
-        love.graphics.printf(label, x, y + 4, 65, "center")
+        love.graphics.setFont(FontCache.get(9))
+        love.graphics.setColor(1, 1, 1, 0.65)
+        love.graphics.printf(label, x, y + 4, p_w, "center")
     end
 
-    -- --- PANEL HOLD ---
+    -- PANEL HOLD
     drawNeonPanel(hold_x, panel_y, "HOLD")
     if board.hold_piece then
-        local shape = SRS.shapes[board.hold_piece.id][1]
+        local pid = board.hold_piece.id
+        local cfg = PREVIEW_CONFIG[pid] or { ox = 12, oy = 18, scale = 0.55 }
+        local shape = SRS.shapes[pid][1]
+        
         love.graphics.push()
-        love.graphics.translate(hold_x + 12, panel_y + 20)
-        love.graphics.scale(0.6, 0.6)
+        love.graphics.translate(hold_x + cfg.ox, panel_y + cfg.oy)
+        love.graphics.scale(cfg.scale, cfg.scale)
         love.graphics.setBlendMode("add")
-        for r=1, #shape do
-            for c=1, #shape[r] do
+        for r = 1, #shape do
+            for c = 1, #shape[r] do
                 if shape[r][c] ~= 0 then
-                    board:drawBlock((c-1)*24, (r-1)*24, board.hold_piece.id, 0.8)
+                    board:drawBlock((c - 1) * 24, (r - 1) * 24, pid, 0.85)
                 end
             end
         end
@@ -2188,20 +2188,22 @@ function HUDPanels.draw(board)
         love.graphics.pop()
     end
 
-    -- --- PANEL NEXT ---
+    -- PANEL NEXT
     drawNeonPanel(next_x, panel_y, "NEXT")
     if board.bag then
         local next_id = board.bag:peek(1)[1]
         if next_id then
+            local cfg = PREVIEW_CONFIG[next_id] or { ox = 12, oy = 18, scale = 0.55 }
             local shape = SRS.shapes[next_id][1]
+            
             love.graphics.push()
-            love.graphics.translate(next_x + 12, panel_y + 20)
-            love.graphics.scale(0.6, 0.6)
+            love.graphics.translate(next_x + cfg.ox, panel_y + cfg.oy)
+            love.graphics.scale(cfg.scale, cfg.scale)
             love.graphics.setBlendMode("add")
-            for r=1, #shape do
-                for c=1, #shape[r] do
+            for r = 1, #shape do
+                for c = 1, #shape[r] do
                     if shape[r][c] ~= 0 then
-                        board:drawBlock((c-1)*24, (r-1)*24, next_id, 0.8)
+                        board:drawBlock((c - 1) * 24, (r - 1) * 24, next_id, 0.85)
                     end
                 end
             end
@@ -2209,6 +2211,60 @@ function HUDPanels.draw(board)
             love.graphics.pop()
         end
     end
+
+    -- BARRA LATERAL ZONE METER (REACTIVA Y DISTINCIÃ“N 100%)
+    local zone_x = is_human and (board.x - 14) or (board.x + 246)
+    local zone_y = board.y + 120
+    local zone_h = 240
+    
+    love.graphics.setColor(0.01, 0.02, 0.05, 0.8)
+    love.graphics.rectangle("fill", zone_x, zone_y, 8, zone_h, 2)
+    love.graphics.setColor(0, 0.6, 1, 0.3)
+    love.graphics.rectangle("line", zone_x, zone_y, 8, zone_h, 2)
+
+    local fill_val = board.is_zone_active and (board.zone_timer / (board.zone_max_time * math.max(0.1, board.zone_meter))) or board.zone_meter
+    fill_val = math.max(0, math.min(1, fill_val))
+    local current_h = zone_h * fill_val
+
+    if current_h > 0 then
+        local is_full_100 = board.zone_meter >= 0.999
+        local time = love.timer.getTime()
+        
+        if board.is_zone_active then
+            if board.zone_tier == 2 then
+                love.graphics.setColor(1.0, 0.85, 0.2, 0.95 + pulse * 0.05)
+            else
+                love.graphics.setColor(0.1, 0.9, 1.0, 0.9 + pulse * 0.1)
+            end
+        elseif is_full_100 then
+            -- Indicador 100% clavado (Hyper Oro/Diamante)
+            local flash = 0.6 + math.sin(time * 16) * 0.4
+            love.graphics.setColor(1.0, 0.85 * flash, 0.2, 0.95)
+        elseif board.zone_meter >= 0.25 then
+            local shimmer = 0.7 + math.sin(time * 10) * 0.3
+            love.graphics.setColor(0.1 * shimmer, 0.95, 0.8 * shimmer, 0.9)
+        else
+            love.graphics.setColor(0.0, 0.7, 0.5, 0.75)
+        end
+        love.graphics.rectangle("fill", zone_x + 1, zone_y + zone_h - current_h + 1, 6, current_h - 2, 2)
+    end
+
+    -- Indicador [Q]
+    if not board.is_zone_active and is_human then
+        local time = love.timer.getTime()
+        if board.zone_meter >= 0.999 then
+            local alpha = 0.7 + math.sin(time * 14) * 0.3
+            love.graphics.setFont(FontCache.get(8))
+            love.graphics.setColor(1.0, 0.85, 0.2, alpha)
+            love.graphics.printf("[Q] 100%", zone_x - 22, zone_y + zone_h + 6, 52, "center")
+        elseif board.zone_meter >= 0.25 then
+            local alpha = 0.5 + math.sin(time * 8) * 0.4
+            love.graphics.setFont(FontCache.get(8))
+            love.graphics.setColor(0.1, 0.95, 1.0, alpha)
+            love.graphics.printf("[Q]", zone_x - 16, zone_y + zone_h + 6, 40, "center")
+        end
+    end
+
     love.graphics.pop()
 end
 
@@ -2216,15 +2272,20 @@ return HUDPanels
 
 
 ================================================
-FILE: tetris/particle_system.txt
+FILE: tetris/particle_system.lua
 ================================================
+---@diagnostic disable: undefined-global
 local ParticleSystem = {}
 
 function ParticleSystem.init(board)
     board.particles = {}
-    -- Pool estÃ¡tico de 120 partÃ­culas reutilizables (Zero-GC compliant)
-    for i = 1, 120 do
-        board.particles[i] = { active = false, x = 0, y = 0, vx = 0, vy = 0, life = 0, max_life = 0, r = 1, g = 1, b = 1 }
+    -- Pool estÃ¡tico de 200 partÃ­culas reutilizables (Zero-GC compliant)
+    for i = 1, 200 do
+        board.particles[i] = { 
+            active = false, x = 0, y = 0, 
+            vx = 0, vy = 0, life = 0, max_life = 0, 
+            r = 1, g = 1, b = 1, size = 3 
+        }
     end
     board.particle_head = 1
 end
@@ -2233,30 +2294,54 @@ function ParticleSystem.spawnLineBlast(board, row_index, color_id)
     local clr = board.colors[color_id] or {1, 1, 1}
     local y_pos = board.y + (row_index - 21) * 24 + 12
     
-    -- Dispara 12 chispas lÃ¡ser horizontales a lo largo de la lÃ­nea eliminada
     for c = 1, 10 do
         local x_pos = board.x + (c - 1) * 24 + 12
         local p = board.particles[board.particle_head]
         
         p.active = true
         p.x, p.y = x_pos, y_pos
-        p.vx = math.random(-150, 150)
-        p.vy = math.random(-60, 40)
+        p.vx = math.random(-160, 160)
+        p.vy = math.random(-70, 50)
         p.life = 0.4
         p.max_life = 0.4
         p.r, p.g, p.b = clr[1], clr[2], clr[3]
+        p.size = 3
         
-        board.particle_head = (board.particle_head % 120) + 1
+        board.particle_head = (board.particle_head % 200) + 1
+    end
+end
+
+function ParticleSystem.spawnSupernova(board, color)
+    local clr = color or {1.0, 0.85, 0.2}
+    local center_x = board.x + 120
+    local center_y = board.y + 240
+
+    for i = 1, 60 do
+        local p = board.particles[board.particle_head]
+        local angle = math.random() * math.pi * 2
+        local speed = math.random(120, 380)
+
+        p.active = true
+        p.x = center_x + math.cos(angle) * math.random(0, 40)
+        p.y = center_y + math.sin(angle) * math.random(0, 40)
+        p.vx = math.cos(angle) * speed
+        p.vy = math.sin(angle) * speed
+        p.life = 0.85
+        p.max_life = 0.85
+        p.r, p.g, p.b = clr[1], clr[2], clr[3]
+        p.size = math.random(3, 6)
+
+        board.particle_head = (board.particle_head % 200) + 1
     end
 end
 
 function ParticleSystem.update(board, dt)
-    for i = 1, 120 do
+    for i = 1, 200 do
         local p = board.particles[i]
         if p.active then
             p.x = p.x + p.vx * dt
             p.y = p.y + p.vy * dt
-            p.vy = p.vy + 200 * dt -- Gravedad leve hacia abajo
+            p.vy = p.vy + 180 * dt
             p.life = p.life - dt
             if p.life <= 0 then p.active = false end
         end
@@ -2265,34 +2350,207 @@ end
 
 function ParticleSystem.draw(board)
     love.graphics.push("all")
-    for i = 1, 120 do
+    for i = 1, 200 do
         local p = board.particles[i]
         if p.active then
             local alpha = p.life / p.max_life
             local pulse = _G.AudioBeatPulse or 0
-            -- Las chispas ganan tamaÃ±o e iluminaciÃ³n neÃ³n con el punch de la mÃºsica
-            local size = (2 + pulse * 2) * (alpha * 1.5)
+            local size = (p.size + pulse * 1.5) * (alpha * 1.3)
             
-            love.graphics.setColor(p.r, p.g, p.b, alpha * 0.8)
-            love.graphics.rectangle("fill", p.x - size/2, p.y - size/2, size, size)
-            love.graphics.setColor(1, 1, 1, alpha * 0.4)
+            love.graphics.setColor(p.r, p.g, p.b, alpha * 0.85)
+            love.graphics.rectangle("fill", p.x - size/2, p.y - size/2, size, size, 1)
+            love.graphics.setColor(1, 1, 1, alpha * 0.5)
             love.graphics.rectangle("fill", p.x - size/4, p.y - size/4, size/2, size/2)
         end
     end
     love.graphics.pop()
-end -- <-- ESTE 'END' CIERRA LA FUNCIÃ“N ParticleSystem.draw
+end
 
-return ParticleSystem -- <-- ESTE CIERRA EL MÃ“DULO ENTERO
-
-
-================================================
-FILE: tetris/piece.txt
-================================================
-Error reading file with 'cp1252': 'charmap' codec can't decode byte 0x81 in position 4796: character maps to <undefined>
+return ParticleSystem
 
 
 ================================================
-FILE: tetris/pps_counter.txt
+FILE: tetris/piece.lua
+================================================
+---@diagnostic disable: undefined-global
+local Piece = {}
+Piece.__index = Piece
+local AudioManager = require "audio_manager"
+local PPSCounter = require "tetris.pps_counter"
+
+function Piece.new(id, board)
+    local self = setmetatable({}, Piece)
+    self.id, self.board = id, board
+    local SRS = require "tetris.rotation_systems.srs"
+    self.shape = (SRS and SRS.shapes) and SRS.shapes[id] or { {{1,1,1,1}} }
+    self.rotation, self.x, self.y = 1, 4, 21
+    self.locked, self.gravity_timer, self.lock_timer = false, 0, 0
+    self.lock_delay, self.move_count, self.max_resets = 0.5, 0, 15
+    self.spawn_timer = 0.2
+    self.last_move_was_rotate = false 
+    return self
+end
+
+function Piece:resetLock()
+    if self.move_count < self.max_resets then 
+        self.lock_timer, self.move_count = 0, self.move_count + 1 
+    end
+end
+
+function Piece:move(dx, dy, is_gravity)
+    if self.board:canMove(self.x + dx, self.y + dy, self.rotation) then
+        self.x, self.y = self.x + dx, self.y + dy
+        if not is_gravity then 
+            AudioManager.playImmediateSFX("move", self.board.player_type == "bot") 
+            self:resetLock() 
+            self.last_move_was_rotate = false
+        end
+        return true
+    end
+    return false
+end
+
+function Piece:rotate(dir)
+    local SRS = require "tetris.rotation_systems.srs"
+    local max_rot = #self.shape
+    local old_rot = self.rotation
+    local next_rot = ((self.rotation + dir - 1) % max_rot) + 1
+    local kicks = SRS.getKicks(self.id, old_rot, next_rot)
+    if kicks then
+        for _, kick in ipairs(kicks) do
+            if self.board:canMove(self.x + kick[1], self.y - kick[2], next_rot) then
+                self.x, self.y, self.rotation = self.x + kick[1], self.y - kick[2], next_rot
+                AudioManager.playImmediateSFX("rotate", self.board.player_type == "bot")
+                self:resetLock()
+                self.last_move_was_rotate = true
+                return true
+            end
+        end
+    end
+    return false
+end
+
+function Piece:checkTSpin()
+    if self.id ~= 6 or not self.last_move_was_rotate then return false end
+    local occupied = 0
+    local corners = {{x=0,y=0}, {x=2,y=0}, {x=0,y=2}, {x=2,y=2}}
+    for _, c in ipairs(corners) do
+        local tx, ty = self.x+c.x, self.y+c.y
+        if tx<1 or tx>10 or ty>40 or (ty>=1 and self.board.grid[ty][tx]~=0) then occupied = occupied+1 end
+    end
+    return occupied >= 3
+end
+
+function Piece:canMove(px, py, pr) return self.board:canMove(px, py, pr) end
+
+function Piece:update(dt, gravity_speed)
+    if self.locked then return end
+    if self.spawn_timer > 0 then self.spawn_timer = self.spawn_timer - dt end
+    self.gravity_timer = self.gravity_timer + dt
+    
+    -- En Zone Mode la gravedad automÃ¡tica se congela
+    local limit = self.board.is_zone_active and 999.0 or (gravity_speed or 0.8)
+    while self.gravity_timer >= limit do
+        if self:move(0, 1, true) then 
+            self.gravity_timer = self.gravity_timer - limit
+        else 
+            self.gravity_timer = 0
+            break 
+        end
+    end
+
+    if not self.board:canMove(self.x, self.y + 1, self.rotation) then
+        self.lock_timer = self.lock_timer + dt
+        if self.lock_timer >= self.lock_delay then self:lock() end
+    else 
+        self.lock_timer = 0 
+    end
+end
+
+function Piece:lock()
+    if self.locked then return end
+    self.board.can_hold, self.board.lock_impact = true, 1.0
+    local is_tspin = self:checkTSpin()
+    local shape = self.shape[self.rotation]
+    for r = 1, #shape do
+        for c = 1, #shape[r] do
+            if shape[r][c] ~= 0 then
+                local tx, ty = self.x + c - 1, self.y + r - 1
+                if ty >= 1 and ty <= 40 then self.board.grid[ty][tx] = self.id end
+            end
+        end
+    end
+    self.locked = true
+    PPSCounter.register(self.board)
+    AudioManager.playImmediateSFX("drop", self.board.player_type == "bot", self.y)
+    self.board:checkLines(is_tspin)
+end
+
+function Piece:draw(bx, by)
+    local shape = self.shape[self.rotation]
+    local energy, pulse = _G.TrackEnergyPunch or 0, _G.AudioBeatPulse or 0
+    love.graphics.push("all")
+
+    -- SPAWN BLOOM
+    if self.spawn_timer > 0 then
+        local p = self.spawn_timer / 0.2
+        local clr = self.board.colors[self.id]
+        love.graphics.setBlendMode("add")
+        for r = 1, #shape do 
+            for c = 1, #shape[r] do 
+                if shape[r][c] ~= 0 then
+                    local x, y = bx + (self.x + c - 2) * 24, by + (self.y + r - 22) * 24
+                    love.graphics.setColor(clr[1], clr[2], clr[3], p * 0.4)
+                    love.graphics.rectangle("fill", x - 6 * p, y - 6 * p, 24 + 12 * p, 24 + 12 * p, 4)
+                    love.graphics.setColor(1, 1, 1, p * 0.6)
+                    love.graphics.rectangle("fill", x, y, 24, 24, 2)
+                end 
+            end 
+        end
+        love.graphics.setBlendMode("alpha")
+    end
+
+    -- GHOST PIECE (SOMBRA REACTIVA AL BEAT & ALTA LEGIBILIDAD)
+    if self.board and bx == self.board.x and by == self.board.y then
+        local gy = self.y
+        while self.board:canMove(self.x, gy + 1, self.rotation) do gy = gy + 1 end
+        local clr = self.board.colors[self.id]
+        local ghost_pulse = 0.25 + pulse * 0.3 + energy * 0.15
+        
+        for r = 1, #shape do 
+            for c = 1, #shape[r] do 
+                if shape[r][c] ~= 0 then
+                    local gx, g_y = bx + (self.x + c - 2) * 24, by + (gy + r - 22) * 24
+                    
+                    -- Relleno tenue
+                    love.graphics.setColor(clr[1], clr[2], clr[3], 0.12)
+                    love.graphics.rectangle("fill", gx + 2, g_y + 2, 20, 20, 2)
+                    
+                    -- Borde neÃ³n pulsante
+                    love.graphics.setLineWidth(1.8)
+                    love.graphics.setColor(clr[1], clr[2], clr[3], ghost_pulse)
+                    love.graphics.rectangle("line", gx + 2, g_y + 2, 20, 20, 2)
+                end 
+            end 
+        end
+    end
+
+    -- ACTIVE PIECE
+    for r = 1, #shape do 
+        for c = 1, #shape[r] do 
+            if shape[r][c] ~= 0 then
+                self.board:drawBlock(bx + (self.x + c - 2) * 24, by + (self.y + r - 22) * 24, self.id)
+            end 
+        end 
+    end
+    love.graphics.pop()
+end
+
+return Piece
+
+
+================================================
+FILE: tetris/pps_counter.lua
 ================================================
 local PPSCounter = {}
 
@@ -2332,7 +2590,7 @@ return PPSCounter
 
 
 ================================================
-FILE: tetris/shaker.txt
+FILE: tetris/shaker.lua
 ================================================
 local Shaker = {}
 
@@ -2368,7 +2626,7 @@ return Shaker
 
 
 ================================================
-FILE: tetris/telemetry.txt
+FILE: tetris/telemetry.lua
 ================================================
 ---@diagnostic disable: undefined-global
 local Telemetry = {}
@@ -2412,7 +2670,7 @@ return Telemetry
 
 
 ================================================
-FILE: tetris/randomizers/7bag.txt
+FILE: tetris/randomizers/7bag.lua
 ================================================
 local Bag = {}
 Bag.__index = Bag
@@ -2457,7 +2715,7 @@ return Bag
 
 
 ================================================
-FILE: tetris/rotation_systems/srs.txt
+FILE: tetris/rotation_systems/srs.lua
 ================================================
 local SRS = {}
 

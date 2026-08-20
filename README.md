@@ -334,3 +334,66 @@ AIBot:evaluate() escaneaba el tablero completo dos veces por cada candidato de c
 | `tetris/board.lua` | **Modificado** | Haces de luz Ethereal Trails, marco reactivo al Drop y pulso lock impact. |
 | `tetris/game_states.lua` | **Modificado** | Ajuste de tipografía, badge de versión visible e interactividad refinada. |
 | `tetris/telemetry.txt` | **Modificado** | Exposición del identificador de versión en el HUD de combate. |
+
+
+
+
+
+
+# 🕹️ MUTRIS v0.9.5 — ETHEREAL TRANSCENDENCE & COMBAT ENGINE
+## COMPENDIO TÉCNICO DE ARQUITECTURA, ZERO-GC, FÍSICA SRS & INYECCIÓN ACÚSTICA POR HARDWARE
+### 🛠️ ESTADO DE SISTEMA: FASE 8 (DESTRUCCIÓN CINEMÁTICA, DANGER GLITCH & HYPER ZONE) — VERSIÓN ESTABLE
+
+---
+
+> ⚠️ **REGLA DE ORO DE DESARROLLO PERMANENTE:**
+> **EL TÍTULO DEL JUEGO Y EL NÚMERO DE VERSIÓN (`MUTRIS v0.9.5`) DEBEN PERMANECER SIEMPRE VISIBLES EN PANTALLA EN TODOS LOS ESTADOS (MENÚ, GAMEPLAY, EDITOR, SETTINGS Y GAME OVER).** Esta directiva es obligatoria para garantizar la trazabilidad visual en capturas de pantalla, pruebas de telemetría y reportes de rendimiento.
+
+---
+
+## 💎 NOVEDADES Y ARQUITECTURA DE LA VERSIÓN v0.9.5
+
+### 1. Sistema de Muerte e Implosión en Cristal Poliédrico (`board.lua`, `audio_manager.lua`)
+* **Secuencia Cinemática de Derrota:** Al perder por top-out, la matriz no desaparece abruptamente:
+  1. **Fisuras de Energía:** Se genera una red de 40 grietas luminosas interconectadas que parpadean sobre los bloques.
+  2. **Micro-Hitstop (0.35s):** Congelamiento de impacto cinemático que da peso físico a la derrota.
+  3. **Desintegración en 350 Fragmentos:** Cada bloque se divide en esquirlas poliédricas con 4 geometrías distintas (triángulos afilados, rombos facetados, bloques biselados y agujas láser) con física de rotación y gravedad pesada (*Zero-GC Pool*).
+  4. **Audio Sub-Bass Crunch:** Caída tonal senoidal profunda combinada con distorsión analógica destructiva.
+
+### 2. HUD de Tensión Crítica & Micro-Glitches Horizontales (`board.lua`)
+* **Láser de Alarma en el Techo:** Línea neón roja de advertencia en la fila 21 que se activa cuando la pila supera los 13 bloques, parpadeando con el compás de la música.
+* **Scanline Tearing (Desplazamiento RGB):** Al acercarse a 3 bloques del límite superior, el marco del tablero sufre micro-cortes y saltos horizontales aleatorios modulados por la intensidad del peligro (`danger_level`).
+* **Audio Glitch Clicks:** Micro-stutters periódicos en el audio al estar en peligro extremo.
+
+### 3. Mecánica Zone Mode de 2 Niveles & Almacenamiento Estricto (`board.lua`, `garbage_manager.lua`)
+* **Invulnerabilidad Total en Zone:** Inmunidad absoluta contra Game Over al spawnear piezas y bloqueo total de basura entrante mientras la Zona esté activa.
+* **Carga Balanceada del Medidor:** Acumulación calibrada a `0.038` por línea para premiar jugadas estratégicas.
+* **Almacenamiento de Ataque Estricto:** Durante Zone Mode **no se fuga daño al rival**; el 100% del ataque se acumula en el contador y detona en un único estallido al expirar la Zona.
+* **Doble Nivel Visual (2 Skins de Zone):**
+  * **Tier 1 (25% - 99%):** *Holo-Cyan Matrix* con ondas diagonales continuas `sin((c + r) * 0.55 - time * 8.0)`.
+  * **Tier 2 (100% Clavado - Hyper Zone):** Solo se activa con el medidor al máximo (`zone_meter >= 1.0`). Transforma los bloques en una piel *Gold-Diamond Prism* con rejilla láser en cruz, bordes iridiscentes arcoíris y SFX de activación con acorde ascendente extendido.
+
+### 4. IA Master con Radar de Downstacking Quirúrgico (`ai_bot.lua`)
+* **Hole-Seeking Algorithm:** La IA detecta la columna exacta de los pozos de basura (`col 1..10`).
+* **Anti-Obstruction Penalty:** Si la IA está bajo peligro, castiga severamente (`-1500 pts`) colocar piezas que tapen la salida de basura sin limpiar líneas.
+* **Aplanamiento Forzado de Grilla:** Máxima prioridad a limpiezas continuas de líneas simples/dobles para reducir la altura de la torre y contraatacar.
+
+### 5. Laboratorio de Configuración DAS/ARR & Audio (`settings_manager.lua`, `game_states.lua`)
+* **Calibración Competitiva en Vivo:** Sliders interactivos para calibrar DAS (50 a 200 ms), ARR (0 a 25 ms), volumen SFX y BGM.
+* **Persistencia JSON Local:** Guardado y carga automática en `settings.json`.
+
+---
+
+## 🗂️ REGISTRO DE ARCHIVOS MODIFICADOS Y CREADOS
+
+| Archivo | Estado | Descripción del Cambio |
+| :--- | :--- | :--- |
+| `main.lua` | **Modificado** | Control de Hitstop, enlace de muerte cinemática, ruteo de settings y watermark persistente. |
+| `tetris/board.lua` | **Modificado** | Shards de cristal poliédrico, fisuras, 2 skins de Zone (Tier 1 y Tier 2), láser de alarma y scanline tearing. |
+| `tetris/ai_bot.lua` | **Modificado** | Heurística de Downstacking con radar de pozos de basura y anti-obstrucción. |
+| `tetris/garbage_manager.lua` | **Modificado** | Almacenamiento 100% estricto de ataques Zone, cálculo de Hyper Zone y ganancia balanceada. |
+| `audio_manager.lua` | **Modificado** | SFX de muerte digital destructiva y activación Hyper Zone 100%. |
+| `tetris/hud_panels.lua` | **Modificado** | Centrado milimétrico por Tetromino (`PREVIEW_CONFIG`) y badge dorado `[Q] 100%`. |
+| `tetris/bloom_shader.lua` | **Modificado** | Calibración anti-burnout con aberración cromática nítida. |
+| `settings_manager.lua` | **Nuevo** | Módulo de guardado y lectura de parámetros competitivos (`settings.json`). |
+| `tetris/game_states.lua` | **Modificado** | Pantalla interactiva de ajustes DAS/ARR con sliders en tiempo real. |

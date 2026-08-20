@@ -18,7 +18,9 @@ function Piece.new(id, board)
 end
 
 function Piece:resetLock()
-    if self.move_count < self.max_resets then self.lock_timer, self.move_count = 0, self.move_count + 1 end
+    if self.move_count < self.max_resets then 
+        self.lock_timer, self.move_count = 0, self.move_count + 1 
+    end
 end
 
 function Piece:move(dx, dy, is_gravity)
@@ -71,15 +73,24 @@ function Piece:update(dt, gravity_speed)
     if self.locked then return end
     if self.spawn_timer > 0 then self.spawn_timer = self.spawn_timer - dt end
     self.gravity_timer = self.gravity_timer + dt
-    local limit = gravity_speed or 0.8
+    
+    -- En Zone Mode la gravedad automática se congela
+    local limit = self.board.is_zone_active and 999.0 or (gravity_speed or 0.8)
     while self.gravity_timer >= limit do
-        if self:move(0, 1, true) then self.gravity_timer = self.gravity_timer - limit
-        else self.gravity_timer = 0; break end
+        if self:move(0, 1, true) then 
+            self.gravity_timer = self.gravity_timer - limit
+        else 
+            self.gravity_timer = 0
+            break 
+        end
     end
+
     if not self.board:canMove(self.x, self.y + 1, self.rotation) then
         self.lock_timer = self.lock_timer + dt
         if self.lock_timer >= self.lock_delay then self:lock() end
-    else self.lock_timer = 0 end
+    else 
+        self.lock_timer = 0 
+    end
 end
 
 function Piece:lock()
@@ -90,14 +101,14 @@ function Piece:lock()
     for r = 1, #shape do
         for c = 1, #shape[r] do
             if shape[r][c] ~= 0 then
-                local tx, ty = self.x+c-1, self.y+r-1
-                if ty>=1 and ty<=40 then self.board.grid[ty][tx] = self.id end
+                local tx, ty = self.x + c - 1, self.y + r - 1
+                if ty >= 1 and ty <= 40 then self.board.grid[ty][tx] = self.id end
             end
         end
     end
     self.locked = true
     PPSCounter.register(self.board)
-    AudioManager.playImmediateSFX("drop", self.board.player_type=="bot", self.y)
+    AudioManager.playImmediateSFX("drop", self.board.player_type == "bot", self.y)
     self.board:checkLines(is_tspin)
 end
 
@@ -106,43 +117,58 @@ function Piece:draw(bx, by)
     local energy, pulse = _G.TrackEnergyPunch or 0, _G.AudioBeatPulse or 0
     love.graphics.push("all")
 
-    -- SPAWN BLOOM (Animación de nacimiento)
+    -- SPAWN BLOOM
     if self.spawn_timer > 0 then
         local p = self.spawn_timer / 0.2
         local clr = self.board.colors[self.id]
         love.graphics.setBlendMode("add")
-        for r=1,#shape do for c=1,#shape[r] do if shape[r][c]~=0 then
-            local x, y = bx+(self.x+c-2)*24, by+(self.y+r-22)*24
-            love.graphics.setColor(clr[1], clr[2], clr[3], p * 0.4)
-            love.graphics.rectangle("fill", x-6*p, y-6*p, 24+12*p, 24+12*p, 4)
-            love.graphics.setColor(1,1,1, p * 0.6)
-            love.graphics.rectangle("fill", x, y, 24, 24, 2)
-        end end end
+        for r = 1, #shape do 
+            for c = 1, #shape[r] do 
+                if shape[r][c] ~= 0 then
+                    local x, y = bx + (self.x + c - 2) * 24, by + (self.y + r - 22) * 24
+                    love.graphics.setColor(clr[1], clr[2], clr[3], p * 0.4)
+                    love.graphics.rectangle("fill", x - 6 * p, y - 6 * p, 24 + 12 * p, 24 + 12 * p, 4)
+                    love.graphics.setColor(1, 1, 1, p * 0.6)
+                    love.graphics.rectangle("fill", x, y, 24, 24, 2)
+                end 
+            end 
+        end
         love.graphics.setBlendMode("alpha")
     end
 
-    -- GHOST PIECE (Legibilidad HOLOGRÁFICA)
+    -- GHOST PIECE (SOMBRA REACTIVA AL BEAT & ALTA LEGIBILIDAD)
     if self.board and bx == self.board.x and by == self.board.y then
         local gy = self.y
-        while self.board:canMove(self.x, gy+1, self.rotation) do gy = gy+1 end
+        while self.board:canMove(self.x, gy + 1, self.rotation) do gy = gy + 1 end
         local clr = self.board.colors[self.id]
+        local ghost_pulse = 0.25 + pulse * 0.3 + energy * 0.15
         
-        for r=1,#shape do for c=1,#shape[r] do if shape[r][c]~=0 then
-            local gx, g_y = bx+(self.x+c-2)*24, by+(gy+r-22)*24
-            -- Relleno muy sutil
-            love.graphics.setColor(clr[1], clr[2], clr[3], 0.1)
-            love.graphics.rectangle("fill", gx+2, g_y+2, 20, 20, 2)
-            -- Borde con brillo pulsante
-            love.graphics.setLineWidth(1.5)
-            love.graphics.setColor(clr[1], clr[2], clr[3], 0.2 + pulse * 0.2)
-            love.graphics.rectangle("line", gx+2, g_y+2, 20, 20, 2)
-        end end end
+        for r = 1, #shape do 
+            for c = 1, #shape[r] do 
+                if shape[r][c] ~= 0 then
+                    local gx, g_y = bx + (self.x + c - 2) * 24, by + (gy + r - 22) * 24
+                    
+                    -- Relleno tenue
+                    love.graphics.setColor(clr[1], clr[2], clr[3], 0.12)
+                    love.graphics.rectangle("fill", gx + 2, g_y + 2, 20, 20, 2)
+                    
+                    -- Borde neón pulsante
+                    love.graphics.setLineWidth(1.8)
+                    love.graphics.setColor(clr[1], clr[2], clr[3], ghost_pulse)
+                    love.graphics.rectangle("line", gx + 2, g_y + 2, 20, 20, 2)
+                end 
+            end 
+        end
     end
 
-    -- ACTIVE PIECE (Brillante)
-    for r=1,#shape do for c=1,#shape[r] do if shape[r][c]~=0 then
-        self.board:drawBlock(bx+(self.x+c-2)*24, by+(self.y+r-22)*24, self.id)
-    end end end
+    -- ACTIVE PIECE
+    for r = 1, #shape do 
+        for c = 1, #shape[r] do 
+            if shape[r][c] ~= 0 then
+                self.board:drawBlock(bx + (self.x + c - 2) * 24, by + (self.y + r - 22) * 24, self.id)
+            end 
+        end 
+    end
     love.graphics.pop()
 end
 

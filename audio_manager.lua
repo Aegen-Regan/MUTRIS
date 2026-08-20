@@ -133,7 +133,7 @@ function AudioManager.playHatClosed(volume)
 end
 
 function AudioManager.triggerGlitch(duration)
-    AudioManager.glitch_timer = duration
+    AudioManager.glitch_timer = duration or 0
 end
 
 function AudioManager.playImmediateSFX(type, is_bot, row_y)
@@ -188,8 +188,14 @@ function AudioManager.playImmediateSFX(type, is_bot, row_y)
         
     elseif type == "zone_enter" then
         local low_note = _G.BG_SCALE and _G.BG_SCALE[1] or 32.70
-        AudioManager.playTone(low_note, 1.8, 0.9, "sine", false, 2, 1.2, true)
+        AudioManager.playTone(low_note, 1.8, 0.95, "sine", false, 2, 1.2, true)
         AudioManager.playNoise(0.9, vol * 0.45, 6, 0)
+
+    elseif type == "zone_enter_hyper" then
+        local low_note = _G.BG_SCALE and _G.BG_SCALE[1] or 32.70
+        AudioManager.playTone(low_note * 0.5, 2.2, 1.1, "sine", false, 3, 0.9, true)
+        AudioManager.playArpeggio({130.81, 164.81, 196.00, 261.63, 329.63, 523.25}, "triangle", 1.2, 2, 0.025, 1)
+        AudioManager.playNoise(1.1, 0.6, 4, 1)
         
     elseif type == "tetris" then
         local n1 = notes[1] or 130.81
@@ -198,6 +204,22 @@ function AudioManager.playImmediateSFX(type, is_bot, row_y)
         local n4 = notes[4] or 233.08
         AudioManager.playArpeggio({n1, n2, n3 * 2, n4 * 2, n1 * 4}, "sine", vol * 1.35, energy * 3, 0.028, 1)
         AudioManager.playNoise(0.9, vol * 0.55, 5, 0)
+
+    elseif type == "ultimatris" or type == "perfect_clear" then
+        local root = notes[1] or 130.81
+        local third = notes[2] or 164.81
+        local fifth = notes[3] or 196.00
+        AudioManager.playArpeggio({
+            root * 2, third * 2, fifth * 2, 
+            root * 4, third * 4, fifth * 4, root * 8
+        }, "sine", 1.6, 4, 0.032, 1)
+        AudioManager.playNoise(1.2, 0.65, 4, 2)
+
+    elseif type == "death" then
+        -- Efecto de colapso/implosión digital (Sub-bass pitch dive + Crunch destructivo)
+        AudioManager.playTone(55.0, 1.6, 1.2, "saw", true, 5, 1.8, true)
+        AudioManager.playNoise(1.4, 0.85, 3, 4)
+        AudioManager.playTone(32.7, 2.0, 1.0, "sine", false, 6, 1.1, true)
     end
 end
 

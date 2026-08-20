@@ -1,7 +1,6 @@
 ---@diagnostic disable: undefined-global
 local Input = {}
-
-local DAS, ARR = 0.094, 0.008 
+local SettingsManager = require "settings_manager"
 
 function Input.init(player_ref)
     Input.player = player_ref
@@ -48,6 +47,9 @@ function Input.update(dt)
     local p = Input.player.active_piece
     if p.locked then return end
 
+    local das = SettingsManager.settings.das or 0.094
+    local arr = math.max(0.001, SettingsManager.settings.arr or 0.008)
+
     local move_left_held = love.keyboard.isDown("kp4") or love.keyboard.isDown("left") or 
                            isGamepadDown("dpleft") or isGamepadAxisDown("leftx", -0.5, false)
     if move_left_held then
@@ -57,9 +59,9 @@ function Input.update(dt)
             Input.timers.left = 0
         else
             Input.timers.left = Input.timers.left + dt
-            while Input.timers.left >= DAS do
+            while Input.timers.left >= das do
                 p:move(-1, 0)
-                Input.timers.left = Input.timers.left - ARR
+                Input.timers.left = Input.timers.left - arr
             end
         end
     else
@@ -75,9 +77,9 @@ function Input.update(dt)
             Input.timers.right = 0
         else
             Input.timers.right = Input.timers.right + dt
-            while Input.timers.right >= DAS do
+            while Input.timers.right >= das do
                 p:move(1, 0)
-                Input.timers.right = Input.timers.right - ARR
+                Input.timers.right = Input.timers.right - arr
             end
         end
     else

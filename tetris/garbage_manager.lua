@@ -1,3 +1,4 @@
+---@diagnostic disable: undefined-global
 local GarbageManager = {}
 
 local ATTACK_TABLE = {
@@ -6,26 +7,40 @@ local ATTACK_TABLE = {
 }
 local COMBO_TABLE = {0, 0, 1, 1, 1, 2, 2, 3, 3, 4, 4, 4, 5}
 
+local ZONE_ATTACK_TIERS = {
+    [1] = 1, [2] = 2, [3] = 3, [4] = 5,
+    [5] = 7, [6] = 9, [7] = 11, [8] = 13,       -- Octoris
+    [9] = 15, [10] = 17, [11] = 19, [12] = 21,   -- Dodecatris
+    [13] = 23, [14] = 25, [15] = 27, [16] = 30,   -- Decahexatris
+    [18] = 36, [20] = 44, [21] = 50              -- Ultimatris
+}
+
 function GarbageManager.calculateAttack(lines, is_tspin, is_mini, combo, b2b, board)
     local attack = 0
     local message = ""
     local color = {1, 1, 1}
 
-    -- HEAT SYSTEM (VISUAL)
     local charge_boost = (lines / 4) * 0.4
     if is_tspin or lines == 4 then 
         charge_boost = 1.0 
-        board.eq_power = 1.0  -- Activa paleta Hyper-Attack
-        board.eq_flash = 1.0  -- Impacto visual
+        board.eq_power = 1.0
+        board.eq_flash = 1.0
     end
 
-    -- Los combos disparan pequeñas ráfagas de brillo
     if combo > 0 then
         charge_boost = charge_boost + (combo * 0.18)
         board.eq_power = math.max(board.eq_power, 0.5)
     end
 
     board.eq_charge = math.min(1.0, board.eq_charge + charge_boost)
+
+    -- Carga del medidor Zone calibrada (apenas más lenta y balanceada)
+    if not board.is_zone_active then
+        local zone_gain = lines * 0.038
+        if is_tspin then zone_gain = zone_gain + 0.06 end
+        if lines == 4 then zone_gain = zone_gain + 0.05 end
+        board.zone_meter = math.min(1.0, board.zone_meter + zone_gain)
+    end
 
     if is_tspin then
         if lines == 1 then attack, message, color = 2, "T-SPIN SINGLE", {0.8, 0.2, 1}
@@ -53,23 +68,75 @@ function GarbageManager.calculateAttack(lines, is_tspin, is_mini, combo, b2b, bo
     return attack
 end
 
+function GarbageManager.calculateZoneBurst(lines_cleared, is_perfect_clear, is_hyper_zone)
+    if is_perfect_clear then
+        return 50, "PERFECT CLEAR ZONE!", {1.0, 0.85, 0.2}
+    end
+
+    if lines_cleared <= 0 then 
+        return 0, "ZONE END", {0.5, 0.8, 1} 
+    end
+
+    local base = ZONE_ATTACK_TIERS[lines_cleared] or math.floor(lines_cleared * 2.3)
+    
+    -- Bonus de 100% Hyper Zone
+    if is_hyper_zone then
+        base = base + 3
+    end
+
+    local name = "ZONE " .. lines_cleared
+    local color = {0, 0.9, 1}
+
+    if lines_cleared >= 20 then 
+        name, color = "ULTIMATRIS (" .. lines_cleared .. ")", {1.0, 0.85, 0.2}
+    elseif lines_cleared >= 16 then 
+        name, color = "DECAHEXATRIS (" .. lines_cleared .. ")", {1, 0.2, 0.8}
+    elseif lines_cleared >= 12 then 
+        name, color = "DODECATRIS (" .. lines_cleared .. ")", {0.8, 0.2, 1}
+    elseif lines_cleared >= 8 then 
+        name, color = "OCTORIS (" .. lines_cleared .. ")", {0.2, 1, 0.5}
+    elseif lines_cleared >= 4 then 
+        name, color = "TETRIS ZONE (" .. lines_cleared .. ")", {0, 0.8, 1}
+    end
+
+    if is_hyper_zone then
+        name = "★ HYPER " .. name
+        color = {1.0, 0.9, 0.3}
+    end
+
+    return base, name, color
+end
+
 function GarbageManager.sendGarbage(sender, receiver, amount)
     if amount <= 0 then return end
+    
+    -- Invulnerabilidad total: En Zone Mode nada de basura entra al receptor
+    if receiver and receiver.is_zone_active then
+        return
+    end
+
+    -- Cancelación activa (Offsetting)
     local rem = amount
     while rem > 0 and #sender.garbage_queue > 0 do
-        if sender.garbage_queue[1] <= rem then rem = rem - table.remove(sender.garbage_queue, 1)
-        else sender.garbage_queue[1] = sender.garbage_queue[1] - rem; rem = 0 end
+        if sender.garbage_queue[1] <= rem then 
+            rem = rem - table.remove(sender.garbage_queue, 1)
+        else 
+            sender.garbage_queue[1] = sender.garbage_queue[1] - rem
+            rem = 0 
+        end
     end
-    if rem > 0 then 
+
+    if rem > 0 and receiver then 
         table.insert(receiver.garbage_queue, rem)
         receiver:triggerShake(rem * 4, 0.25)
-        -- Cuando recibimos ataque, la energía se vuelve "inestable" (Rojo Danger)
         receiver.eq_charge = math.min(1.0, receiver.eq_charge + 0.4)
     end
 end
 
 function GarbageManager.pushToGrid(board)
-    if #board.garbage_queue == 0 then return end
+    -- Inmunidad: Mientras Zone esté activo la basura no ingresa al grid
+    if board.is_zone_active or #board.garbage_queue == 0 then return end
+    
     local lines = math.min(table.remove(board.garbage_queue, 1), 8)
     local hole = math.random(1, 10)
     for i = 1, lines do
@@ -78,8 +145,11 @@ function GarbageManager.pushToGrid(board)
         for c = 1, 10 do row[c] = (c == hole) and 0 or 8 end
         table.insert(board.grid, row)
     end
+    
     local AudioManager = require "audio_manager"
-    AudioManager.triggerGlitch(lines * 0.08)
+    if AudioManager and AudioManager.triggerGlitch then
+        AudioManager.triggerGlitch(lines * 0.08)
+    end
     board:triggerShake(lines * 5, 0.3)
 end
 
