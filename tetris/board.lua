@@ -266,6 +266,13 @@ function Board:triggerDeath()
     self.is_dying = true
     self.death_timer = self.death_duration
     self.is_zone_active = false
+
+    -- ⚡ REGISTRO INSTANTÁNEO APENAS OCURRE LA MUERTE (FRAME 0)
+    local winner = (self.player_type == "human") and "BOT" or "PLAYER"
+    local human_board = (self.player_type == "human") and self or self.opponent
+    local player_pps = (human_board and human_board.current_pps_display) or 1.0
+    local AIBot = require "tetris.ai_bot"
+    AIBot.recordMatch(winner, player_pps, _G.RealMatchTimer)
     
     for i = 1, 40 do
         local c = self.cracks[i]
@@ -318,11 +325,12 @@ function Board:triggerDeath()
 end
 
 function Board:spawnTrail(x, y_start, y_end, id, shape)
+    if not self.trails then return end
     for i = 1, #self.trails do
         if not self.trails[i].active then
             local t = self.trails[i]
             t.active, t.x, t.y_start, t.y_end = true, x, y_start, y_end
-            t.id, t.shape, t.timer = id, shape, self.trail_duration
+            t.id, t.shape, t.timer = id, shape, self.trail_duration or 0.45
             break
         end
     end

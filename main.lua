@@ -16,9 +16,12 @@ local SettingsManager = require "settings_manager"
 local AnomalyManager = require "tetris.anomaly_manager"
 
 _G.RestartHalo = 0
-_G.Winner = nil 
+_G.Winner = nil
 _G.GameOverPending = nil
 _G.HitStopTimer = 0
+_G.RealMatchTimer = 0
+_G.TrackEnergyPunch = 0
+_G.AudioBeatPulse = 0
 _G.SetGameState = function(state) game_state = state end
 
 local player, bot, game_state, selected_diff = nil, nil, "menu", 1
@@ -26,6 +29,9 @@ local player, bot, game_state, selected_diff = nil, nil, "menu", 1
 local difficulties = {
     { name = "MASTER", pps = 6.0, color = {1, 0.2, 0.3} }
 }
+
+-- Pool singleton Zero-GC para batch de 1 solo archivo
+local _singleton_batch = {""}
 
 function love.load()
     love.window.setTitle("MUTRIS - " .. _G.ENGINE_VERSION)
@@ -47,6 +53,7 @@ end
 function GlobalRestart()
     _G.RestartHalo, _G.Winner, _G.GameOverPending = 1.0, nil, nil
     _G.HitStopTimer = 0
+    _G.RealMatchTimer = 0
     local d = difficulties[selected_diff]
     player = Board.new(80, 50, "human")
     bot = Board.new(480, 50, "bot")
@@ -67,7 +74,8 @@ end
 function love.filedropped(file)
     local path = file:getFilename()
     if path and (path:match("%.mp3$") or path:match("%.ogg$")) then
-        TrackEditor.enterBatch({path})
+        _singleton_batch[1] = path
+        TrackEditor.enterBatch(_singleton_batch)
     end
 end
 
@@ -84,16 +92,20 @@ end
 
 function love.update(dt)
     if _G.RestartHalo > 0 then _G.RestartHalo = math.max(0, _G.RestartHalo - dt * 2.0) end
-    if _G.HitStopTimer > 0 then 
-        _G.HitStopTimer = math.max(0, _G.HitStopTimer - dt) 
+    if _G.HitStopTimer > 0 then
+        _G.HitStopTimer = math.max(0, _G.HitStopTimer - dt)
         if player then player:update(dt) end
         if bot then bot:update(dt) end
-        return 
+        return
     end
 
     local energy = _G.TrackEnergyPunch or 0
-    for _, s in ipairs(_G.Stars) do
-        s.y = s.y + s.v * dt * (1 + energy * 8) 
+
+    -- Zero-GC: for numérico en vez de ipairs()
+    local stars_total = #_G.Stars
+    for i = 1, stars_total do
+        local s = _G.Stars[i]
+        s.y = s.y + s.v * dt * (1 + energy * 8)
         if s.y > 600 then s.y, s.x = 0, math.random(800) end
     end
 
@@ -105,9 +117,11 @@ function love.update(dt)
     end
 
     if game_state == "play" then
-        _G.RealMatchTimer = _G.RealMatchTimer + dt
+        -- ⏱️ Contador de partida continuo e inmune a cortes de audio
+        _G.RealMatchTimer = (_G.RealMatchTimer or 0) + dt
+
         Input.update(dt)
-        
+
         local player_danger = (player and player.danger_level) or 0
         local bot_danger = (bot and bot.danger_level) or 0
         AudioManager.update(dt, { danger_level = math.max(player_danger, bot_danger), drop_intensity = 0 })
@@ -127,8 +141,16 @@ function love.update(dt)
         end
 
         if player and player.is_dying and player.death_timer <= 0 then
+            if game_state == "play" then
+                local AIBot = require "tetris.ai_bot"
+                AIBot.recordMatch("BOT", (player and player.current_pps_display) or 1.0, _G.RealMatchTimer)
+            end
             game_state = "over"
         elseif bot and bot.is_dying and bot.death_timer <= 0 then
+            if game_state == "play" then
+                local AIBot = require "tetris.ai_bot"
+                AIBot.recordMatch("PLAYER", (player and player.current_pps_display) or 1.0, _G.RealMatchTimer)
+            end
             game_state = "over"
         end
 
@@ -138,7 +160,7 @@ function love.update(dt)
             if player.active_piece.locked then
                 require("tetris.garbage_manager").pushToGrid(player)
                 player.active_piece = Piece.new(player.bag:next(), player)
-                if not player.is_zone_active and not player.active_piece:canMove(player.active_piece.x, player.active_piece.y, 1) then 
+                if not player.is_zone_active and not player.active_piece:canMove(player.active_piece.x, player.active_piece.y, 1) then
                     player:triggerDeath()
                     _G.Winner = "BOT"
                 end
@@ -154,7 +176,7 @@ function love.update(dt)
             if bot.active_piece.locked then
                 require("tetris.garbage_manager").pushToGrid(bot)
                 bot.active_piece = Piece.new(bot.bag:next(), bot)
-                if not bot.is_zone_active and not bot.active_piece:canMove(bot.active_piece.x, bot.active_piece.y, 1) then 
+                if not bot.is_zone_active and not bot.active_piece:canMove(bot.active_piece.x, bot.active_piece.y, 1) then
                     bot:triggerDeath()
                     _G.Winner = "PLAYER"
                 end
@@ -167,13 +189,16 @@ end
 
 function love.draw()
     BloomShader.beginDraw()
-    
+
     local pulse = _G.AudioBeatPulse or 0
     love.graphics.clear(0.002, 0.002, 0.008)
 
     FogLayer.draw()
 
-    for _, s in ipairs(_G.Stars) do
+    -- Zero-GC: for numérico sin iteradores
+    local stars_total = #_G.Stars
+    for i = 1, stars_total do
+        local s = _G.Stars[i]
         love.graphics.setColor(0.5, 0.7, 1.0, 0.2 + pulse * 0.2)
         love.graphics.circle("fill", s.x, s.y, s.s)
     end
@@ -185,17 +210,17 @@ function love.draw()
     elseif game_state == "editor" then
         TrackEditor.draw()
     elseif game_state == "play" then
-        if player then 
-            player:draw() 
-            if player.active_piece and not player.is_dying then 
-                player.active_piece:draw(player.x, player.y) 
-            end 
+        if player then
+            player:draw()
+            if player.active_piece and not player.is_dying then
+                player.active_piece:draw(player.x, player.y)
+            end
         end
-        if bot then 
-            bot:draw() 
-            if bot.active_piece and not bot.is_dying then 
-                bot.active_piece:draw(bot.x, bot.y) 
-            end 
+        if bot then
+            bot:draw()
+            if bot.active_piece and not bot.is_dying then
+                bot.active_piece:draw(bot.x, bot.y)
+            end
         end
         AnomalyManager.draw(player, bot)
         require("tetris.hud_center").draw(player, bot)
@@ -227,15 +252,19 @@ function love.mousepressed(x, y, button)
         if x >= 275 and x <= 525 and y >= 222 and y <= 254 then
             local cur = TrackManager.getCurrentTrack()
             if cur and cur.file_path ~= "" then
-                TrackEditor.enterBatch({cur.file_path})
+                _singleton_batch[1] = cur.file_path
+                TrackEditor.enterBatch(_singleton_batch)
+                AudioManager.playMenuClick()
             end
             return
         end
         if x >= 275 and x <= 525 and y >= 435 and y <= 470 then
+            AudioManager.playMenuClick()
             game_state = "settings"
             return
         end
         if x >= 275 and x <= 525 and y >= 485 and y <= 530 then
+            AudioManager.playMenuClick()
             GlobalRestart()
             return
         end
@@ -249,10 +278,33 @@ function love.mousereleased(x, y, button)
 end
 
 function love.keypressed(key)
+    -- 🎚️ TECLA ESC GLOBAL: Abrir settings en CUALQUIER ESTADO
+    if key == "escape" then
+        if game_state == "settings" then
+            AudioManager.playMenuBack()
+            SettingsManager.save()
+            game_state = "menu"
+        else
+            AudioManager.playMenuClick()
+            game_state = "settings"
+        end
+        return
+    end
+
+    -- 🔇 TECLA M: Toggle Mute cuando estamos en settings
+    if key == "m" and game_state == "settings" then
+        SettingsManager.toggleMute()
+        local is_muted = SettingsManager.settings.mute_all and SettingsManager.settings.mute_all >= 0.5
+        AudioManager.playMuteToggle(is_muted)
+        SettingsManager.save()
+        return
+    end
+
     if game_state == "editor" then
         TrackEditor.keypressed(key)
     elseif game_state == "settings" then
-        if key == "escape" or key == "return" then
+        if key == "return" then
+            AudioManager.playMenuBack()
             SettingsManager.save()
             game_state = "menu"
         end
@@ -261,12 +313,12 @@ function love.keypressed(key)
         elseif key == "down" then selected_diff = math.min(#difficulties, selected_diff + 1)
         elseif key == "left" then TrackManager.prevTrack()
         elseif key == "right" then TrackManager.nextTrack()
-        elseif key == "return" or key == "space" then GlobalRestart() 
+        elseif key == "return" or key == "space" then GlobalRestart()
         end
-    elseif game_state == "play" then 
+    elseif game_state == "play" then
         Input.keypressed(key)
-    elseif game_state == "over" and key == "r" then 
-        GlobalRestart() 
+    elseif game_state == "over" and key == "r" then
+        GlobalRestart()
     end
 end
 
@@ -275,6 +327,7 @@ function love.gamepadpressed(joystick, button)
         Input.gamepadpressed(joystick, button)
     elseif game_state == "settings" then
         if button == "b" or button == "start" then
+            AudioManager.playMenuBack()
             SettingsManager.save()
             game_state = "menu"
         end
@@ -282,5 +335,18 @@ function love.gamepadpressed(joystick, button)
         if button == "start" or button == "a" then GlobalRestart() end
     elseif game_state == "over" then
         if button == "start" or button == "a" then GlobalRestart() end
+    end
+end
+
+-- Callbacks globales para refrescar caché de joysticks (solo por eventos)
+function love.joystickadded()
+    if Input and Input._refreshJoystickCache then
+        Input._refreshJoystickCache()
+    end
+end
+
+function love.joystickremoved()
+    if Input and Input._refreshJoystickCache then
+        Input._refreshJoystickCache()
     end
 end

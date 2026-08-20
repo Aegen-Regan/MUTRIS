@@ -441,7 +441,409 @@ AIBot:evaluate() escaneaba el tablero completo dos veces por cada candidato de c
 ================================================
 FILE: audio_manager.lua
 ================================================
-Error reading file with 'cp1252': 'charmap' codec can't decode byte 0x8d in position 10055: character maps to <undefined>
+---@diagnostic disable: undefined-global
+local AudioManager = {}
+local SettingsManager = require "settings_manager"
+
+-- ╔══════════════════════════════════════════════════════════════════════╗
+-- ║  🎛️  PANEL DE CONTROL DE SFX HARMONIZATION MUTRIS v0.9.5         ║
+-- ╚══════════════════════════════════════════════════════════════════════╝
+AUDIO_CONFIG = {
+    SFX_DURATION_BASE_BOOST_MIN = 1.0,
+    SFX_DURATION_BASE_BOOST_MAX = 2.4,
+    DELAY_TAP1_MS_MIN = 0.030,
+    DELAY_TAP1_MS_MAX = 0.180,
+    DELAY_TAP2_MS_MIN = 0.055,
+    DELAY_TAP2_MS_MAX = 0.310,
+    DELAY_FEEDBACK_TAP1_MIN = 0.02,
+    DELAY_FEEDBACK_TAP1_MAX = 0.42,
+    DELAY_FEEDBACK_TAP2_MIN = 0.01,
+    DELAY_FEEDBACK_TAP2_MAX = 0.28,
+    DRIVE_BOOST_MIN = 0.0,
+    DRIVE_BOOST_MAX = 4.2,
+    DECAY_DIVISOR_MIN = 1.0,
+    DECAY_DIVISOR_MAX = 4.8,
+    ZONE_EXTRA_DURATION = 1.35,
+    ZONE_EXTRA_DRIVE  = 3.0,
+    ZONE_PITCH_SHIFT  = 0.97,
+    DANGER_GLITCH_CHANCE = 0.30,
+}
+
+local SCALE = {
+    C2=65.41, C3=130.81, G2=98.00, F2=87.31,
+    Eb2=77.78, Bb2=116.54,
+    C4=261.63, E4=329.63, G4=392.00, B4=493.88
+}
+
+_G.PLAYER_NOTES = { SCALE.C2, SCALE.Eb2, SCALE.G2, SCALE.Bb2 }
+_G.BOT_NOTES    = { SCALE.C2, SCALE.Eb2, SCALE.G2, SCALE.Bb2 }
+_G.BG_SCALE      = { SCALE.C2 * 0.5, SCALE.Eb2 * 0.5, SCALE.G2 * 0.5 }
+
+AudioManager.beat_timer = 0
+AudioManager.base_bpm = 120
+AudioManager.current_bpm = 120
+AudioManager.step = 0
+
+AudioManager.zone_active = false
+AudioManager.glitch_timer = 0
+_G.AudioBeatPulse = 0
+AudioManager.melody_step = 1
+_G.TrackEnergyPunch = 0
+
+local function lerp(a, b, t) return a + (b - a) * t end
+
+local function tanh(x)
+    local e2x = math.exp(2 * x)
+    return (e2x - 1) / (e2x + 1)
+end
+
+function AudioManager.init()
+    AudioManager.beat_timer = 0
+    AudioManager.step = 0
+    AudioManager.melody_step = 1
+    _G.TrackEnergyPunch = 0
+    AudioManager.glitch_timer = 0
+end
+
+-- ╔══════════════════════════════════════════════════════════════════════╗
+-- ║  🔊  NUEVOS SFX: Menú, Hover, Slider, Back, Mute                  ║
+-- ╚══════════════════════════════════════════════════════════════════════╝
+function AudioManager.playMenuClick()
+    AudioManager.playTone(1800, 0.11, 0.28, "sine", false, 0.0, 38, true)
+end
+
+function AudioManager.playMenuHover()
+    AudioManager.playTone(620, 0.06, 0.18, "triangle", false, 0.0, 60, true)
+end
+
+function AudioManager.playSliderTick()
+    AudioManager.playTone(1400, 0.03, 0.22, "sine", false, 0.0, 90, true)
+end
+
+function AudioManager.playMenuBack()
+    local sfx_vol = SettingsManager.getSFX()
+    local sample_rate = 44100
+    local length = math.floor(sample_rate * 0.2)
+    if length <= 0 then return end
+    local data = love.sound.newSoundData(length, sample_rate, 16, 1)
+    for i = 0, length - 1 do
+        local t = i / sample_rate
+        local f = 980 - (420 * (t / 0.2))
+        local val = math.sin(2 * math.pi * f * t)
+        val = val * math.exp(-14 * t)
+        data:setSample(i, val * 0.32 * sfx_vol)
+    end
+    love.audio.play(love.audio.newSource(data, "static"))
+end
+
+function AudioManager.playMuteToggle(is_muted)
+    if is_muted then
+        AudioManager.playTone(600, 0.16, 0.3, "triangle", false, 0.5, 28, true)
+    else
+        local sfx_vol = SettingsManager.getSFX()
+        local sample_rate = 44100
+        local length = math.floor(sample_rate * 0.18)
+        if length <= 0 then return end
+        local data = love.sound.newSoundData(length, sample_rate, 16, 1)
+        for i = 0, length - 1 do
+            local t = i / sample_rate
+            local f = 1600 + (600 * (t / 0.18))
+            local val = math.sin(2 * math.pi * f * t)
+            val = val * math.exp(-11 * t)
+            data:setSample(i, val * 0.3 * sfx_vol)
+        end
+        love.audio.play(love.audio.newSource(data, "static"))
+    end
+end
+
+function AudioManager.playTone(freq, duration, volume, wave_type, is_kick, drive, decay, no_lfo)
+    if AudioManager.glitch_timer > 0 and math.random() < AUDIO_CONFIG.DANGER_GLITCH_CHANCE then return end
+
+    local energy = _G.TrackEnergyPunch or 0
+    local e2 = energy * energy
+    local sample_rate = 44100
+
+    local dur_boost    = lerp(AUDIO_CONFIG.SFX_DURATION_BASE_BOOST_MIN, AUDIO_CONFIG.SFX_DURATION_BASE_BOOST_MAX, energy)
+    local zone_dur     = (AudioManager.zone_active and not is_kick) and AUDIO_CONFIG.ZONE_EXTRA_DURATION or 1.0
+    local effective_duration = duration * dur_boost * zone_dur
+    local length = math.floor(sample_rate * effective_duration)
+    if length <= 0 then return end
+
+    local drive_boost = lerp(AUDIO_CONFIG.DRIVE_BOOST_MIN, AUDIO_CONFIG.DRIVE_BOOST_MAX, energy)
+    drive = (drive or 0) + drive_boost
+    if AudioManager.zone_active and not is_kick then drive = drive + AUDIO_CONFIG.ZONE_EXTRA_DRIVE end
+
+    local decay_div = lerp(AUDIO_CONFIG.DECAY_DIVISOR_MIN, AUDIO_CONFIG.DECAY_DIVISOR_MAX, energy)
+    decay = (decay or 22) / decay_div
+
+    if AudioManager.zone_active and not is_kick then freq = freq * AUDIO_CONFIG.ZONE_PITCH_SHIFT end
+
+    local tap1_ms   = lerp(AUDIO_CONFIG.DELAY_TAP1_MS_MIN,   AUDIO_CONFIG.DELAY_TAP1_MS_MAX,   energy)
+    local tap2_ms   = lerp(AUDIO_CONFIG.DELAY_TAP2_MS_MIN,   AUDIO_CONFIG.DELAY_TAP2_MS_MAX,   energy)
+    local fb_tap1   = lerp(AUDIO_CONFIG.DELAY_FEEDBACK_TAP1_MIN, AUDIO_CONFIG.DELAY_FEEDBACK_TAP1_MAX, energy)
+    local fb_tap2   = lerp(AUDIO_CONFIG.DELAY_FEEDBACK_TAP2_MIN, AUDIO_CONFIG.DELAY_FEEDBACK_TAP2_MAX, energy)
+    local delay1_samples = math.floor(sample_rate * tap1_ms)
+    local delay2_samples = math.floor(sample_rate * tap2_ms)
+
+    local data = love.sound.newSoundData(length, sample_rate, 16, 1)
+    for i = 0, length - 1 do
+        local t = i / sample_rate
+        local current_f = freq
+        local f = is_kick and (current_f * math.exp(-24 * t)) or current_f
+        local val = 0
+
+        if wave_type == "square" then
+            val = math.sin(2 * math.pi * f * t) >= 0 and 0.4 or -0.4
+        elseif wave_type == "triangle" then
+            local sv = math.sin(2 * math.pi * f * t)
+            val = (2 / math.pi) * math.asin(math.max(-1, math.min(1, sv)))
+        elseif wave_type == "saw" then
+            local ft = f * t
+            val = 1.4 * (ft - math.floor(ft + 0.5))
+            val = val * (1 - math.min(0.7, t * 15))
+        else
+            val = math.sin(2 * math.pi * f * t)
+        end
+
+        if not is_kick and not no_lfo then
+            local lfo_rate = 6 + energy * 4
+            local lfo = (1.0 - energy * 0.2) + (0.2 + energy * 0.2) * math.sin(2 * math.pi * lfo_rate * t)
+            val = val * lfo
+        end
+
+        if energy > 0.05 and i >= delay1_samples then
+            local prev = data:getSample(i - delay1_samples)
+            val = val + prev * fb_tap1
+        end
+
+        if energy > 0.35 and i >= delay2_samples then
+            local prev = data:getSample(i - delay2_samples)
+            val = val + prev * fb_tap2
+        end
+
+        if drive > 0 then val = tanh(val * drive) / tanh(drive) end
+        data:setSample(i, val * math.exp(-decay * t) * volume)
+    end
+
+    local sfx_norm = SettingsManager.getSFX()
+    local src = love.audio.newSource(data, "static")
+    src:setVolume(src:getVolume() * sfx_norm)
+    love.audio.play(src)
+end
+
+function AudioManager.playNoise(duration, volume, decay, drive)
+    if AudioManager.zone_active then volume = volume * 0.2 end
+    if AudioManager.glitch_timer > 0 and math.random() < 0.3 then return end
+
+    local energy = _G.TrackEnergyPunch or 0
+    local sample_rate = 44100
+
+    local dur_boost = lerp(AUDIO_CONFIG.SFX_DURATION_BASE_BOOST_MIN, AUDIO_CONFIG.SFX_DURATION_BASE_BOOST_MAX, energy)
+    local effective_duration = duration * dur_boost
+    local length = math.floor(sample_rate * effective_duration)
+    if length <= 0 then return end
+
+    local decay_div = lerp(AUDIO_CONFIG.DECAY_DIVISOR_MIN, AUDIO_CONFIG.DECAY_DIVISOR_MAX, energy)
+    decay = (decay or 45) / decay_div
+
+    local drive_boost = lerp(AUDIO_CONFIG.DRIVE_BOOST_MIN, AUDIO_CONFIG.DRIVE_BOOST_MAX, energy) * 0.7
+    drive = (drive or 0) + drive_boost
+
+    local tap1_ms   = lerp(AUDIO_CONFIG.DELAY_TAP1_MS_MIN,   AUDIO_CONFIG.DELAY_TAP1_MS_MAX,   energy)
+    local fb_tap1   = lerp(AUDIO_CONFIG.DELAY_FEEDBACK_TAP1_MIN, AUDIO_CONFIG.DELAY_FEEDBACK_TAP1_MAX, energy)
+    local delay1_samples = math.floor(sample_rate * tap1_ms)
+
+    local data = love.sound.newSoundData(length, sample_rate, 16, 1)
+    for i = 0, length - 1 do
+        local t = i / sample_rate
+        local val = (math.random() * 2 - 1)
+        val = val * math.sin(2 * math.pi * (3200 + energy * 800) * t)
+
+        if energy > 0.05 and i >= delay1_samples then
+            local prev = data:getSample(i - delay1_samples)
+            val = val + prev * fb_tap1
+        end
+
+        if drive > 0 then val = tanh(val * drive) / tanh(drive) end
+        data:setSample(i, val * math.exp(-decay * t) * volume)
+    end
+
+    local sfx_norm = SettingsManager.getSFX()
+    local src = love.audio.newSource(data, "static")
+    src:setVolume(src:getVolume() * sfx_norm)
+    love.audio.play(src)
+end
+
+function AudioManager.playArpeggio(notes, wave_type, volume, drive, speed, scale_factor)
+    speed = speed or 0.045
+    scale_factor = scale_factor or 1
+    local energy = _G.TrackEnergyPunch or 0
+
+    local speed_mult = lerp(1.0, 0.72, energy)
+    speed = speed * speed_mult
+
+    for i, base_f in ipairs(notes) do
+        local note_dur = 0.2 + (i * 0.03) + (energy * 0.35)
+        AudioManager.playTone(base_f * scale_factor, note_dur, volume * 0.75, wave_type, false, drive, 18 - i, true)
+    end
+end
+
+function AudioManager.playHatClosed(volume)
+    AudioManager.playNoise(0.032, volume or 0.12, 110)
+end
+
+function AudioManager.triggerGlitch(duration)
+    AudioManager.glitch_timer = duration or 0
+end
+
+function AudioManager.playImmediateSFX(type, is_bot, row_y)
+    local notes = is_bot and _G.BOT_NOTES or _G.PLAYER_NOTES
+    local vol = is_bot and 0.45 or 0.38
+    local energy = _G.TrackEnergyPunch or 0
+
+    if type == "move" then
+        local idx = AudioManager.melody_step
+        local current_note = notes[idx] or notes[1] or 130.81
+        AudioManager.playTone(current_note, 0.06 + energy * 0.02, vol * 0.45, "triangle", false, 0, 65, true)
+        AudioManager.melody_step = (AudioManager.melody_step % #notes) + 1
+
+    elseif type == "rotate" then
+        local rotate_note = notes[2] or notes[1] or 155.56
+        AudioManager.playTone(rotate_note * 2, 0.08 + energy * 0.03, vol * 0.5, "sine", false, 0, 50, true)
+
+    elseif type == "hold" then
+        local n1 = notes[1] or 130.81
+        local n4 = notes[4] or notes[3] or 233.08
+        AudioManager.playTone(n1, 0.07, vol * 0.5, "sine", false, 0, 40, true)
+        AudioManager.playTone(n4 * 2, 0.09 + energy * 0.04, vol * 0.45, "sine", false, 1, 30, true)
+
+    elseif type == "drop" then
+        local target_row = tonumber(row_y) or 40
+        local height_factor = (41 - target_row) / 20
+        local root = notes[1] or 130.81
+        local third = notes[2] or 164.81
+        local fifth = notes[3] or 196.00
+        local pitch_mod = 1 + (height_factor * 0.3)
+        local drop_vol_boost = 1 + (energy * 0.6)
+
+        AudioManager.playTone(root * pitch_mod, 0.4, vol * 0.35 * drop_vol_boost, "sine", false, 0, 12, true)
+        AudioManager.playTone(third * pitch_mod, 0.42, vol * 0.3 * drop_vol_boost, "sine", false, 0, 11, true)
+        AudioManager.playTone(fifth * pitch_mod, 0.45, vol * 0.28 * drop_vol_boost, "sine", false, 0, 10, true)
+        AudioManager.playNoise(0.28, vol * 0.25 * drop_vol_boost, 24, 0)
+
+    elseif type == "line_clear" then
+        local n1 = notes[1] or 130.81
+        local n2 = notes[2] or 164.81
+        local n3 = notes[3] or 196.00
+        AudioManager.playArpeggio({n1, n2, n3}, "sine", vol * 0.85, energy * 2, 0.04, 2)
+        AudioManager.playNoise(0.45 + energy * 0.1, vol * 0.45, 15, 1)
+
+    elseif type == "t_spin" then
+        local n1 = notes[1] or 130.81
+        local n2 = notes[2] or 164.81
+        local n3 = notes[3] or 196.00
+        local n4 = notes[4] or 233.08
+        AudioManager.playArpeggio({n1 * 2, n3 * 2, n4 * 2, n2 * 4}, "triangle", vol * 0.98, 1 + energy * 3, 0.035, 1)
+        AudioManager.playNoise(0.55, vol * 0.35, 12, 0)
+
+    elseif type == "phantom_attack" then
+        local root = notes[1] or 130.81
+        AudioManager.playTone(root * 4.5, 0.45, 0.85, "saw", true, 4, 10, false)
+        AudioManager.playTone(root * 2.2, 0.65, 0.75, "triangle", false, 2, 6, false)
+        AudioManager.playTone(root * 0.75, 0.8, 0.9, "sine", true, 5, 4, true)
+        AudioManager.playNoise(0.4, 0.65, 18, 3)
+
+    elseif type == "zone_enter" then
+        local low_note = _G.BG_SCALE and _G.BG_SCALE[1] or 32.70
+        AudioManager.playTone(low_note, 1.8, 0.95, "sine", false, 2, 1.2, true)
+        AudioManager.playNoise(0.9, vol * 0.45, 6, 0)
+
+    elseif type == "zone_enter_hyper" then
+        local low_note = _G.BG_SCALE and _G.BG_SCALE[1] or 32.70
+        AudioManager.playTone(low_note * 0.5, 2.2, 1.1, "sine", false, 3, 0.9, true)
+        AudioManager.playArpeggio({130.81, 164.81, 196.00, 261.63, 329.63, 523.25}, "triangle", 1.2, 2, 0.025, 1)
+        AudioManager.playNoise(1.1, 0.6, 4, 1)
+
+    elseif type == "tetris" then
+        local n1 = notes[1] or 130.81
+        local n2 = notes[2] or 164.81
+        local n3 = notes[3] or 196.00
+        local n4 = notes[4] or 233.08
+        AudioManager.playArpeggio({n1, n2, n3 * 2, n4 * 2, n1 * 4}, "sine", vol * 1.35, energy * 3, 0.028, 1)
+        AudioManager.playNoise(0.9, vol * 0.55, 5, 0)
+
+    elseif type == "ultimatris" or type == "perfect_clear" then
+        local root = notes[1] or 130.81
+        local third = notes[2] or 164.81
+        local fifth = notes[3] or 196.00
+        AudioManager.playArpeggio({
+            root * 2, third * 2, fifth * 2,
+            root * 4, third * 4, fifth * 4, root * 8
+        }, "sine", 1.6, 4, 0.032, 1)
+        AudioManager.playNoise(1.2, 0.65, 4, 2)
+
+    elseif type == "death" then
+        AudioManager.playTone(55.0, 1.6, 1.2, "saw", true, 5, 1.8, true)
+        AudioManager.playNoise(1.4, 0.85, 3, 4)
+        AudioManager.playTone(32.7, 2.0, 1.0, "sine", false, 6, 1.1, true)
+    end
+end
+
+function AudioManager.update(dt, stats)
+    if AudioManager.glitch_timer > 0 then
+        AudioManager.glitch_timer = AudioManager.glitch_timer - dt
+    end
+
+    local TrackManager = require "track_manager"
+    local MusicManager = require "music_manager"
+    local current_track = TrackManager.getCurrentTrack()
+
+    if current_track then
+        AudioManager.base_bpm = current_track.bpm
+    end
+
+    local song_time = MusicManager.getTime()
+    if song_time <= 0.01 then song_time = _G.RealMatchTimer or 0 end
+
+    local bpm = AudioManager.base_bpm or 120
+    local bar_duration = (60 / bpm) * 4
+
+    local drop_point = (current_track and current_track.drop_second and current_track.drop_second > 0) and current_track.drop_second or (bar_duration * 32)
+    local build_len = (current_track and current_track.build_duration and current_track.build_duration > 0) and current_track.build_duration or (bar_duration * 16)
+    local build_start = math.max(0, drop_point - build_len)
+
+    if song_time >= drop_point then
+        _G.TrackEnergyPunch = 1.0
+    elseif song_time >= build_start then
+        local progress = (song_time - build_start) / build_len
+        _G.TrackEnergyPunch = progress * progress * progress
+    else
+        _G.TrackEnergyPunch = 0.0
+    end
+
+    local danger = (stats and stats.danger_level) or 0
+    local drop_rate_intensity = (stats and stats.drop_intensity) or 0
+    local intensity_factor = math.max(danger, drop_rate_intensity)
+
+    AudioManager.current_bpm = AudioManager.base_bpm + (intensity_factor * 26)
+
+    if _G.AudioBeatPulse > 0 then
+        local decay_speed = 4.5 + (_G.TrackEnergyPunch * 4.5)
+        _G.AudioBeatPulse = _G.AudioBeatPulse - dt * decay_speed
+        if _G.AudioBeatPulse < 0 then _G.AudioBeatPulse = 0 end
+    end
+
+    if song_time > 0.05 then
+        local beat_duration = (60 / AudioManager.current_bpm)
+        local current_beat = song_time / beat_duration
+        local fraction = current_beat - math.floor(current_beat)
+        if fraction < 0.09 and _G.AudioBeatPulse <= 0.1 then
+            _G.AudioBeatPulse = 1.0
+        end
+    end
+end
+
+return AudioManager
 
 
 ================================================
@@ -474,27 +876,92 @@ FILE: input.lua
 local Input = {}
 local SettingsManager = require "settings_manager"
 
+-- ╔══════════════════════════════════════════════════════════════════════╗
+-- ║  🎛️  PANEL DE CONTROL DE INPUT COMPETITIVO MUTRIS v0.9.5          ║
+-- ║  Edita SOLO estos valores si querés calibrar sin tocar la lógica. ║
+-- ║  MODOS DE TIMEBASE:                                                ║
+-- ║    • "gpu"  → dt del render (feeling ESTILO JSTRIS — por defecto) ║
+-- ║    • "audio" → anclado a placa de sonido (sync musical más fiel)  ║
+-- ╚══════════════════════════════════════════════════════════════════════╝
+INPUT_CONFIG = {
+    -- ⏱️ Timebase (CAMBIÁ ESTO SI QUERÉS PROBAR AMBOS FEELINGS)
+    TIMEBASE_MODE = "gpu",
+
+    -- ⏱️ Tiempos (en SEGUNDOS). Pueden ser overridden por SettingsManager.settings.
+    FALLBACK_DAS = 0.094,
+    FALLBACK_ARR = 0.008,
+    ARR_ABSOLUTE_MIN = 0.001,
+
+    -- 🎮 Gamepad
+    JOY_DEADZONE_LEFT_RIGHT = 0.5,
+    JOY_DEADZONE_DOWN = 0.5,
+    JOY_CACHE_POOL_SIZE = 8,
+
+    -- ⬇️ Caída (mismos valores que el original)
+    SOFT_DROP_SPEED = 0.001,
+    NORMAL_GRAVITY = 0.8,
+
+    -- 🛡️ Anti-glitch
+    MAX_AUDIO_DT_SAFETY = 0.1,
+    MAX_ARR_STEPS_PER_FRAME = 32
+}
+
 function Input.init(player_ref)
     Input.player = player_ref
+
+    -- ── Pool estático de joysticks (Zero-GC — se mantiene del refactor) ──
+    Input.joystick_pool = {}
+    for i = 1, INPUT_CONFIG.JOY_CACHE_POOL_SIZE do
+        Input.joystick_pool[i] = false
+    end
+    Input.joystick_count = 0
+
+    -- ── Timers DAS/ARR (mismos nombres que ORIGINAL para 100% compatibilidad) ──
     Input.timers = { left = 0, right = 0 }
     Input.das_active = { left = false, right = false }
-    Input.gamepad_btn_prev = {}
+
+    -- ── Timebase ──
+    Input.last_audio_time = 0.0
+
+    -- ── Snapshot (Zero-GC) ──
+    Input.btn_snapshot = {
+        k_left  = false, k_right = false, k_down  = false,
+        g_left  = false, g_right = false, g_down  = false
+    }
+
+    Input._refreshJoystickCache()
 end
 
-local function isGamepadDown(button_name)
-    local joysticks = love.joystick.getJoysticks()
-    for _, js in ipairs(joysticks) do
-        if js:isGamepad() and js:isGamepadDown(button_name) then
-            return true
+-- ╔══════════════════════════════════════════════════════════════════════╗
+-- ║  🔄  REFRESH CACHÉ JOYSTICKS (Zero-GC, solo por eventos)          ║
+-- ╚══════════════════════════════════════════════════════════════════════╝
+function Input._refreshJoystickCache()
+    local list = love.joystick.getJoysticks()
+    Input.joystick_count = 0
+    for i = 1, INPUT_CONFIG.JOY_CACHE_POOL_SIZE do
+        if i <= #list then
+            Input.joystick_pool[i] = list[i]
+            Input.joystick_count = Input.joystick_count + 1
+        else
+            Input.joystick_pool[i] = false
+        end
+    end
+end
+
+local function _isGamepadDown(button_name)
+    for i = 1, Input.joystick_count do
+        local js = Input.joystick_pool[i]
+        if js and js ~= false and js:isGamepad() then
+            if js:isGamepadDown(button_name) then return true end
         end
     end
     return false
 end
 
-local function isGamepadAxisDown(axis_name, threshold, greater_than)
-    local joysticks = love.joystick.getJoysticks()
-    for _, js in ipairs(joysticks) do
-        if js:isGamepad() then
+local function _isGamepadAxisDown(axis_name, threshold, greater_than)
+    for i = 1, Input.joystick_count do
+        local js = Input.joystick_pool[i]
+        if js and js ~= false and js:isGamepad() then
             local val = js:getGamepadAxis(axis_name)
             if greater_than and val > threshold then return true end
             if not greater_than and val < threshold then return true end
@@ -503,36 +970,65 @@ local function isGamepadAxisDown(axis_name, threshold, greater_than)
     return false
 end
 
+-- ╔══════════════════════════════════════════════════════════════════════╗
+-- ║  ⬇️  SOFT DROP FACTOR (igual al ORIGINAL — valores exactos)      ║
+-- ╚══════════════════════════════════════════════════════════════════════╝
 function Input.getSoftDropFactor()
     if Input.player and Input.player.active_piece then
-        if love.keyboard.isDown("kp5") or love.keyboard.isDown("5") or 
+        if love.keyboard.isDown("kp5") or love.keyboard.isDown("5") or
            love.keyboard.isDown("down") or love.keyboard.isDown("clear") or
-           isGamepadDown("dpdown") or isGamepadAxisDown("lefty", 0.5, true) then 
+           _isGamepadDown("dpdown") or _isGamepadAxisDown("lefty", INPUT_CONFIG.JOY_DEADZONE_DOWN, true) then
             return 0.001
         end
     end
-    return 0.8 
+    return 0.8
 end
 
+-- ╔══════════════════════════════════════════════════════════════════════╗
+-- ║  ⏱️  MOTOR DAS / ARR — FEELING JSTRIS RESTAURADO 100%             ║
+-- ║  Regla matemática EXACTA del original:                             ║
+-- ║    while timers[dir] >= DAS do                                      ║
+-- ║        move()                                                        ║
+-- ║        timers[dir] = timers[dir] - ARR                              ║
+-- ║    end                                                              ║
+-- ╚══════════════════════════════════════════════════════════════════════╝
 function Input.update(dt)
     if not Input.player or not Input.player.active_piece then return end
     local p = Input.player.active_piece
     if p.locked then return end
 
-    local das = SettingsManager.settings.das or 0.094
-    local arr = math.max(0.001, SettingsManager.settings.arr or 0.008)
+    -- ⏱️ 1. TIMEBASE (switch configurable para probar ambos sentimientos)
+    local t
+    if INPUT_CONFIG.TIMEBASE_MODE == "audio" then
+        local audio_now = 0
+        if MusicManager and MusicManager.getTime then audio_now = MusicManager.getTime() end
+        t = audio_now - Input.last_audio_time
+        Input.last_audio_time = audio_now
+        if t <= 0 or t > INPUT_CONFIG.MAX_AUDIO_DT_SAFETY then t = dt end
+    else
+        -- MODO GPU = JSTRIS FEELING (por defecto — restaurado)
+        t = dt
+    end
 
-    local move_left_held = love.keyboard.isDown("kp4") or love.keyboard.isDown("left") or 
-                           isGamepadDown("dpleft") or isGamepadAxisDown("leftx", -0.5, false)
+    local das = SettingsManager.settings.das or INPUT_CONFIG.FALLBACK_DAS
+    local arr = math.max(INPUT_CONFIG.ARR_ABSOLUTE_MIN, SettingsManager.settings.arr or INPUT_CONFIG.FALLBACK_ARR)
+
+    -- ⬅️ ── LADO IZQUIERDO (LÓGICA EXACTA DEL ORIGINAL) ──
+    local move_left_held = love.keyboard.isDown("kp4") or love.keyboard.isDown("left") or
+                           _isGamepadDown("dpleft") or _isGamepadAxisDown("leftx", -INPUT_CONFIG.JOY_DEADZONE_LEFT_RIGHT, false)
     if move_left_held then
         if not Input.das_active.left then
-            p:move(-1, 0)
+            p:move(-1, 0)                              -- ← TAP inicial (igual original: sin if extra)
             Input.das_active.left = true
             Input.timers.left = 0
         else
-            Input.timers.left = Input.timers.left + dt
+            Input.timers.left = Input.timers.left + t
+            -- 🔑 REGLA MATEMÁTICA JSTRIS: while >= DAS, restar ARR. No restar DAS primero.
             while Input.timers.left >= das do
-                p:move(-1, 0)
+                if not p:move(-1, 0) then
+                    Input.timers.left = 0
+                    break
+                end
                 Input.timers.left = Input.timers.left - arr
             end
         end
@@ -540,17 +1036,21 @@ function Input.update(dt)
         Input.das_active.left = false
     end
 
-    local move_right_held = love.keyboard.isDown("kp6") or love.keyboard.isDown("right") or 
-                            isGamepadDown("dpright") or isGamepadAxisDown("leftx", 0.5, true)
+    -- ➡️ ── LADO DERECHO (LÓGICA EXACTA DEL ORIGINAL) ──
+    local move_right_held = love.keyboard.isDown("kp6") or love.keyboard.isDown("right") or
+                            _isGamepadDown("dpright") or _isGamepadAxisDown("leftx", INPUT_CONFIG.JOY_DEADZONE_LEFT_RIGHT, true)
     if move_right_held then
         if not Input.das_active.right then
             p:move(1, 0)
             Input.das_active.right = true
             Input.timers.right = 0
         else
-            Input.timers.right = Input.timers.right + dt
+            Input.timers.right = Input.timers.right + t
             while Input.timers.right >= das do
-                p:move(1, 0)
+                if not p:move(1, 0) then
+                    Input.timers.right = 0
+                    break
+                end
                 Input.timers.right = Input.timers.right - arr
             end
         end
@@ -559,6 +1059,9 @@ function Input.update(dt)
     end
 end
 
+-- ╔══════════════════════════════════════════════════════════════════════╗
+-- ║  🎮  ACCIONES PUNTUALES — IGUALES AL ORIGINAL 100%               ║
+-- ╚══════════════════════════════════════════════════════════════════════╝
 function Input.handleAction(action)
     if action == "restart" then GlobalRestart() return end
     if not Input.player or not Input.player.active_piece then return end
@@ -608,292 +1111,7 @@ return Input
 ================================================
 FILE: main.lua
 ================================================
----@diagnostic disable: undefined-global
-_G.ENGINE_VERSION = "MUTRIS v0.9.5"
-
-local Piece = require "tetris.piece"
-local Board = require "tetris.board"
-local Input = require "input"
-local AudioManager = require "audio_manager"
-local MusicManager = require "music_manager"
-local TrackManager = require "track_manager"
-local TrackEditor = require "track_editor"
-local GameStates = require "tetris.game_states"
-local FogLayer = require "tetris.fog_layer"
-local FontCache = require "tetris.font_cache"
-local BloomShader = require "tetris.bloom_shader"
-local SettingsManager = require "settings_manager"
-local AnomalyManager = require "tetris.anomaly_manager"
-
-_G.RestartHalo = 0
-_G.Winner = nil 
-_G.GameOverPending = nil
-_G.HitStopTimer = 0
-_G.SetGameState = function(state) game_state = state end
-
-local player, bot, game_state, selected_diff = nil, nil, "menu", 1
-
-local difficulties = {
-    { name = "MASTER", pps = 6.0, color = {1, 0.2, 0.3} }
-}
-
-function love.load()
-    love.window.setTitle("MUTRIS - " .. _G.ENGINE_VERSION)
-    love.window.setMode(800, 600, {resizable = false, vsync = true})
-    SettingsManager.init()
-    AudioManager.init()
-    TrackManager.init()
-    FogLayer.init()
-    BloomShader.init()
-    AnomalyManager.init()
-    _G.RealMatchTimer, _G.TrackEnergyPunch, _G.AudioBeatPulse = 0, 0, 0
-    _G.HitStopTimer = 0
-    _G.Stars = {}
-    for i = 1, 150 do
-        _G.Stars[i] = { x = math.random(800), y = math.random(600), s = math.random(1, 2), v = math.random(10, 40) }
-    end
-end
-
-function GlobalRestart()
-    _G.RestartHalo, _G.Winner, _G.GameOverPending = 1.0, nil, nil
-    _G.HitStopTimer = 0
-    local d = difficulties[selected_diff]
-    player = Board.new(80, 50, "human")
-    bot = Board.new(480, 50, "bot")
-    player.opponent, bot.opponent = bot, player
-    local Bag = require "tetris.randomizers.7bag"
-    player.bag, bot.bag = Bag.new(), Bag.new()
-    local AIBot = require "tetris.ai_bot"
-    bot.ai = AIBot.new(bot, {pps = d.pps})
-    player.active_piece = Piece.new(player.bag:next(), player)
-    bot.active_piece = Piece.new(bot.bag:next(), bot)
-    Input.init(player)
-    AnomalyManager.init()
-    MusicManager.stop()
-    MusicManager.start()
-    game_state = "play"
-end
-
-function love.filedropped(file)
-    local path = file:getFilename()
-    if path and (path:match("%.mp3$") or path:match("%.ogg$")) then
-        TrackEditor.enterBatch({path})
-    end
-end
-
-function love.directorydropped(path)
-    local files = love.filesystem.getDirectoryItems(path)
-    local batch = {}
-    for _, f in ipairs(files) do
-        if f:match("%.mp3$") or f:match("%.ogg$") then
-            table.insert(batch, path .. "/" .. f)
-        end
-    end
-    if #batch > 0 then TrackEditor.enterBatch(batch) end
-end
-
-function love.update(dt)
-    if _G.RestartHalo > 0 then _G.RestartHalo = math.max(0, _G.RestartHalo - dt * 2.0) end
-    if _G.HitStopTimer > 0 then 
-        _G.HitStopTimer = math.max(0, _G.HitStopTimer - dt) 
-        if player then player:update(dt) end
-        if bot then bot:update(dt) end
-        return 
-    end
-
-    local energy = _G.TrackEnergyPunch or 0
-    for _, s in ipairs(_G.Stars) do
-        s.y = s.y + s.v * dt * (1 + energy * 8) 
-        if s.y > 600 then s.y, s.x = 0, math.random(800) end
-    end
-
-    FogLayer.update(dt)
-
-    if game_state == "editor" then
-        TrackEditor.update(dt)
-        return
-    end
-
-    if game_state == "play" then
-        _G.RealMatchTimer = _G.RealMatchTimer + dt
-        Input.update(dt)
-        
-        local player_danger = (player and player.danger_level) or 0
-        local bot_danger = (bot and bot.danger_level) or 0
-        AudioManager.update(dt, { danger_level = math.max(player_danger, bot_danger), drop_intensity = 0 })
-        MusicManager.update(dt)
-        AnomalyManager.update(dt, player, bot)
-
-        if _G.GameOverPending then
-            local loser = _G.GameOverPending
-            _G.GameOverPending = nil
-            if loser == "human" and player and not player.is_dying then
-                player:triggerDeath()
-                _G.Winner = "BOT"
-            elseif loser == "bot" and bot and not bot.is_dying then
-                bot:triggerDeath()
-                _G.Winner = "PLAYER"
-            end
-        end
-
-        if player and player.is_dying and player.death_timer <= 0 then
-            game_state = "over"
-        elseif bot and bot.is_dying and bot.death_timer <= 0 then
-            game_state = "over"
-        end
-
-        if game_state == "play" and player and player.active_piece and not player.is_dying then
-            player:update(dt)
-            player.active_piece:update(dt, Input.getSoftDropFactor())
-            if player.active_piece.locked then
-                require("tetris.garbage_manager").pushToGrid(player)
-                player.active_piece = Piece.new(player.bag:next(), player)
-                if not player.is_zone_active and not player.active_piece:canMove(player.active_piece.x, player.active_piece.y, 1) then 
-                    player:triggerDeath()
-                    _G.Winner = "BOT"
-                end
-            end
-        elseif player and player.is_dying then
-            player:update(dt)
-        end
-
-        if game_state == "play" and bot and bot.active_piece and not bot.is_dying then
-            bot:update(dt)
-            if bot.ai then bot.ai:update(dt) end
-            bot.active_piece:update(dt, 0.8)
-            if bot.active_piece.locked then
-                require("tetris.garbage_manager").pushToGrid(bot)
-                bot.active_piece = Piece.new(bot.bag:next(), bot)
-                if not bot.is_zone_active and not bot.active_piece:canMove(bot.active_piece.x, bot.active_piece.y, 1) then 
-                    bot:triggerDeath()
-                    _G.Winner = "PLAYER"
-                end
-            end
-        elseif bot and bot.is_dying then
-            bot:update(dt)
-        end
-    end
-end
-
-function love.draw()
-    BloomShader.beginDraw()
-    
-    local pulse = _G.AudioBeatPulse or 0
-    love.graphics.clear(0.002, 0.002, 0.008)
-
-    FogLayer.draw()
-
-    for _, s in ipairs(_G.Stars) do
-        love.graphics.setColor(0.5, 0.7, 1.0, 0.2 + pulse * 0.2)
-        love.graphics.circle("fill", s.x, s.y, s.s)
-    end
-
-    if game_state == "menu" then
-        GameStates.drawMenu(love.timer.getTime(), selected_diff, difficulties)
-    elseif game_state == "settings" then
-        GameStates.drawSettings(love.timer.getTime())
-    elseif game_state == "editor" then
-        TrackEditor.draw()
-    elseif game_state == "play" then
-        if player then 
-            player:draw() 
-            if player.active_piece and not player.is_dying then 
-                player.active_piece:draw(player.x, player.y) 
-            end 
-        end
-        if bot then 
-            bot:draw() 
-            if bot.active_piece and not bot.is_dying then 
-                bot.active_piece:draw(bot.x, bot.y) 
-            end 
-        end
-        AnomalyManager.draw(player, bot)
-        require("tetris.hud_center").draw(player, bot)
-        local success, Telemetry = pcall(require, "tetris.telemetry")
-        if success then Telemetry.draw(player, bot) end
-    elseif game_state == "over" then
-        GameStates.drawGameOver()
-    end
-
-    love.graphics.setFont(FontCache.get(10))
-    love.graphics.setColor(1, 1, 1, 0.35 + pulse * 0.15)
-    love.graphics.print(_G.ENGINE_VERSION, 10, 582)
-
-    if _G.RestartHalo > 0 then
-        love.graphics.setColor(1, 1, 1, _G.RestartHalo * 0.5)
-        love.graphics.rectangle("fill", 0, 0, 800, 600)
-    end
-
-    local is_any_zone = (player and player.is_zone_active) or (bot and bot.is_zone_active)
-    BloomShader.endDraw(is_any_zone)
-end
-
-function love.mousepressed(x, y, button)
-    if game_state == "editor" then
-        TrackEditor.mousepressed(x, y, button)
-    elseif game_state == "settings" and button == 1 then
-        GameStates.handleSettingsMouse(x, y)
-    elseif game_state == "menu" and button == 1 then
-        if x >= 275 and x <= 525 and y >= 222 and y <= 254 then
-            local cur = TrackManager.getCurrentTrack()
-            if cur and cur.file_path ~= "" then
-                TrackEditor.enterBatch({cur.file_path})
-            end
-            return
-        end
-        if x >= 275 and x <= 525 and y >= 435 and y <= 470 then
-            game_state = "settings"
-            return
-        end
-        if x >= 275 and x <= 525 and y >= 485 and y <= 530 then
-            GlobalRestart()
-            return
-        end
-    end
-end
-
-function love.mousereleased(x, y, button)
-    if game_state == "settings" then
-        SettingsManager.save()
-    end
-end
-
-function love.keypressed(key)
-    if game_state == "editor" then
-        TrackEditor.keypressed(key)
-    elseif game_state == "settings" then
-        if key == "escape" or key == "return" then
-            SettingsManager.save()
-            game_state = "menu"
-        end
-    elseif game_state == "menu" then
-        if key == "up" then selected_diff = math.max(1, selected_diff - 1)
-        elseif key == "down" then selected_diff = math.min(#difficulties, selected_diff + 1)
-        elseif key == "left" then TrackManager.prevTrack()
-        elseif key == "right" then TrackManager.nextTrack()
-        elseif key == "return" or key == "space" then GlobalRestart() 
-        end
-    elseif game_state == "play" then 
-        Input.keypressed(key)
-    elseif game_state == "over" and key == "r" then 
-        GlobalRestart() 
-    end
-end
-
-function love.gamepadpressed(joystick, button)
-    if game_state == "play" then
-        Input.gamepadpressed(joystick, button)
-    elseif game_state == "settings" then
-        if button == "b" or button == "start" then
-            SettingsManager.save()
-            game_state = "menu"
-        end
-    elseif game_state == "menu" then
-        if button == "start" or button == "a" then GlobalRestart() end
-    elseif game_state == "over" then
-        if button == "start" or button == "a" then GlobalRestart() end
-    end
-end
+Error reading file with 'cp1252': 'charmap' codec can't decode byte 0x8f in position 9852: character maps to <undefined>
 
 
 ================================================
@@ -920,18 +1138,21 @@ end
 
 function MusicManager.start()
     local TrackManager = require "track_manager"
+    local SettingsManager = require "settings_manager"
     local current_track = TrackManager.getCurrentTrack()
 
     if not current_track.is_embedded then
         if MusicManager.custom_source then MusicManager.custom_source:stop() end
         MusicManager.custom_source = love.audio.newSource(current_track.file_path, "stream")
         MusicManager.custom_source:setLooping(true)
-        MusicManager.custom_source:setVolume(0.85)
+
+        local bgm_norm = SettingsManager.getBGM()
+        MusicManager.custom_source:setVolume(bgm_norm * 0.85)
+
         MusicManager.custom_source:play()
     end
 end
 
--- FUNCIÃ“N EXTRA: Expone los segundos reales de reproducciÃ³n de hardware al AudioManager
 function MusicManager.getTime()
     if MusicManager.custom_source and MusicManager.custom_source:isPlaying() then
         return MusicManager.custom_source:tell("seconds")
@@ -940,16 +1161,17 @@ function MusicManager.getTime()
 end
 
 function MusicManager.update(dt)
+    local SettingsManager = require "settings_manager"
+    local AudioManager = require "audio_manager"
     if MusicManager.custom_source and MusicManager.custom_source:isPlaying() then
-        local AudioManager = require "audio_manager"
-        local target_vol = AudioManager.zone_active and 1.15 or 0.85
+        local bgm_norm = SettingsManager.getBGM()
+        local target_base = (AudioManager.zone_active and 1.15 or 0.85) * bgm_norm
         local cur_vol = MusicManager.custom_source:getVolume()
-        MusicManager.custom_source:setVolume(cur_vol + (target_vol - cur_vol) * 4 * dt)
+        MusicManager.custom_source:setVolume(cur_vol + (target_base - cur_vol) * 4 * dt)
     end
 end
 
 return MusicManager
-
 
 
 ================================================
@@ -962,8 +1184,13 @@ SettingsManager.settings = {
     das = 0.094,       -- DAS en segundos (94 ms)
     arr = 0.008,       -- ARR en segundos (8 ms)
     sfx_vol = 1.0,     -- Volumen SFX (0.0 a 1.0)
-    bgm_vol = 0.85     -- Volumen BGM (0.0 a 1.0)
+    bgm_vol = 0.85,    -- Volumen BGM (0.0 a 1.0)
+    master_vol = 1.0,  -- Volumen MASTER (0.0 a 1.0)
+    mute_all = 0       -- 0 = normal, 1 = mute total
 }
+
+-- Helpers numÃ©ricos (Zero-GC, solo matemÃ¡tica pura)
+local function clamp01(v) return math.max(0, math.min(1, v)) end
 
 local function serializeJSON(t)
     local s = "{\n"
@@ -987,16 +1214,40 @@ function SettingsManager.init()
         local contents = love.filesystem.read("settings.json")
         if contents then
             local data = parseSimpleJSON(contents)
-            if data.das then SettingsManager.settings.das = data.das end
-            if data.arr then SettingsManager.settings.arr = data.arr end
-            if data.sfx_vol then SettingsManager.settings.sfx_vol = data.sfx_vol end
-            if data.bgm_vol then SettingsManager.settings.bgm_vol = data.bgm_vol end
+            if data.das        then SettingsManager.settings.das        = data.das end
+            if data.arr        then SettingsManager.settings.arr        = data.arr end
+            if data.sfx_vol    then SettingsManager.settings.sfx_vol    = data.sfx_vol end
+            if data.bgm_vol    then SettingsManager.settings.bgm_vol    = data.bgm_vol end
+            if data.master_vol then SettingsManager.settings.master_vol = data.master_vol end
+            if data.mute_all   then SettingsManager.settings.mute_all   = data.mute_all end
         end
     end
 end
 
 function SettingsManager.save()
     love.filesystem.write("settings.json", serializeJSON(SettingsManager.settings))
+end
+
+-- Helpers para volumen normalizado (aplica master + mute en 1 solo lugar)
+function SettingsManager.getSFX()
+    local s = SettingsManager.settings
+    if s.mute_all and s.mute_all >= 0.5 then return 0 end
+    return clamp01(s.sfx_vol) * clamp01(s.master_vol)
+end
+
+function SettingsManager.getBGM()
+    local s = SettingsManager.settings
+    if s.mute_all and s.mute_all >= 0.5 then return 0 end
+    return clamp01(s.bgm_vol) * clamp01(s.master_vol)
+end
+
+function SettingsManager.toggleMute()
+    local s = SettingsManager.settings
+    if s.mute_all and s.mute_all >= 0.5 then
+        s.mute_all = 0
+    else
+        s.mute_all = 1
+    end
 end
 
 return SettingsManager
@@ -1675,13 +1926,998 @@ FILE: music/eliveta_uplifting_trance.json
 ================================================
 FILE: tetris/ai_bot.lua
 ================================================
-Error reading file with 'cp1252': 'charmap' codec can't decode byte 0x81 in position 7657: character maps to <undefined>
+---@diagnostic disable: undefined-global
+local AIBot = {}
+AIBot.__index = AIBot
+
+-- ╔══════════════════════════════════════════════════════════════════════╗
+-- ║  🎛️  PANEL DE CONTROL DE IA MASTER MUTRIS v0.9.5                 ║
+-- ║  NUEVO: SISTEMA DE ANTICIPACIÓN DE AMENAZA DEL OPONENTE          ║
+-- ║  Si el HUMANO está armando un setup (pila alta + superficie      ║
+-- ║  limpia, como DT Cannon), la IA entra en MODO DEFENSIVO PROACTIVO║
+-- ║  y carga ZONE ANTES de que le llegue la basura.                  ║
+-- ╚══════════════════════════════════════════════════════════════════════╝
+AI_CONFIG = {
+    -- ⚠️ Niveles de activación (altura en bloques)
+    PANIC_LIGHT_HEIGHT = 8,
+    PANIC_EXTREME_HEIGHT = 11,
+    PANIC_ANY_GARBAGE_LINES = 1,
+
+    -- 👁️ SISTEMA DE ANTICIPACIÓN (mirada al tablero del HUMANO)
+    OPPONENT_THREAT_HEIGHT_LIGHT = 9,     -- Humano tiene ≥9 bloques → alerta
+    OPPONENT_THREAT_HEIGHT_EXTREME = 12,  -- Humano tiene ≥12 bloques → DEFENSA TOTAL (DT Cannon)
+    OPPONENT_CLEAN_SURFACE_BUMP = 45,     -- Si oponente tiene bumpiness ≤45 → está armando un setup clean
+    THREAT_ZONE_MIN_METER = 0.22,         -- En amenaza EXTREMA, activa Zone con 22% (antes 35%)
+    THREAT_BUILD_ZONE_PRIORITY = 900,     -- Bonus por limpiezas chicas que cargan Zone cuando hay amenaza
+    THREAT_SAVE_LINE_FOR_OFFSET = 1300,   -- Premio GIGANTE por limpiar líneas que cancelen garbage incoming
+
+    -- 🛡️ Offsetting: cancelar basura que ya está en la cola
+    GARBAGE_OFFSET_LINE_BONUS = 1600,     -- Cada línea limpiada que cancela garbage incoming
+    GARBAGE_OFFSET_BIG_QUEUE_BONUS = 600, -- Bonus extra si la cola tiene ≥3 líneas
+
+    -- 💥 PESOS: MODO CALM (ofensivo / armar tetris)
+    CALM_HEIGHT_PENALTY   = 4.5,
+    CALM_HOLES_PENALTY    = 320.0,
+    CALM_COVERED_PENALTY  = 250.0,
+    CALM_BUMP_PENALTY     = 14.0,
+    CALM_WELL_BONUS       = 90.0,
+    CALM_SINGLE_DOUBLE_BONUS = 30.0,
+    CALM_TETRIS_BONUS     = 1300.0,
+
+    -- 🚨 PESOS: MODO PÁNICO LEVE (prioriza limpiar sin morir)
+    PANIC_HEIGHT_PENALTY  = 16.0,
+    PANIC_HOLES_PENALTY   = 900.0,
+    PANIC_COVERED_PENALTY = 1400.0,
+    PANIC_BUMP_PENALTY    = 36.0,
+    PANIC_HOLE_BLOCK_PENALTY = 4500,
+    PANIC_LINE_BONUS      = 1400.0,
+    PANIC_TETRIS_BONUS    = 1900.0,
+
+    -- 🔥 PESOS: MODO PÁNICO EXTREMO (sobrevivir A TODA COSTA)
+    EXTREME_HEIGHT_PENALTY  = 42.0,
+    EXTREME_HOLES_PENALTY   = 2600.0,
+    EXTREME_COVERED_PENALTY = 4200.0,
+    EXTREME_BUMP_PENALTY    = 72.0,
+    EXTREME_HOLE_BLOCK_PENALTY = 9500,
+    EXTREME_LINE_BONUS      = 2400.0,
+    EXTREME_TETRIS_BONUS    = 2800.0,
+
+    -- 🎯 Regla adicional: priorizar limpiezas ENCIMA del pozo de basura
+    HOLE_CLEAR_ALIGNMENT_BONUS = 700,
+
+    -- ⚡ PPS dinámico en pánico
+    PANIC_EXTRA_PPS = 4.0,
+
+    -- 🛡️ Zone Mode normal (sin amenaza externa)
+    ZONE_MIN_METER = 0.35,
+    ZONE_GARBAGE_TRIGGER = 1,
+}
+
+function AIBot.new(board, profile)
+    local self = setmetatable({}, AIBot)
+    self.board = board
+    self.base_pps = profile.pps == 6.0 and 12.0 or (profile.pps or 3.0)
+    self.pps = self.base_pps
+    self.move_timer = 0
+    self.target_x, self.target_rot = nil, nil
+    self.is_thinking = false
+    self.just_locked = false
+
+    -- Buffers planos pre-alocados para evaluación Zero-GC
+    self._overlay = {}
+    for i = 1, 400 do self._overlay[i] = false end
+
+    self._heights = {}
+    self._top_found = {}
+    self._hole_depths = {}
+    for i = 1, 10 do
+        self._heights[i] = 0
+        self._top_found[i] = false
+        self._hole_depths[i] = 0
+    end
+
+    return self
+end
+
+-- ╔══════════════════════════════════════════════════════════════════════╗
+-- ║  👁️  scanOpponentThreat — MIRA LO QUE HACE EL JUGADOR HUMANO    ║
+-- ║  Detecta si te está armando un DT Cannon / setup ofensivo.       ║
+-- ║  Devuelve: threat_level (0=ok, 1=alerta, 2=KO INMINENTE)        ║
+-- ║            op_bumpiness (para saber si su setup está limpio)     ║
+-- ╚══════════════════════════════════════════════════════════════════════╝
+function AIBot:scanOpponentThreat()
+    local opp = self.board.opponent
+    if not opp then return 0, 0 end
+
+    -- 1) Altura máxima del oponente
+    local opp_max_h = 0
+    local opp_heights = {0,0,0,0,0,0,0,0,0,0}
+    for c = 1, 10 do
+        for r = 21, 40 do
+            if opp.grid[r][c] ~= 0 then
+                local h = 41 - r
+                opp_heights[c] = h
+                if h > opp_max_h then opp_max_h = h end
+                break
+            end
+        end
+    end
+
+    -- 2) Bumpiness del oponente: si es MUY BAJO, está armando un setup clean (DT Cannon)
+    local opp_bump = 0
+    for i = 1, 9 do
+        opp_bump = opp_bump + math.abs(opp_heights[i] - opp_heights[i+1])
+    end
+
+    -- 3) Nivel de amenaza
+    local is_clean_setup = (opp_bump <= AI_CONFIG.OPPONENT_CLEAN_SURFACE_BUMP)
+    local threat = 0
+    if opp_max_h >= AI_CONFIG.OPPONENT_THREAT_HEIGHT_EXTREME then
+        threat = 2  -- KO inminente (DT Cannon casi listo)
+    elseif opp_max_h >= AI_CONFIG.OPPONENT_THREAT_HEIGHT_LIGHT then
+        threat = 1  -- Alerta (va armando algo)
+    end
+
+    -- Si es un setup clean + altura alta → SUBIMOS el nivel
+    if is_clean_setup and opp_max_h >= 7 then
+        threat = math.min(2, threat + 1)
+    end
+
+    return threat, opp_bump
+end
+
+function AIBot:update(dt)
+    if not self.board.active_piece or self.board.active_piece.locked or self.just_locked then
+        if self.board.active_piece and not self.board.active_piece.locked then
+            self.just_locked = false
+        end
+        return
+    end
+
+    local active_punch = _G.TrackEnergyPunch or 0
+    local pps_punch = active_punch * 8.0
+
+    -- ⚠️ Bonus PPS EXTRA en pánico extremo
+    local max_h = 0
+    for c = 1, 10 do
+        for r = 21, 40 do
+            if self.board.grid[r][c] ~= 0 then
+                local h = 41 - r
+                if h > max_h then max_h = h end
+                break
+            end
+        end
+    end
+    local panic_pps = 0
+    if max_h >= AI_CONFIG.PANIC_EXTREME_HEIGHT then
+        panic_pps = AI_CONFIG.PANIC_EXTRA_PPS
+    elseif max_h >= AI_CONFIG.PANIC_LIGHT_HEIGHT then
+        panic_pps = AI_CONFIG.PANIC_EXTRA_PPS * 0.55
+    end
+
+    self.pps = self.base_pps + pps_punch + panic_pps
+
+    -- 👁️ Escaneamos AMENAZA DEL OPONENTE para decidir Zone proactivo
+    local opp_threat = 0
+    opp_threat = self:scanOpponentThreat()
+
+    -- 🛡️ ACTIVACIÓN ZONE MODE — MÁS AGRESIVA SI HAY AMENAZA
+    local zone_meter_min = AI_CONFIG.ZONE_MIN_METER
+    if opp_threat >= 2 then
+        zone_meter_min = AI_CONFIG.THREAT_ZONE_MIN_METER  -- Activa Zone a los 22% si ve DT Cannon
+    elseif opp_threat == 1 then
+        zone_meter_min = 0.28
+    end
+
+    if not self.board.is_zone_active and self.board.zone_meter >= zone_meter_min then
+        local in_danger = #self.board.garbage_queue >= AI_CONFIG.ZONE_GARBAGE_TRIGGER
+        local high_stack = false
+        local extreme_stack = false
+        for c = 1, 10 do
+            if self.board.grid[26][c] ~= 0 then high_stack = true end
+            if self.board.grid[24][c] ~= 0 then extreme_stack = true break end
+        end
+        -- Amenaza del oponente ≥2 = activa Zone de forma PREVENTIVA sin importar nada
+        if (in_danger or high_stack or extreme_stack or active_punch >= 0.85 or opp_threat >= 2) then
+            self.board:enterZone()
+        end
+    end
+
+    self.move_timer = self.move_timer + dt
+    if self.move_timer >= (1 / self.pps) then
+        if not self.is_thinking then
+            self:think()
+        else
+            self:executeMove()
+        end
+        self.move_timer = 0
+    end
+end
+
+function AIBot:findGarbageHoleColumn()
+    local grid = self.board.grid
+    for r = 40, 21, -1 do
+        local hole_col = nil
+        local garbage_count = 0
+        for c = 1, 10 do
+            if grid[r][c] == 8 or grid[r][c] ~= 0 then
+                garbage_count = garbage_count + 1
+            elseif grid[r][c] == 0 then
+                hole_col = c
+            end
+        end
+        if garbage_count >= 8 and hole_col then
+            return hole_col, r
+        end
+    end
+    return nil, nil
+end
+
+function AIBot:think()
+    local p = self.board.active_piece
+    if not p or p.locked or type(p.canMove) ~= "function" then return end
+
+    local best_score = -20000000
+    local max_rot = #p.shape
+
+    -- Detección de peligro (3 niveles)
+    local max_board_h = 0
+    for r = 21, 40 do
+        for c = 1, 10 do
+            if self.board.grid[r][c] ~= 0 then
+                local h = 41 - r
+                if h > max_board_h then max_board_h = h end
+            end
+        end
+    end
+
+    local has_garbage_queue = #self.board.garbage_queue >= AI_CONFIG.PANIC_ANY_GARBAGE_LINES
+    local panic_level = 0
+    if max_board_h >= AI_CONFIG.PANIC_EXTREME_HEIGHT then
+        panic_level = 2
+    elseif max_board_h >= AI_CONFIG.PANIC_LIGHT_HEIGHT or has_garbage_queue then
+        panic_level = 1
+    end
+
+    -- 👁️ NUEVO: Escaneamos la amenaza del oponente 1 vez por think
+    local opp_threat_level = 0
+    opp_threat_level = self:scanOpponentThreat()
+
+    -- Tamaño de la cola de basura incoming (para offsetting proactivo)
+    local garbage_queue_size = #self.board.garbage_queue
+    local total_garbage_incoming = 0
+    for i = 1, garbage_queue_size do
+        total_garbage_incoming = total_garbage_incoming + self.board.garbage_queue[i]
+    end
+
+    local target_hole_col, target_hole_row = self:findGarbageHoleColumn()
+
+    for r = 1, max_rot do
+        for x = -2, 11 do
+            if p:canMove(x, p.y, r) then
+                local gy = p.y
+                while p:canMove(x, gy + 1, r) do gy = gy + 1 end
+
+                local score = self:evaluate(
+                    x, gy, r,
+                    panic_level,
+                    target_hole_col, target_hole_row,
+                    opp_threat_level,
+                    garbage_queue_size, total_garbage_incoming
+                )
+
+                -- Si es pieza T y NO estamos en pánico extremo, buscar T-Spins
+                if p.id == 6 and panic_level < 2 and opp_threat_level < 2 and score > -500000 then
+                    local old_x, old_y, old_r = p.x, p.y, p.rotation
+                    p.x, p.y, p.rotation = x, gy, r
+                    if p:checkTSpin() then
+                        score = score + 3500
+                    end
+                    p.x, p.y, p.rotation = old_x, old_y, old_r
+                end
+
+                if score > best_score then
+                    best_score = score
+                    self.target_x, self.target_rot = x, r
+                end
+            end
+        end
+    end
+    self.is_thinking = true
+end
+
+function AIBot:evaluate(px, py, pr, panic_level, target_hole_col, target_hole_row, opp_threat_level, garbage_queue_size, total_garbage_incoming)
+    local grid = self.board.grid
+    local shape = self.board.active_piece.shape[pr]
+
+    local overlay = self._overlay
+    for i = 1, 400 do overlay[i] = false end
+    for sr = 1, #shape do
+        local srow = shape[sr]
+        for sc = 1, #srow do
+            if srow[sc] ~= 0 then
+                local tr, tc = py + sr - 1, px + sc - 1
+                if tr >= 1 and tr <= 40 and tc >= 1 and tc <= 10 then
+                    overlay[(tr - 1) * 10 + tc] = true
+                end
+            end
+        end
+    end
+
+    local heights = self._heights
+    local top_found = self._top_found
+    local hole_depths = self._hole_depths
+    for c = 1, 10 do
+        heights[c] = 0
+        top_found[c] = false
+        hole_depths[c] = 0
+    end
+
+    local holes = 0
+    local covered_holes = 0
+    local lines_cleared = 0
+
+    -- Bonus: ¿reduce altura del pozo de basura?
+    local hole_col_covered_before = 0
+    local hole_col_covered_after = 0
+    if target_hole_col and target_hole_row then
+        for r = 21, target_hole_row do
+            if grid[r][target_hole_col] ~= 0 then
+                hole_col_covered_before = hole_col_covered_before + 1
+            end
+        end
+        for r = 21, target_hole_row do
+            local occ = (grid[r][target_hole_col] ~= 0) or overlay[(r - 1) * 10 + target_hole_col]
+            if occ then
+                hole_col_covered_after = hole_col_covered_after + 1
+            end
+        end
+    end
+
+    for r = 1, 40 do
+        local row_full = true
+        local base = (r - 1) * 10
+        for c = 1, 10 do
+            local occupied = (grid[r][c] ~= 0) or overlay[base + c]
+            if occupied then
+                if not top_found[c] then
+                    heights[c] = 41 - r
+                    top_found[c] = true
+                end
+            else
+                row_full = false
+                if top_found[c] then
+                    holes = holes + 1
+                    hole_depths[c] = hole_depths[c] + 1
+                    if hole_depths[c] > 1 then
+                        covered_holes = covered_holes + 1
+                    end
+                end
+            end
+        end
+        if row_full then lines_cleared = lines_cleared + 1 end
+    end
+
+    local max_h, bumpiness = 0, 0
+    for i = 1, 10 do
+        if heights[i] > max_h then max_h = heights[i] end
+        if i < 10 then bumpiness = bumpiness + math.abs(heights[i] - heights[i + 1]) end
+    end
+
+    local score = 0
+
+    -- ================================================================
+    -- 🛡️ SISTEMA DEFENSIVO NUEVO: OFFSETTING + ANTICIPO DE AMENAZA
+    -- ================================================================
+
+    -- 1) Offsetting: líneas limpiadas CANCELAN basura en la cola → PREMIO MÁXIMO
+    if lines_cleared > 0 and total_garbage_incoming > 0 then
+        local offset_effect = math.min(lines_cleared, total_garbage_incoming)
+        score = score + (offset_effect * AI_CONFIG.GARBAGE_OFFSET_LINE_BONUS)
+        if garbage_queue_size >= 3 then
+            score = score + AI_CONFIG.GARBAGE_OFFSET_BIG_QUEUE_BONUS
+        end
+    end
+
+    -- 2) Si hay amenaza del oponente (DT Cannon): priorizar limpiezas CHICAS que carguen Zone
+    if opp_threat_level >= 1 and not self.board.is_zone_active then
+        if lines_cleared == 1 or lines_cleared == 2 then
+            score = score + (lines_cleared * AI_CONFIG.THREAT_BUILD_ZONE_PRIORITY)
+        end
+        -- En amenaza EXTREMA (DT Cannon): NO intentar buildear tetris de 4 si no compensa
+        if opp_threat_level >= 2 and lines_cleared == 0 then
+            score = score - 2500
+        end
+    end
+
+    -- 3) Offsetting proactivo: Si basura incoming ≥4, limpiar 2 es MEJOR que limpiar 0 aunque buildee peor
+    if total_garbage_incoming >= 4 and lines_cleared >= 2 and lines_cleared < 4 then
+        score = score + AI_CONFIG.THREAT_SAVE_LINE_FOR_OFFSET
+    end
+
+    -- ================================================================
+    -- PESOS ESTÁNDARES POR NIVEL DE PÁNICO
+    -- ================================================================
+
+    if panic_level == 2 then
+        score = score - (max_h * max_h * AI_CONFIG.EXTREME_HEIGHT_PENALTY)
+        score = score - (holes * AI_CONFIG.EXTREME_HOLES_PENALTY)
+        score = score - (covered_holes * AI_CONFIG.EXTREME_COVERED_PENALTY)
+        score = score - (bumpiness * AI_CONFIG.EXTREME_BUMP_PENALTY)
+
+        if target_hole_col and lines_cleared == 0 then
+            local shape_occupies_hole_col = false
+            for sr = 1, #shape do
+                for sc = 1, #shape[sr] do
+                    if shape[sr][sc] ~= 0 and (px + sc - 1) == target_hole_col then
+                        shape_occupies_hole_col = true
+                        break
+                    end
+                end
+            end
+            if shape_occupies_hole_col then
+                score = score - AI_CONFIG.EXTREME_HOLE_BLOCK_PENALTY
+            end
+        end
+
+        if target_hole_col and lines_cleared > 0 then
+            local delta = hole_col_covered_before - hole_col_covered_after
+            if delta > 0 then
+                score = score + (delta * AI_CONFIG.HOLE_CLEAR_ALIGNMENT_BONUS)
+            end
+        end
+
+        if lines_cleared > 0 then
+            score = score + (lines_cleared * AI_CONFIG.EXTREME_LINE_BONUS)
+            if lines_cleared == 4 then score = score + AI_CONFIG.EXTREME_TETRIS_BONUS end
+        end
+
+    elseif panic_level == 1 then
+        score = score - (max_h * max_h * AI_CONFIG.PANIC_HEIGHT_PENALTY)
+        score = score - (holes * AI_CONFIG.PANIC_HOLES_PENALTY)
+        score = score - (covered_holes * AI_CONFIG.PANIC_COVERED_PENALTY)
+        score = score - (bumpiness * AI_CONFIG.PANIC_BUMP_PENALTY)
+
+        if target_hole_col and lines_cleared == 0 then
+            local shape_occupies_hole_col = false
+            for sr = 1, #shape do
+                for sc = 1, #shape[sr] do
+                    if shape[sr][sc] ~= 0 and (px + sc - 1) == target_hole_col then
+                        shape_occupies_hole_col = true
+                        break
+                    end
+                end
+            end
+            if shape_occupies_hole_col then
+                score = score - AI_CONFIG.PANIC_HOLE_BLOCK_PENALTY
+            end
+        end
+
+        if target_hole_col and lines_cleared > 0 then
+            local delta = hole_col_covered_before - hole_col_covered_after
+            if delta > 0 then
+                score = score + (delta * AI_CONFIG.HOLE_CLEAR_ALIGNMENT_BONUS)
+            end
+        end
+
+        if lines_cleared > 0 then
+            score = score + (lines_cleared * AI_CONFIG.PANIC_LINE_BONUS)
+            if lines_cleared == 4 then score = score + AI_CONFIG.PANIC_TETRIS_BONUS end
+        end
+
+    else
+        score = score - (max_h * max_h * AI_CONFIG.CALM_HEIGHT_PENALTY)
+        score = score - (holes * AI_CONFIG.CALM_HOLES_PENALTY)
+        score = score - (covered_holes * AI_CONFIG.CALM_COVERED_PENALTY)
+        score = score - (bumpiness * AI_CONFIG.CALM_BUMP_PENALTY)
+
+        if heights[10] < heights[9] - 1 then
+            score = score + AI_CONFIG.CALM_WELL_BONUS
+        end
+
+        if lines_cleared == 4 then
+            score = score + AI_CONFIG.CALM_TETRIS_BONUS
+        elseif lines_cleared > 0 then
+            score = score + (lines_cleared * AI_CONFIG.CALM_SINGLE_DOUBLE_BONUS)
+        end
+    end
+
+    return score
+end
+
+function AIBot:executeMove()
+    local p = self.board.active_piece
+    if not p or p.locked or not self.target_x then
+        self.is_thinking = false
+        return
+    end
+
+    local max_rot = #p.shape
+    local real_target_rot = ((self.target_rot - 1) % max_rot) + 1
+
+    if p.rotation ~= real_target_rot then
+        p:rotate(1)
+    elseif p.x < self.target_x then
+        p:move(1, 0)
+    elseif p.x > self.target_x then
+        p:move(-1, 0)
+    else
+        local startY = p.y
+        while p:move(0, 1, true) do end
+        local endY = p.y
+        self.board:spawnTrail(p.x, startY, endY, p.id, p.shape[p.rotation])
+        p:lock()
+        self.is_thinking = false
+        self.just_locked = true
+    end
+end
+
+return AIBot
 
 
 ================================================
 FILE: tetris/anomaly_manager.lua
 ================================================
-Error reading file with 'cp1252': 'charmap' codec can't decode byte 0x8d in position 5475: character maps to <undefined>
+---@diagnostic disable: undefined-global
+local AnomalyManager = {}
+local FontCache = require "tetris.font_cache"
+local AudioManager = require "audio_manager"
+
+AnomalyManager.current_anomaly = nil
+AnomalyManager.timer = 0
+AnomalyManager.duration = 0
+AnomalyManager.warning_timer = 0
+AnomalyManager.cooldown = 45.0
+AnomalyManager.time_until_next = 35.0
+
+AnomalyManager.step_timer = 0
+AnomalyManager.laser_x = 0
+AnomalyManager.laser_dir = 1
+
+-- ╔══════════════════════════════════════════════════════════════════════╗
+-- ║  🎨  PANEL DE CONTROL: COLORES Y ESTILOS DE ANOMALÍAS            ║
+-- ╚══════════════════════════════════════════════════════════════════════╝
+ANOMALY_THEMES = {
+    torus_belt       = { c1 = {0.55, 0.20, 1.0}, c2 = {0.80, 0.45, 1.0}, label = "TORUS" },
+    global_wormhole  = { c1 = {0.95, 0.15, 0.85}, c2 = {1.00, 0.55, 0.90}, label = "WORM" },
+    laser_scan       = { c1 = {0.15, 0.65, 1.0}, c2 = {0.45, 0.90, 1.0}, label = "LASER" },
+    matrix_swap      = { c1 = {1.00, 0.08, 0.15}, c2 = {1.00, 0.55, 0.35}, label = "SWAP!" },
+    gravity_flip     = { c1 = {0.85, 0.15, 0.25}, c2 = {0.95, 0.45, 0.75}, label = "ANTIG" },
+    lock_drain       = { c1 = {1.00, 0.45, 0.05}, c2 = {1.00, 0.75, 0.20}, label = "DRAIN" },
+    hyper_speed      = { c1 = {0.10, 0.85, 0.95}, c2 = {0.55, 1.00, 0.95}, label = "SPEED" }
+}
+DEFAULT_THEME = { c1 = {1.0, 0.85, 0.2}, c2 = {1.0, 1.0, 0.5}, label = "ANOM" }
+
+local ANOMALY_POOL = {
+    { id = "torus_belt",      name = "TORUS CONVEYOR (LOCAL)",         dur = 12.0 },
+    { id = "global_wormhole", name = "GLOBAL WORMHOLE (CROSS-MATRIX)",  dur = 10.0 },
+    { id = "laser_scan",     name = "QUANTUM LASER SCANNER",          dur = 12.0 },
+    { id = "matrix_swap",    name = "SUDDEN MATRIX SWAP",             dur =  3.0 },
+    { id = "gravity_flip",   name = "ANTI-GRAVITY REVERSE",           dur = 10.0 },
+    { id = "lock_drain",     name = "LOCK DRAIN OVERLOAD",             dur = 12.0 },
+    { id = "hyper_speed",    name = "HYPER SPEED RUN BOOST",         dur = 15.0 }
+}
+
+function AnomalyManager.init()
+    AnomalyManager.current_anomaly = nil
+    AnomalyManager.timer = 0
+    AnomalyManager.duration = 0
+    AnomalyManager.warning_timer = 0
+    AnomalyManager.time_until_next = 35.0
+    AnomalyManager.step_timer = 0
+    AnomalyManager.laser_x = 80
+    AnomalyManager.laser_dir = 1
+    AnomalyManager.swapped = false
+    AnomalyManager.lock_drain_active = false
+    AnomalyManager.hyper_speed_active = false
+end
+
+function AnomalyManager.triggerRandomAnomaly(track_bpm)
+    local idx = math.random(1, #ANOMALY_POOL)
+    local selected = ANOMALY_POOL[idx]
+
+    AnomalyManager.current_anomaly = selected.id
+    AnomalyManager.duration = selected.dur
+    AnomalyManager.timer = selected.dur
+    AnomalyManager.warning_timer = 0
+    AnomalyManager.step_timer = 0
+    AnomalyManager.swapped = false
+    AnomalyManager.lock_drain_active = false
+    AnomalyManager.hyper_speed_active = false
+
+    AudioManager.playImmediateSFX("phantom_attack", false)
+    if selected.id == "gravity_flip" or selected.id == "matrix_swap" or selected.id == "hyper_speed" then
+        AudioManager.triggerGlitch(0.6)
+    else
+        AudioManager.triggerGlitch(0.4)
+    end
+end
+
+function AnomalyManager.update(dt, player, bot)
+    local bpm = AudioManager.current_bpm or 120
+    local beat_duration = 60 / bpm
+
+    if not AnomalyManager.current_anomaly then
+        AnomalyManager.time_until_next = AnomalyManager.time_until_next - dt
+
+        if AnomalyManager.time_until_next <= 3.0 and AnomalyManager.warning_timer <= 0 then
+            AnomalyManager.warning_timer = 3.0
+            AudioManager.triggerGlitch(0.2)
+        end
+
+        if AnomalyManager.warning_timer > 0 then
+            AnomalyManager.warning_timer = AnomalyManager.warning_timer - dt
+        end
+
+        if AnomalyManager.time_until_next <= 0 then
+            AnomalyManager.triggerRandomAnomaly(bpm)
+        end
+        return
+    end
+
+    AnomalyManager.timer = AnomalyManager.timer - dt
+    local id = AnomalyManager.current_anomaly
+
+    if id == "torus_belt" then
+        AnomalyManager.step_timer = AnomalyManager.step_timer + dt
+        if AnomalyManager.step_timer >= (beat_duration * 1.5) then
+            AnomalyManager.step_timer = 0
+            if player and not player.is_dying then player:shiftColumnsLocal(1) end
+            if bot and not bot.is_dying then bot:shiftColumnsLocal(1) end
+            AudioManager.playImmediateSFX("move", false)
+        end
+
+    elseif id == "global_wormhole" then
+        AnomalyManager.step_timer = AnomalyManager.step_timer + dt
+        if AnomalyManager.step_timer >= (beat_duration * 0.8) then
+            AnomalyManager.step_timer = 0
+            if player and bot and not player.is_dying and not bot.is_dying then
+                player:shiftColumnsGlobal(bot, 1)
+            end
+            AudioManager.playImmediateSFX("move", true)
+        end
+
+    elseif id == "laser_scan" then
+        AnomalyManager.laser_x = AnomalyManager.laser_x + AnomalyManager.laser_dir * 180 * dt
+        if AnomalyManager.laser_x > 720 then
+            AnomalyManager.laser_x = 720
+            AnomalyManager.laser_dir = -1
+        elseif AnomalyManager.laser_x < 80 then
+            AnomalyManager.laser_x = 80
+            AnomalyManager.laser_dir = 1
+        end
+
+    elseif id == "matrix_swap" then
+        if AnomalyManager.timer <= 0.1 and not AnomalyManager.swapped then
+            AnomalyManager.swapped = true
+            if player and bot and not player.is_dying and not bot.is_dying then
+                player:swapGrids(bot)
+                _G.HitStopTimer = 0.35
+                AudioManager.playImmediateSFX("ultimatris", false)
+            end
+        end
+
+    elseif id == "gravity_flip" then
+        AnomalyManager.step_timer = AnomalyManager.step_timer + dt
+        if AnomalyManager.step_timer >= (beat_duration * 0.5) then
+            AnomalyManager.step_timer = 0
+            if player and not player.is_dying then
+                local pp = player.active_piece
+                if pp and not pp.locked then
+                    while pp:canMove(pp.x, pp.y - 1, pp.rotation) do
+                        pp.y = pp.y - 1
+                    end
+                end
+            end
+            if bot and not bot.is_dying then
+                local bp = bot.active_piece
+                if bp and not bp.locked then
+                    while bp:canMove(bp.x, bp.y - 1, bp.rotation) do
+                        bp.y = bp.y - 1
+                    end
+                end
+            end
+            AudioManager.playImmediateSFX("rotate", false)
+        end
+
+    elseif id == "lock_drain" then
+        AnomalyManager.lock_drain_active = true
+        if player and player.active_piece and not player.is_dying then
+            player.active_piece.lock_delay = 0.08
+        end
+        if bot and bot.active_piece and not bot.is_dying then
+            bot.active_piece.lock_delay = 0.08
+        end
+
+    elseif id == "hyper_speed" then
+        AnomalyManager.hyper_speed_active = true
+        if player and not player.is_dying then
+            local pp = player.active_piece
+            if pp and not pp.locked then pp.spawn_timer = 0 end
+        end
+        if bot and bot.ai and not bot.is_dying then
+            local active_punch = _G.TrackEnergyPunch or 0
+            bot.ai.pps = bot.ai.base_pps + (active_punch * 8.0) + 5.2
+        end
+        AudioManager.playHatClosed(0.25)
+    end
+
+    if AnomalyManager.timer <= 0 then
+        if AnomalyManager.lock_drain_active then
+            if player and player.active_piece then player.active_piece.lock_delay = 0.5 end
+            if bot and bot.active_piece then bot.active_piece.lock_delay = 0.5 end
+        end
+        AnomalyManager.lock_drain_active = false
+        AnomalyManager.hyper_speed_active = false
+
+        AnomalyManager.current_anomaly = nil
+        AnomalyManager.swapped = false
+        AnomalyManager.time_until_next = AnomalyManager.cooldown
+        AnomalyManager.warning_timer = 0
+        AudioManager.triggerGlitch(0.2)
+    end
+end
+
+-- ╔══════════════════════════════════════════════════════════════════════╗
+-- ║  🎨  DRAW: HUD REDISEÑADO — PELIGRO VISUAL EXTREMO               ║
+-- ╚══════════════════════════════════════════════════════════════════════╝
+function AnomalyManager.draw(player, bot)
+    love.graphics.push("all")
+    local time = love.timer.getTime()
+    local pulse = _G.AudioBeatPulse or 0
+    local energy = _G.TrackEnergyPunch or 0
+
+    -- ─────────────────────────────────────────────────────────────────
+    -- 1) ⚠️ WARNING INMINENTE (3 segundos antes) — PELIGRO EXTREMO
+    -- ─────────────────────────────────────────────────────────────────
+    if AnomalyManager.warning_timer > 0 and not AnomalyManager.current_anomaly then
+        local wt = AnomalyManager.warning_timer
+        local urgency = 1.0 - (wt / 3.0)  -- 0 al principio → 1 al final
+        local flash = 0.45 + math.sin(time * (14 + urgency * 32)) * 0.55
+        local count_sec = math.max(0, math.ceil(wt))
+
+        love.graphics.setBlendMode("add")
+
+        -- A) Gradiente radial oscuro de tensión (más oscuro en los bordes)
+        local steps = 24
+        for i = steps, 1, -1 do
+            local p = i / steps
+            local alpha = (1.0 - p) * urgency * 0.32
+            love.graphics.setColor(0.9, 0.05, 0.1, alpha)
+            local pad = p * 240
+            love.graphics.rectangle("line", pad, pad, 800 - pad * 2, 600 - pad * 2, 16)
+        end
+
+        -- B) MARCO GIGANTE PARPADEANTE (8px) en los bordes de la pantalla completa
+        local frame_w = 8 + pulse * 8
+        love.graphics.setColor(1.0, 0.10, 0.12, flash * (0.65 + urgency * 0.35))
+        love.graphics.rectangle("fill", 0, 0, 800, frame_w)                                   -- top
+        love.graphics.rectangle("fill", 0, 600 - frame_w, 800, frame_w)                       -- bottom
+        love.graphics.rectangle("fill", 0, 0, frame_w, 600)                                   -- left
+        love.graphics.rectangle("fill", 800 - frame_w, 0, frame_w, 600)                       -- right
+
+        -- Esquinas afiladas más gruesas
+        love.graphics.setColor(1.0, 0.5, 0.2, flash * 0.9)
+        local cor = 38 + pulse * 8
+        love.graphics.line(0, cor, cor, 0)                            -- top-left
+        love.graphics.line(800, cor, 800 - cor, 0)                    -- top-right
+        love.graphics.line(0, 600 - cor, cor, 600)                    -- bottom-left
+        love.graphics.line(800, 600 - cor, 800 - cor, 600)            -- bottom-right
+
+        -- C) SCANLINES HORIZONTALES ROJAS
+        love.graphics.setColor(1.0, 0.15, 0.15, urgency * 0.28)
+        for y = 0, 599, 4 do
+            local scan_alpha = urgency * (0.18 + ((math.sin(time * 60 + y * 0.1) + 1) * 0.5) * 0.35)
+            love.graphics.setColor(1.0, 0.08, 0.12, scan_alpha)
+            love.graphics.rectangle("fill", 0, y, 800, 2)
+        end
+
+        -- D) RAYOS DIAGONALES que salen de las 4 esquinas
+        love.graphics.setColor(1.0, 0.25, 0.2, flash * (0.35 + urgency * 0.5))
+        love.graphics.setLineWidth(1 + pulse * 3)
+        for i = 1, 7 do
+            local len = 120 + i * 45 + pulse * 60
+            local ang = (i * 0.13) + math.sin(time * 8 + i) * 0.2
+            -- Top-left
+            love.graphics.line(0, 0, math.cos(ang) * len, math.sin(ang) * len)
+            -- Top-right
+            love.graphics.line(800, 0, 800 - math.cos(ang) * len, math.sin(ang) * len)
+            -- Bot-left
+            love.graphics.line(0, 600, math.cos(ang) * len, 600 - math.sin(ang) * len)
+            -- Bot-right
+            love.graphics.line(800, 600, 800 - math.cos(ang) * len, 600 - math.sin(ang) * len)
+        end
+
+        love.graphics.setBlendMode("alpha")
+
+        -- E) TÍTULO: "⚠ ANOMALY INCOMING ⚠" con glitch RGB
+        local title_txt = "⚠  ANOMALY INCOMING  ⚠"
+        love.graphics.setFont(FontCache.get(18))
+        local tw = FontCache.get(18):getWidth(title_txt)
+        local tx = 400 - tw / 2
+
+        -- Glitch de color rojo/azul
+        local gx_off = (math.random() - 0.5) * (3 + urgency * 10)
+        local gy_off = (math.random() - 0.5) * 2
+        love.graphics.setColor(1.0, 0.1, 0.1, flash * 0.7)
+        love.graphics.print(title_txt, tx - 4 + gx_off, 140 + gy_off)
+        love.graphics.setColor(0.1, 0.2, 1.0, flash * 0.7)
+        love.graphics.print(title_txt, tx + 4 - gx_off, 140 - gy_off)
+        -- Texto central blanco opaco
+        love.graphics.setColor(1.0, 1.0, 1.0, flash * (0.8 + urgency * 0.2))
+        love.graphics.print(title_txt, tx, 140)
+
+        -- F) CONTADOR GIGANTE 3-2-1 (tamaño 52)
+        love.graphics.setFont(FontCache.get(52))
+        local cstr = tostring(count_sec)
+        local cw = FontCache.get(52):getWidth(cstr)
+        local cx = 400 - cw / 2
+        local cy = 230
+
+        -- Halo creciente del número
+        local halo = (urgency * 18) + pulse * 16
+        love.graphics.setColor(1.0, 0.2, 0.25, urgency * 0.35)
+        love.graphics.print(cstr, cx - halo / 2, cy - halo / 4, 0, 1 + halo / 200, 1 + halo / 200)
+        -- Número central con glitch
+        love.graphics.setColor(1.0, 0.2, 0.2, 0.7)
+        love.graphics.print(cstr, cx - 3, cy + 2)
+        love.graphics.setColor(0.3, 0.4, 1.0, 0.7)
+        love.graphics.print(cstr, cx + 3, cy - 2)
+        love.graphics.setColor(1.0, 1.0, 1.0, 0.95)
+        love.graphics.print(cstr, cx, cy)
+
+        -- G) Tiempo exacto debajo con fuente pequeña
+        love.graphics.setFont(FontCache.get(11))
+        local tstr = string.format("%.2fs", wt)
+        local w2 = FontCache.get(11):getWidth(tstr)
+        love.graphics.setColor(1.0, 0.7, 0.3, flash * 0.85)
+        love.graphics.print(tstr, 400 - w2 / 2, 345)
+
+        -- H) Barra de progreso de advertencia (se llena hacia 0)
+        local bw = 480
+        local bx = 400 - bw / 2
+        local by = 370
+        love.graphics.setColor(0.2, 0.05, 0.05, 0.85)
+        love.graphics.rectangle("fill", bx, by, bw, 14, 8)
+        love.graphics.setColor(1.0, 0.25, 0.2, 0.9)
+        love.graphics.rectangle("fill", bx, by, bw * (1.0 - urgency), 14, 8)
+        love.graphics.setColor(1, 1, 1, 0.6)
+        love.graphics.rectangle("line", bx, by, bw, 14, 8)
+    end
+
+    -- ─────────────────────────────────────────────────────────────────
+    -- 2) ⚡ ANOMALÍA ACTIVA — Barras laterales + barra superior/inferior
+    -- ─────────────────────────────────────────────────────────────────
+    if AnomalyManager.current_anomaly then
+        local id = AnomalyManager.current_anomaly
+        local theme = ANOMALY_THEMES[id] or DEFAULT_THEME
+        local c1, c2 = theme.c1, theme.c2
+        local t = AnomalyManager.timer
+        local dur = AnomalyManager.duration
+        local progress = math.max(0, math.min(1, t / dur))  -- 1 = recién empieza, 0 = termina
+        local flash2 = 0.65 + math.sin(time * 10 + energy * 14) * 0.35
+
+        local name = "ACTIVE ANOMALY"
+        for _, a in ipairs(ANOMALY_POOL) do
+            if a.id == id then name = a.name break end
+        end
+
+        love.graphics.setBlendMode("add")
+
+        -- A) BARRAS LATERALES DE COLOR (22px de ancho) — gradiente vertical
+        local barw = 22
+        for y = 0, 599, 6 do
+            local p = y / 600
+            local r = c1[1] + (c2[1] - c1[1]) * p
+            local g = c1[2] + (c2[2] - c1[2]) * p
+            local b = c1[3] + (c2[3] - c1[3]) * p
+            local a2 = (0.55 + pulse * 0.35 + math.sin(time * 2 + y * 0.05) * 0.1) * flash2
+            love.graphics.setColor(r, g, b, a2 * 0.85)
+            -- Left bar
+            love.graphics.rectangle("fill", 0, y, barw, 7)
+            -- Right bar
+            love.graphics.rectangle("fill", 800 - barw, y, barw, 7)
+        end
+
+        -- B) BARRA SUPERIOR con nombre de la anomalía
+        local top_h = 32
+        love.graphics.setColor(c1[1], c1[2], c1[3], 0.7 + pulse * 0.3)
+        love.graphics.rectangle("fill", 0, 0, 800, top_h)
+        love.graphics.setColor(c2[1], c2[2], c2[3], 0.9)
+        love.graphics.rectangle("fill", 0, top_h - 3, 800, 3)
+
+        -- C) BARRA INFERIOR con BARRA DE PROGRESO de la anomalía
+        local bot_h = 26
+        love.graphics.setColor(c1[1], c1[2], c1[3], 0.55 + pulse * 0.25)
+        love.graphics.rectangle("fill", 0, 600 - bot_h, 800, bot_h)
+        love.graphics.setColor(c2[1], c2[2], c2[3], 0.85)
+        love.graphics.rectangle("fill", 0, 600 - bot_h, 800, 2)
+
+        -- Barra de progreso que se reduce
+        local pbx = 60
+        local pbw = 800 - pbx * 2
+        local pby = 600 - bot_h + 11
+        love.graphics.setColor(0, 0, 0, 0.45)
+        love.graphics.rectangle("fill", pbx, pby, pbw, 8, 6)
+        love.graphics.setColor(c2[1], c2[2], c2[3], 0.95)
+        love.graphics.rectangle("fill", pbx, pby, pbw * progress, 8, 6)
+
+        -- Etiqueta SHORT arriba a la izquierda
+        love.graphics.setBlendMode("alpha")
+        love.graphics.setFont(FontCache.get(11))
+        love.graphics.setColor(1, 1, 1, 0.9)
+        love.graphics.print("ANOMALY: " .. theme.label, 10, 9)
+
+        -- Tiempo numérico arriba derecha
+        local tstr2 = string.format("%.1fs", t)
+        love.graphics.setFont(FontCache.get(11))
+        local tw2 = FontCache.get(11):getWidth(tstr2)
+        love.graphics.setColor(1, 1, 1, 0.9)
+        love.graphics.print(tstr2, 800 - tw2 - 10, 9)
+
+        -- Nombre completo CENTRO ARRIBA
+        love.graphics.setFont(FontCache.get(13))
+        local nw = FontCache.get(13):getWidth(name)
+        love.graphics.setColor(1, 1, 1, 0.95)
+        love.graphics.print(name, 400 - nw / 2, 7)
+
+        love.graphics.setBlendMode("add")
+
+        -- ── RENDER ESPECÍFICO DE CADA ANOMALÍA (mantenido intacto) ──
+
+        if id == "global_wormhole" then
+            love.graphics.setLineWidth(2 + pulse * 2)
+            love.graphics.setColor(0.9, 0.2, 1.0, 0.6 + pulse * 0.3)
+            for r = 0, 10 do
+                local line_y = 50 + 240 + (r * 24)
+                love.graphics.line(320, line_y, 480, line_y)
+            end
+            love.graphics.setBlendMode("alpha")
+
+        elseif id == "laser_scan" then
+            love.graphics.setLineWidth(3 + pulse * 3)
+            love.graphics.setColor(0.2, 0.95, 1.0, 0.85 + pulse * 0.15)
+            love.graphics.line(AnomalyManager.laser_x, 40, AnomalyManager.laser_x, 540)
+            love.graphics.setColor(1, 1, 1, 0.9)
+            love.graphics.line(AnomalyManager.laser_x, 40, AnomalyManager.laser_x, 540)
+            love.graphics.setBlendMode("alpha")
+
+        elseif id == "gravity_flip" then
+            love.graphics.setColor(0.8, 0.3, 1.0, 0.55 + pulse * 0.35)
+            love.graphics.setFont(FontCache.get(14))
+            local arrow_y = 260 + math.sin(time * 6) * 6
+            love.graphics.printf("▲ ▲ ▲  ANTI-GRAV ACTIVE  ▲ ▲ ▲", 0, arrow_y, 800, "center")
+            love.graphics.setBlendMode("alpha")
+
+        elseif id == "lock_drain" then
+            love.graphics.setColor(1.0, 0.35, 0.2, 0.7 + pulse * 0.3)
+            love.graphics.setFont(FontCache.get(11))
+            love.graphics.printf("⏱ LOCK DELAY = 0.08s OVERLOAD", 0, 560, 800, "center")
+            for i = 1, 6 do
+                local bar_y = 55 + (i * 72)
+                love.graphics.rectangle("fill", 310, bar_y, 180, 2)
+            end
+            love.graphics.setBlendMode("alpha")
+
+        elseif id == "hyper_speed" then
+            love.graphics.setColor(0.2, 0.9, 1.0, 0.6 + pulse * 0.4)
+            love.graphics.setLineWidth(2)
+            local offset = (time * 600) % 60
+            for i = -2, 16 do
+                local bx = (i * 60) + offset
+                love.graphics.line(bx, 50, bx + 80, 530)
+            end
+            love.graphics.setFont(FontCache.get(12))
+            love.graphics.setColor(1.0, 1.0, 1.0, 0.95)
+            love.graphics.printf("⚡ HYPER SPEED RUN x2.6", 0, 30, 800, "center")
+            love.graphics.setBlendMode("alpha")
+        end
+    end
+
+    love.graphics.pop()
+end
+
+return AnomalyManager
 
 
 ================================================

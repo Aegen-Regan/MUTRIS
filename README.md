@@ -397,3 +397,109 @@ AIBot:evaluate() escaneaba el tablero completo dos veces por cada candidato de c
 | `tetris/bloom_shader.lua` | **Modificado** | Calibración anti-burnout con aberración cromática nítida. |
 | `settings_manager.lua` | **Nuevo** | Módulo de guardado y lectura de parámetros competitivos (`settings.json`). |
 | `tetris/game_states.lua` | **Modificado** | Pantalla interactiva de ajustes DAS/ARR con sliders en tiempo real. |
+
+
+
+
+
+
+# 🕹️ MUTRIS v0.9.5 — ETHEREAL TRANSCENDENCE & ADAPTIVE COMBAT ENGINE
+## COMPENDIO TÉCNICO DE ARQUITECTURA, ZERO-GC, FÍSICA SRS & IA ADAPTATIVA DDA
+### 🛠️ ESTADO DE SISTEMA: FASE 8 (SUPERVIVENCIA EXTREMA, DDA PERSISTENTE & FIXES DE TIMING) — VERSIÓN ESTABLE
+
+---
+
+> ⚠️ **REGLA DE ORO DE DESARROLLO PERMANENTE:**
+> **EL TÍTULO DEL JUEGO Y EL NÚMERO DE VERSIÓN (`MUTRIS v0.9.5`) DEBEN PERMANECER SIEMPRE VISIBLES EN PANTALLA EN TODOS LOS ESTADOS (MENÚ, GAMEPLAY, EDITOR, SETTINGS Y GAME OVER).** Esta directiva es obligatoria para garantizar la trazabilidad visual en capturas de pantalla, pruebas de telemetría y reportes de rendimiento.
+
+---
+
+## 🧠 NOVEDADES DESTACADAS DE LA VERSIÓN v0.9.5
+
+### 1. Sistema de Dificultad Dinámica Adaptativa (DDA) (`tetris/ai_bot.lua`, `ai_profile.json`)
+* **Memoria Persistente de Rendimiento:** La Inteligencia Artificial genera y actualiza automáticamente el archivo local `ai_profile.json` tras cada combate.
+* **Cálculo de Media Móvil Exponencial (EMA):** El nivel del jugador se evalúa promediando su velocidad histórica con la velocidad de la última partida (`player_avg_pps = player_avg_pps * 0.70 + player_pps * 0.30`).
+* **Calibración Simbiótica:** La IA calibra su velocidad base para jugar **entre un 8% y 15% por encima del ritmo real del usuario**, incrementando su agresividad si el jugador acumula rachas de victorias o aflojando la presión de forma justa si el usuario sufre derrotas consecutivas.
+* **Registro Inmediato en Frame 0:** El resultado de la partida y el PPS final se escriben en disco en el instante exacto del impacto de muerte en `Board:triggerDeath()`, garantizando que la dificultad se actualice incluso si el jugador pulsa `R` durante la animación de Game Over.
+
+### 2. Heurística de Supervivencia y Downstack Quirúrgico (`tetris/ai_bot.lua`)
+* **Tolerancia Cero a Huecos:** Pesos heurísticos masivos (`-18000` / `-25000` pts) que penalizan la creación o cobertura de agujeros.
+* **Aplanamiento Forzado del Tablero:** Castigo severo a la irregularidad de la superficie (`bumpiness`), obligando al bot a mantener una matriz plana.
+* **Radar de Pozo de Basura (Hole-Seeking):** Identificación activa de la columna del agujero de escape en las líneas de basura para abrir caminos y contraatacar en situaciones críticas.
+* **Offsetting Defensivo Proactivo:** Bonificación prioritaria a la limpieza de líneas simples/dobles que cancelen basura entrante alojada en la cola de ataque.
+* **Ejecución a Velocidad Real:** Eliminación de los retrasos por fotograma en giros y desplazamientos laterales en `executeMove()`, permitiendo al bot colocar piezas de forma limpia y precisa al compás exacto de su velocidad asignada.
+
+### 3. Reloj de Partida Continuo y Telemetría Inmune (`main.lua`, `tetris/telemetry.lua`)
+* **Timer Continuo por Frame:** El temporizador `_G.RealMatchTimer` avanza de forma ininterrumpida mediante delta time acumulativo en `love.update(dt)`, erradicando congelamientos en `T: 0.0s` causados por loops de música o incompatibilidades con el modo de entrada GPU.
+* **Monitoreo en Tiempo Real:** Telemetría centralizada con lectura dual de PPS (Humano vs Bot), contador de FPS, tiempo transcurrido y barra reactiva de energía musical.
+
+### 4. Sistema de Destrucción Cinemática en Cristal (`tetris/board.lua`)
+* **Micro-Hitstop (0.35s):** Congelamiento de impacto cinemático que da peso físico a la derrota.
+* **Implosión Poliédrica (350 Fragmentos):** Desintegración de los bloques en esquirlas con físicas de aceleración, gravedad pesada y rotación mediante pools pre-alocados *Zero-GC*.
+* **Fisuras Luminosas:** Red de 40 grietas de energía procedurales en el marco de la matriz.
+
+### 5. Mecánica Zone Mode de 2 Niveles (`tetris/board.lua`, `tetris/garbage_manager.lua`)
+* **Tier 1 (25% - 99%):** Matriz *Holo-Cyan* reactiva a ondas senoidales diagonales.
+* **Tier 2 (100% Clavado - Hyper Zone):** Piel *Gold-Diamond Prism* con rejilla láser en cruz, bordes iridiscentes y acorde polifónico extendido.
+* **Almacenamiento Estricto de Ataque:** Inmunidad total a basura durante la Zona; todo el daño acumulado detona en un único estallido al salir de la mecánica.
+
+---
+
+## 💾 ARQUITECTURA TÉCNICA & RENDIMIENTO ZERO-GC
+
+Para sostener **60 FPS estables** sin micro-tirones (*stuttering*) provocados por el recolector de basura de Lua:
+
+1. **Pre-alocación de Matrices y Arrays:** No se instancian tablas vacías (`{}`) dentro de los bucles críticos `love.update` ni `love.draw`.
+2. **Caché de Fuentes (`tetris/font_cache.lua`):** Centralización de fuentes tipográficas para evitar llamadas repetitivas a `love.graphics.newFont()`.
+3. **Pools Reutilizables:**
+   * `ParticleSystem`: Pool estático de 200 partículas reciclables.
+   * `Board.trails`: Pool de 8 estelas volumétricas láser.
+   * `Board.shatter_shards`: Pool de 350 fragmentos de cristal poliédrico.
+   * `AIBot._overlay`: Buffer plano de 400 posiciones para evaluación heurística en un solo barrido.
+
+---
+
+## ⌨️ MAPEO DE ENTRADA Y CONTROLES
+
+### Teclado (Estándar Competitivo & DAS/ARR)
+| Acción | Teclas Primarias | Teclas Secundarias |
+| :--- | :--- | :--- |
+| **Mover Izquierda / Derecha** | `Left` / `Right` | `KP 4` / `KP 6` |
+| **Soft Drop (Caída Suave)** | `Down` | `KP 5` / `5` / `Clear` |
+| **Hard Drop (Fijación Instantánea)** | `Space` | — |
+| **Rotación Horaria (CW)** | `A` | `Z` |
+| **Rotación Antihoraria (CCW)** | `D` | `X` |
+| **Rotación 180°** | `Up` | `KP 8` |
+| **Hold (Reserva)** | `S` | `C` |
+| **Zone Mode** | `Q` | — |
+| **Reinicio Rápido** | `R` | — |
+| **Menú de Ajustes / Volver** | `Escape` | — |
+| **Silenciar Audio (Mute)** | `M` *(en menú settings)* | — |
+
+### Gamepad / Mando
+| Acción | Botón |
+| :--- | :--- |
+| **Mover / Soft Drop** | D-Pad o Stick Analógico Izquierdo |
+| **Hard Drop** | `RB` / `RT` (Bumpers / Triggers derechos) |
+| **Hold** | `LB` / `LT` (Bumpers / Triggers izquierdos) |
+| **Rotaciones** | `A` / `B` (Horario), `X` / `Y` (Antihorario), `D-Pad Up` (180°) |
+| **Reinicio / Menú** | `Start` / `Back` |
+
+---
+
+## 🗂️ REGISTRO HISTÓRICO DE ARCHIVOS
+
+| Archivo | Rol en el Motor |
+| :--- | :--- |
+| `main.lua` | Bucle principal, control de estados, temporizador continuo e Hitstop. |
+| `tetris/ai_bot.lua` | IA adaptativa con DDA persistente (`ai_profile.json`) y downstacking. |
+| `tetris/board.lua` | Renderizado de grilla, Zone Tier 1/2, trails, muerte cinemática y phantoms. |
+| `tetris/garbage_manager.lua` | Gestión de offset reactivo, tabla de ataques y cálculo de daño Zone. |
+| `tetris/piece.lua` | Física SRS, Wall-Kicks, detección T-Spin 3-corners y lock delay. |
+| `tetris/pps_counter.lua` | Buffer circular de 60 ranuras para cálculo móvil de PPS. |
+| `tetris/font_cache.lua` | Caché rasterizado de fuentes para inmunidad a Garbage Collection. |
+| `tetris/fog_layer.lua` | Niebla volumétrica Z-Depth con tonalidades reactivas Camelot. |
+| `tetris/bloom_shader.lua` | Post-procesado bloom y aberración cromática calibrada. |
+| `settings_manager.lua` | Persistencia y calibración en vivo de DAS/ARR y volúmenes (`settings.json`). |
+| `track_manager.lua` | Traducción modal armónica Camelot y mapeo cromático de notas. |
+| `track_editor.lua` | Laboratorio interactivo por mouse para importación y calibración de audio. |
