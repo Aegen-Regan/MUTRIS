@@ -2,10 +2,16 @@
 local AIBot = {}
 AIBot.__index = AIBot
 
--- ╔══════════════════════════════════════════════════════════════════════╗
--- ║  🧠 SISTEMA DE PERFIL ADAPTATIVO PERSISTENTE (ai_profile.json)     ║
--- ╚══════════════════════════════════════════════════════════════════════╝
 local PROFILE_FILE = "ai_profile.json"
+_G.AI_ADAPTIVE_PROFILE = {
+    player_avg_pps = 1.30,
+    ai_target_pps = 1.45,
+    player_wins = 0,
+    bot_wins = 0,
+    player_streak = 0,
+    bot_streak = 0,
+    matches_played = 0
+}
 
 local function loadAdaptiveProfile()
     local profile = {
@@ -25,10 +31,12 @@ local function loadAdaptiveProfile()
             end
         end
     end
+    _G.AI_ADAPTIVE_PROFILE = profile
     return profile
 end
 
 local function saveAdaptiveProfile(p)
+    _G.AI_ADAPTIVE_PROFILE = p
     local json = string.format(
         '{\n  "player_avg_pps": %.2f,\n  "ai_target_pps": %.2f,\n  "player_wins": %d,\n  "bot_wins": %d,\n  "player_streak": %d,\n  "bot_streak": %d,\n  "matches_played": %d\n}',
         p.player_avg_pps, p.ai_target_pps, p.player_wins, p.bot_wins, p.player_streak, p.bot_streak, p.matches_played
@@ -37,10 +45,11 @@ local function saveAdaptiveProfile(p)
 end
 
 function AIBot.recordMatch(winner, player_pps, match_duration)
+    if _G.IS_DEMO_MODE then return end -- No alterar el perfil del jugador durante las demos automáticas
+
     local p = loadAdaptiveProfile()
     p.matches_played = p.matches_played + 1
 
-    -- Si el PPS de esa partida fue muy bajo por morir de golpe, toma el histórico
     local valid_pps = (player_pps and player_pps > 0.3) and player_pps or p.player_avg_pps
     p.player_avg_pps = math.max(0.6, (p.player_avg_pps * 0.70) + (valid_pps * 0.30))
 
@@ -48,14 +57,12 @@ function AIBot.recordMatch(winner, player_pps, match_duration)
         p.player_wins = p.player_wins + 1
         p.player_streak = p.player_streak + 1
         p.bot_streak = 0
-        -- El jugador ganó: la IA sube su velocidad para la próxima
         local boost = 0.15 + (math.min(p.player_streak, 5) * 0.05)
         p.ai_target_pps = p.player_avg_pps + boost
     else
         p.bot_wins = p.bot_wins + 1
         p.bot_streak = p.bot_streak + 1
         p.player_streak = 0
-        -- El bot ganó: si lleva racha, afloja un poco
         if p.bot_streak >= 2 then
             p.ai_target_pps = math.max(0.7, p.player_avg_pps + 0.05)
         else
@@ -63,21 +70,15 @@ function AIBot.recordMatch(winner, player_pps, match_duration)
         end
     end
 
-    -- Límite de velocidad
     p.ai_target_pps = math.max(0.8, math.min(6.0, p.ai_target_pps))
     saveAdaptiveProfile(p)
 end
 
--- ╔══════════════════════════════════════════════════════════════════════╗
--- ║  🎛️  PANEL DE CONTROL DE IA MASTER (HEURÍSTICA DE SUPERVIVENCIA)  ║
--- ╚══════════════════════════════════════════════════════════════════════╝
 AI_CONFIG = {
-    -- ⚠️ Umbrales de Peligro Ultra-Sensibles (altura en bloques)
     PANIC_LIGHT_HEIGHT = 4,
     PANIC_EXTREME_HEIGHT = 8,
     PANIC_ANY_GARBAGE_LINES = 1,
 
-    -- 👁️ Anticipación y Defensa
     OPPONENT_THREAT_HEIGHT_LIGHT = 6,
     OPPONENT_THREAT_HEIGHT_EXTREME = 10,
     OPPONENT_CLEAN_SURFACE_BUMP = 40,
@@ -85,11 +86,9 @@ AI_CONFIG = {
     THREAT_BUILD_ZONE_PRIORITY = 2500,
     THREAT_SAVE_LINE_FOR_OFFSET = 3500,
 
-    -- 🛡️ Offsetting Agresivo (cancelar basura antes de que entre)
     GARBAGE_OFFSET_LINE_BONUS = 4000,
     GARBAGE_OFFSET_BIG_QUEUE_BONUS = 2000,
 
-    -- 💥 PESOS CALM (prioriza superficie ultra-plana y cero huecos)
     CALM_HEIGHT_PENALTY   = 18.0,
     CALM_HOLES_PENALTY    = 4500.0,
     CALM_COVERED_PENALTY  = 6000.0,
@@ -98,7 +97,6 @@ AI_CONFIG = {
     CALM_SINGLE_DOUBLE_BONUS = 400.0,
     CALM_TETRIS_BONUS     = 1200.0,
 
-    -- 🚨 PESOS PÁNICO LEVE
     PANIC_HEIGHT_PENALTY  = 45.0,
     PANIC_HOLES_PENALTY   = 8500.0,
     PANIC_COVERED_PENALTY = 11000.0,
@@ -107,7 +105,6 @@ AI_CONFIG = {
     PANIC_LINE_BONUS      = 3500.0,
     PANIC_TETRIS_BONUS    = 3600.0,
 
-    -- 🔥 PESOS PÁNICO EXTREMO (Downstack quirúrgico)
     EXTREME_HEIGHT_PENALTY  = 95.0,
     EXTREME_HOLES_PENALTY   = 18000.0,
     EXTREME_COVERED_PENALTY = 25000.0,
@@ -116,7 +113,6 @@ AI_CONFIG = {
     EXTREME_LINE_BONUS      = 6000.0,
     EXTREME_TETRIS_BONUS    = 6000.0,
 
-    -- 🎯 Prioridad máxima a despejar el pozo de basura
     HOLE_CLEAR_ALIGNMENT_BONUS = 3000,
     ZONE_MIN_METER = 0.25,
     ZONE_GARBAGE_TRIGGER = 1,
@@ -126,16 +122,20 @@ function AIBot.new(board, profile)
     local self = setmetatable({}, AIBot)
     self.board = board
 
-    -- Lee el perfil adaptativo guardado
-    local adapt = loadAdaptiveProfile()
-    self.base_pps = adapt.ai_target_pps or 1.45
+    if _G.IS_DEMO_MODE then
+        -- 🚀 En Modo Demo: Velocidad eSports ultra alta y agresiva
+        self.base_pps = (profile and profile.pps) or 3.8
+    else
+        local adapt = loadAdaptiveProfile()
+        self.base_pps = adapt.ai_target_pps or 1.45
+    end
+
     self.pps = self.base_pps
     self.move_timer = 0
     self.target_x, self.target_rot = nil, nil
     self.is_thinking = false
     self.just_locked = false
 
-    -- Buffers planos pre-alocados para evaluación Zero-GC
     self._overlay = {}
     for i = 1, 400 do self._overlay[i] = false end
 
@@ -169,22 +169,14 @@ function AIBot:scanOpponentThreat()
     end
 
     local opp_bump = 0
-    for i = 1, 9 do
-        opp_bump = opp_bump + math.abs(opp_heights[i] - opp_heights[i+1])
-    end
+    for i = 1, 9 do opp_bump = opp_bump + math.abs(opp_heights[i] - opp_heights[i+1]) end
 
     local is_clean_setup = (opp_bump <= AI_CONFIG.OPPONENT_CLEAN_SURFACE_BUMP)
     local threat = 0
-    if opp_max_h >= AI_CONFIG.OPPONENT_THREAT_HEIGHT_EXTREME then
-        threat = 2
-    elseif opp_max_h >= AI_CONFIG.OPPONENT_THREAT_HEIGHT_LIGHT then
-        threat = 1
-    end
+    if opp_max_h >= AI_CONFIG.OPPONENT_THREAT_HEIGHT_EXTREME then threat = 2
+    elseif opp_max_h >= AI_CONFIG.OPPONENT_THREAT_HEIGHT_LIGHT then threat = 1 end
 
-    if is_clean_setup and opp_max_h >= 7 then
-        threat = math.min(2, threat + 1)
-    end
-
+    if is_clean_setup and opp_max_h >= 7 then threat = math.min(2, threat + 1) end
     return threat, opp_bump
 end
 
@@ -197,8 +189,12 @@ function AIBot:update(dt)
     end
 
     local active_punch = _G.TrackEnergyPunch or 0
-    -- Escalado proporcional según su PPS base
-    local pps_punch = active_punch * (self.base_pps * 0.35)
+    local pps_punch = active_punch * (self.base_pps * 0.40)
+
+    local blackout_mod = 1.0
+    if _G.IsBlackoutActive and (_G.BlackoutStrobeVisibility or 0) < 0.2 then
+        blackout_mod = 0.75
+    end
 
     local max_h = 0
     for c = 1, 10 do
@@ -212,22 +208,16 @@ function AIBot:update(dt)
     end
 
     local panic_pps = 0
-    if max_h >= AI_CONFIG.PANIC_EXTREME_HEIGHT then
-        panic_pps = self.base_pps * 0.25
-    elseif max_h >= AI_CONFIG.PANIC_LIGHT_HEIGHT then
-        panic_pps = self.base_pps * 0.12
-    end
+    if max_h >= AI_CONFIG.PANIC_EXTREME_HEIGHT then panic_pps = self.base_pps * 0.30
+    elseif max_h >= AI_CONFIG.PANIC_LIGHT_HEIGHT then panic_pps = self.base_pps * 0.15 end
 
-    self.pps = self.base_pps + pps_punch + panic_pps
+    self.pps = (self.base_pps + pps_punch + panic_pps) * blackout_mod
 
-    -- Detección de amenaza y activación Zone
+    -- 🛡️ Activación de Zone Agresiva (Especialmente en Demo para generar espectáculo)
     local opp_threat = self:scanOpponentThreat()
-    local zone_meter_min = AI_CONFIG.ZONE_MIN_METER
-    if opp_threat >= 2 then
-        zone_meter_min = AI_CONFIG.THREAT_ZONE_MIN_METER
-    elseif opp_threat == 1 then
-        zone_meter_min = 0.28
-    end
+    local zone_meter_min = _G.IS_DEMO_MODE and 0.25 or AI_CONFIG.ZONE_MIN_METER
+    if opp_threat >= 2 then zone_meter_min = AI_CONFIG.THREAT_ZONE_MIN_METER
+    elseif opp_threat == 1 then zone_meter_min = 0.28 end
 
     if not self.board.is_zone_active and self.board.zone_meter >= zone_meter_min then
         local in_danger = #self.board.garbage_queue >= AI_CONFIG.ZONE_GARBAGE_TRIGGER
@@ -237,7 +227,7 @@ function AIBot:update(dt)
             if self.board.grid[26][c] ~= 0 then high_stack = true end
             if self.board.grid[24][c] ~= 0 then extreme_stack = true; break end
         end
-        if (in_danger or high_stack or extreme_stack or active_punch >= 0.85 or opp_threat >= 2) then
+        if (in_danger or high_stack or extreme_stack or active_punch >= 0.70 or opp_threat >= 1 or (_G.IS_DEMO_MODE and self.board.zone_meter >= 0.50)) then
             self.board:enterZone()
         end
     end
@@ -265,19 +255,48 @@ function AIBot:findGarbageHoleColumn()
                 hole_col = c
             end
         end
-        if garbage_count >= 8 and hole_col then
-            return hole_col, r
-        end
+        if garbage_count >= 8 and hole_col then return hole_col, r end
     end
     return nil, nil
+end
+
+function AIBot:_findBestForPiece(piece_obj, panic_level, target_hole_col, target_hole_row, opp_threat_level, garbage_queue_size, total_garbage_incoming)
+    local best_score = -20000000
+    local target_x, target_rot = nil, nil
+    local max_rot = #piece_obj.shape
+
+    for r = 1, max_rot do
+        for x = -2, 11 do
+            if piece_obj:canMove(x, piece_obj.y, r) then
+                local gy = piece_obj.y
+                while piece_obj:canMove(x, gy + 1, r) do gy = gy + 1 end
+
+                local score = self:evaluate(
+                    piece_obj, x, gy, r,
+                    panic_level, target_hole_col, target_hole_row,
+                    opp_threat_level, garbage_queue_size, total_garbage_incoming
+                )
+
+                if piece_obj.id == 6 and panic_level < 2 and opp_threat_level < 2 and score > -500000 then
+                    local old_x, old_y, old_r = piece_obj.x, piece_obj.y, piece_obj.rotation
+                    piece_obj.x, piece_obj.y, piece_obj.rotation = x, gy, r
+                    if piece_obj:checkTSpin() then score = score + 3500 end
+                    piece_obj.x, piece_obj.y, piece_obj.rotation = old_x, old_y, old_r
+                end
+
+                if score > best_score then
+                    best_score = score
+                    target_x, target_rot = x, r
+                end
+            end
+        end
+    end
+    return best_score, target_x, target_rot
 end
 
 function AIBot:think()
     local p = self.board.active_piece
     if not p or p.locked or type(p.canMove) ~= "function" then return end
-
-    local best_score = -20000000
-    local max_rot = #p.shape
 
     local max_board_h = 0
     for r = 21, 40 do
@@ -291,58 +310,53 @@ function AIBot:think()
 
     local has_garbage_queue = #self.board.garbage_queue >= AI_CONFIG.PANIC_ANY_GARBAGE_LINES
     local panic_level = 0
-    if max_board_h >= AI_CONFIG.PANIC_EXTREME_HEIGHT then
-        panic_level = 2
-    elseif max_board_h >= AI_CONFIG.PANIC_LIGHT_HEIGHT or has_garbage_queue then
-        panic_level = 1
-    end
+    if max_board_h >= AI_CONFIG.PANIC_EXTREME_HEIGHT then panic_level = 2
+    elseif max_board_h >= AI_CONFIG.PANIC_LIGHT_HEIGHT or has_garbage_queue then panic_level = 1 end
 
     local opp_threat_level = self:scanOpponentThreat()
-
     local garbage_queue_size = #self.board.garbage_queue
     local total_garbage_incoming = 0
-    for i = 1, garbage_queue_size do
-        total_garbage_incoming = total_garbage_incoming + self.board.garbage_queue[i]
-    end
+    for i = 1, garbage_queue_size do total_garbage_incoming = total_garbage_incoming + self.board.garbage_queue[i] end
 
     local target_hole_col, target_hole_row = self:findGarbageHoleColumn()
 
-    for r = 1, max_rot do
-        for x = -2, 11 do
-            if p:canMove(x, p.y, r) then
-                local gy = p.y
-                while p:canMove(x, gy + 1, r) do gy = gy + 1 end
+    local score_current, tx_curr, trot_curr = self:_findBestForPiece(
+        p, panic_level, target_hole_col, target_hole_row, opp_threat_level, garbage_queue_size, total_garbage_incoming
+    )
 
-                local score = self:evaluate(
-                    x, gy, r,
-                    panic_level,
-                    target_hole_col, target_hole_row,
-                    opp_threat_level,
-                    garbage_queue_size, total_garbage_incoming
-                )
-
-                if p.id == 6 and panic_level < 2 and opp_threat_level < 2 and score > -500000 then
-                    local old_x, old_y, old_r = p.x, p.y, p.rotation
-                    p.x, p.y, p.rotation = x, gy, r
-                    if p:checkTSpin() then
-                        score = score + 3500
-                    end
-                    p.x, p.y, p.rotation = old_x, old_y, old_r
-                end
-
-                if score > best_score then
-                    best_score = score
-                    self.target_x, self.target_rot = x, r
-                end
+    -- Inteligencia Táctica de HOLD
+    local should_swap_hold = false
+    if self.board.can_hold then
+        local PieceModule = require "tetris.piece"
+        local alt_id = self.board.hold_piece and self.board.hold_piece.id or (self.board.bag and self.board.bag:peek(1)[1])
+        if alt_id and alt_id ~= p.id then
+            local alt_piece = PieceModule.new(alt_id, self.board)
+            local score_alt, _, _ = self:_findBestForPiece(
+                alt_piece, panic_level, target_hole_col, target_hole_row, opp_threat_level, garbage_queue_size, total_garbage_incoming
+            )
+            if score_alt > (score_current + 1200) then
+                should_swap_hold = true
             end
         end
     end
+
+    if should_swap_hold then
+        self.board:hold()
+        p = self.board.active_piece
+        if p and not p.locked then
+            score_current, tx_curr, trot_curr = self:_findBestForPiece(
+                p, panic_level, target_hole_col, target_hole_row, opp_threat_level, garbage_queue_size, total_garbage_incoming
+            )
+        end
+    end
+
+    self.target_x, self.target_rot = tx_curr, trot_curr
     self.is_thinking = true
 end
 
-function AIBot:evaluate(px, py, pr, panic_level, target_hole_col, target_hole_row, opp_threat_level, garbage_queue_size, total_garbage_incoming)
+function AIBot:evaluate(piece_obj, px, py, pr, panic_level, target_hole_col, target_hole_row, opp_threat_level, garbage_queue_size, total_garbage_incoming)
     local grid = self.board.grid
-    local shape = self.board.active_piece.shape[pr]
+    local shape = piece_obj.shape[pr]
 
     local overlay = self._overlay
     for i = 1, 400 do overlay[i] = false end
@@ -375,15 +389,11 @@ function AIBot:evaluate(px, py, pr, panic_level, target_hole_col, target_hole_ro
     local hole_col_covered_after = 0
     if target_hole_col and target_hole_row then
         for r = 21, target_hole_row do
-            if grid[r][target_hole_col] ~= 0 then
-                hole_col_covered_before = hole_col_covered_before + 1
-            end
+            if grid[r][target_hole_col] ~= 0 then hole_col_covered_before = hole_col_covered_before + 1 end
         end
         for r = 21, target_hole_row do
             local occ = (grid[r][target_hole_col] ~= 0) or overlay[(r - 1) * 10 + target_hole_col]
-            if occ then
-                hole_col_covered_after = hole_col_covered_after + 1
-            end
+            if occ then hole_col_covered_after = hole_col_covered_after + 1 end
         end
     end
 
@@ -402,9 +412,7 @@ function AIBot:evaluate(px, py, pr, panic_level, target_hole_col, target_hole_ro
                 if top_found[c] then
                     holes = holes + 1
                     hole_depths[c] = hole_depths[c] + 1
-                    if hole_depths[c] > 1 then
-                        covered_holes = covered_holes + 1
-                    end
+                    if hole_depths[c] > 1 then covered_holes = covered_holes + 1 end
                 end
             end
         end
@@ -419,29 +427,21 @@ function AIBot:evaluate(px, py, pr, panic_level, target_hole_col, target_hole_ro
 
     local score = 0
 
-    -- Offsetting & Defensa Proactiva
     if lines_cleared > 0 and total_garbage_incoming > 0 then
         local offset_effect = math.min(lines_cleared, total_garbage_incoming)
         score = score + (offset_effect * AI_CONFIG.GARBAGE_OFFSET_LINE_BONUS)
-        if garbage_queue_size >= 3 then
-            score = score + AI_CONFIG.GARBAGE_OFFSET_BIG_QUEUE_BONUS
-        end
+        if garbage_queue_size >= 3 then score = score + AI_CONFIG.GARBAGE_OFFSET_BIG_QUEUE_BONUS end
     end
 
     if opp_threat_level >= 1 and not self.board.is_zone_active then
-        if lines_cleared == 1 or lines_cleared == 2 then
-            score = score + (lines_cleared * AI_CONFIG.THREAT_BUILD_ZONE_PRIORITY)
-        end
-        if opp_threat_level >= 2 and lines_cleared == 0 then
-            score = score - 2500
-        end
+        if lines_cleared == 1 or lines_cleared == 2 then score = score + (lines_cleared * AI_CONFIG.THREAT_BUILD_ZONE_PRIORITY) end
+        if opp_threat_level >= 2 and lines_cleared == 0 then score = score - 2500 end
     end
 
     if total_garbage_incoming >= 4 and lines_cleared >= 2 and lines_cleared < 4 then
         score = score + AI_CONFIG.THREAT_SAVE_LINE_FOR_OFFSET
     end
 
-    -- Ponderación por Niveles de Pánico
     if panic_level == 2 then
         score = score - (max_h * max_h * AI_CONFIG.EXTREME_HEIGHT_PENALTY)
         score = score - (holes * AI_CONFIG.EXTREME_HOLES_PENALTY)
@@ -458,16 +458,12 @@ function AIBot:evaluate(px, py, pr, panic_level, target_hole_col, target_hole_ro
                     end
                 end
             end
-            if shape_occupies_hole_col then
-                score = score - AI_CONFIG.EXTREME_HOLE_BLOCK_PENALTY
-            end
+            if shape_occupies_hole_col then score = score - AI_CONFIG.EXTREME_HOLE_BLOCK_PENALTY end
         end
 
         if target_hole_col and lines_cleared > 0 then
             local delta = hole_col_covered_before - hole_col_covered_after
-            if delta > 0 then
-                score = score + (delta * AI_CONFIG.HOLE_CLEAR_ALIGNMENT_BONUS)
-            end
+            if delta > 0 then score = score + (delta * AI_CONFIG.HOLE_CLEAR_ALIGNMENT_BONUS) end
         end
 
         if lines_cleared > 0 then
@@ -491,16 +487,12 @@ function AIBot:evaluate(px, py, pr, panic_level, target_hole_col, target_hole_ro
                     end
                 end
             end
-            if shape_occupies_hole_col then
-                score = score - AI_CONFIG.PANIC_HOLE_BLOCK_PENALTY
-            end
+            if shape_occupies_hole_col then score = score - AI_CONFIG.PANIC_HOLE_BLOCK_PENALTY end
         end
 
         if target_hole_col and lines_cleared > 0 then
             local delta = hole_col_covered_before - hole_col_covered_after
-            if delta > 0 then
-                score = score + (delta * AI_CONFIG.HOLE_CLEAR_ALIGNMENT_BONUS)
-            end
+            if delta > 0 then score = score + (delta * AI_CONFIG.HOLE_CLEAR_ALIGNMENT_BONUS) end
         end
 
         if lines_cleared > 0 then
@@ -514,9 +506,7 @@ function AIBot:evaluate(px, py, pr, panic_level, target_hole_col, target_hole_ro
         score = score - (covered_holes * AI_CONFIG.CALM_COVERED_PENALTY)
         score = score - (bumpiness * AI_CONFIG.CALM_BUMP_PENALTY)
 
-        if heights[10] < heights[9] - 1 then
-            score = score + AI_CONFIG.CALM_WELL_BONUS
-        end
+        if heights[10] < heights[9] - 1 then score = score + AI_CONFIG.CALM_WELL_BONUS end
 
         if lines_cleared == 4 then
             score = score + AI_CONFIG.CALM_TETRIS_BONUS
@@ -538,7 +528,6 @@ function AIBot:executeMove()
     local max_rot = #p.shape
     local real_target_rot = ((self.target_rot - 1) % max_rot) + 1
 
-    -- Colocación precisa y fluida al ritmo de self.pps
     p.rotation = real_target_rot
     p.x = self.target_x
 
@@ -546,7 +535,6 @@ function AIBot:executeMove()
     while p:move(0, 1, true) do end
     local endY = p.y
     
-    -- Blindaje seguro contra nil
     if self.board and self.board.spawnTrail then
         self.board:spawnTrail(p.x, startY, endY, p.id, p.shape[p.rotation])
     end
