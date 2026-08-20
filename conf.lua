@@ -1,15 +1,18 @@
--- conf.lua
--- Configuración del motor LÖVE2D optimizada para hardware limitado
+-- ============================================================================
+-- MUTRIS ENGINE: LÖVE2D CONFIGURATION (16:9 WIDESCREEN NATIVO)
+-- ============================================================================
 
 function love.conf(t)
-    t.window.title = "Tetris OPT - Versus"
-    t.window.width = 800
-    t.window.height = 600
+    t.window.title = "MUTRIS: SYNTHETIC TRANSCENDENCE"
+    t.window.width = 1280
+    t.window.height = 720
     t.window.vsync = 1
-    t.window.resizable = false
+    t.window.resizable = true
+    t.window.minwidth = 960
+    t.window.minheight = 540
     
     t.identity = "tetris_opt"
-    t.version = "11.4" -- Compatible con LÖVE 11.x y superiores
+    t.version = "11.4"
     
     t.modules.joystick = true
     t.modules.physics = false

@@ -461,3 +461,114 @@ Menú de Ajustes / Salir	Escape	—	—
 🏁 CERTIFICACIÓN TÉCNICA FINAL
 
 Este compendio técnico unifica la totalidad del código vigente y las especificaciones completas para las Fases 7 a 26 de MUTRIS. Cualquier sesión de desarrollo futura puede ejecutarse tomando este archivo como referencia definitiva y absoluta.
+
+
+
+
+
+
+
+
+
+# 🚀 REGISTRO DE PROGRESO & CHANGELOG TÉCNICO (FASE 7 A 13 + WIDESCREEN REFACTOR)
+
+> **Estado del Repositorio:** `MUTRIS v1.0.0-PROD`  
+> **Arquitectura:** Zero-Garbage Collection | Widescreen 16:9 Nativo (1280×720 @ 144/240Hz Target) | Win32 FFI Streaming
+
+---
+
+## 📑 RESUMEN DE SISTEMAS IMPLEMENTADOS
+========================================================================================================
+MUTRIS ENGINE: ESTADO DE ACTUALIZACIÓN DEL ROADMAP
+[✔️] FASE 7 │ Beat-Lock Timing: Ventana ±35ms, Groove Strikes (+1 Línea) & Pulso Subgrave
+[✔️] FASE 8 │ Stance Switching System: Rush (1.5x Atk), Bastion (Parry) & Resonance (20G / 2x Zone)
+[✔️] FASE 9 │ Kinetic Parry: Ventana de 3 Frames, 100% Absorción & Counter-Spike del 50%
+[✔️] FASE 12 │ ARCHON META-BALANCER 1.0: Auto-Equilibrio Estadístico por Descenso de Gradiente
+[✔️] FASE 13 │ DDA Heurística 2.0: Clonación Adaptativa de PPS (+10%) & Radar Hole-Seeking
+[✔️] FASE 25 │ Replay System (.mutrisrec) & Win32 Silent MP4 60FPS Video Pipeline (FFmpeg Pipe)
+
+---
+
+## 🕹️ DETALLE TÉCNICO DE NOVEDADES
+
+### 1. 🥊 Motor de Combate & Sincronización Rítmica (Fases 7, 8 y 9)
+* **Beat-Lock Timing (`tetris/beat_lock.lua`):**
+  - Mide la diferencia temporal entre el *Hard Drop* y el pulso fuerte de la música mediante el reloj de hardware (`MusicManager.getTime()`).
+  - Ventana de tolerancia: $\pm35\text{ ms}$ (ampliada a $\pm45\text{ ms}$ en *Resonance*).
+  - Recompensa: Disparo de *Groove Strike* (+1 línea de ataque), onda de choque, transitorio de subgraves a 30 Hz y multiplicador de racha.
+* **Sistema de Posturas Dinámicas (`combat/combat_stances.lua`):**
+  - Conmutable al vuelo con `TAB`, `Shift` o `L3/R3` con auras neón dedicadas:
+    - **RUSH (Bermellón):** Daño $\times1.5$, Lock Delay ultra-rápido ($0.12\text{ s}$), ARR instantáneo ($0.001\text{ s}$).
+    - **BASTION (Zafiro):** Daño $\times0.5$, Lock Delay seguro ($0.50\text{ s}$), activa la absorción de daño por *Kinetic Parry*.
+    - **RESONANCE (Amatista):** Carga de Zone $\times2.0$, gravedad forzada a $20\text{ G}$ instantánea.
+* **Kinetic Parry & Anti-Recursión (`combat/kinetic_parry.lua`):**
+  - Ventana de 3 frames ($\sim0.050\text{ s}$) al fijar una pieza para anular el $100\%$ de la basura entrante y devolver un *Counter-Spike* del $50\%$.
+  - Implementado con flag `is_counter_spike` para evitar bucles infinitos de contraataques mutuos.
+
+---
+
+### 2. 🧠 Inteligencia Auto-Evolutiva (Fases 12 y 13)
+* **ARCHON Meta-Balancer (`core/meta_balancer.lua`):**
+  - Monitorea la tasa global de victorias (*Win Rate*) y la duración de partidas en `saves/game_balance.json`.
+  - Si el usuario pierde persistentemente ($<35\%$), auto-calibra la tolerancia de *Beat-Lock*, la defensa de *Bastion* y el daño devuelto. Si domina ($>75\%$), ajusta la agresividad.
+  - Imprime notas de parche automáticas en el menú principal (`[ ARCHON ] ...`).
+* **DDA Heurístico 2.0 & Radar Hole-Seeking (`tetris/ai_bot.lua`):**
+  - Ajusta el PPS base del Bot a través de una Media Móvil Exponencial (EMA) para situarse permanentemente un $10\%$ por encima de la velocidad real del jugador.
+  - Algoritmo *Hole-Seeking*: Identifica la columna de escape en la basura para ejecutar *Downstacking* quirúrgico sin tapar pozos.
+  - Sistema Anti-Atasco (*Anti-Stall Fallback*): Previene bloqueos lógicos en techos saturados forzando caídas deterministas.
+
+---
+
+### 3. 🖥️ Arquitectura Widescreen 16:9 & Telemetría Sin Solapamiento
+* **Resolución Nativa 1280×720 (`conf.lua` & `main.lua`):**
+  - Migración completa de 800×600 a 1280×720 Widescreen con escalado virtual centrado (*Letterbox/Pillarbox*) para monitores 1080p, 1440p y 4K (`F11`).
+* **Blackbox Flight Recorder & Telemetría Permanente (`core/blackbox.lua`):**
+  - Búfer circular de 128 eventos en memoria fija (Zero-GC) que registra cada acción crítica.
+  - Distribución no obstructiva en pantalla:
+    - **Ala Izquierda (x: 20..120):** Altura pico de P1, tamaño de cola de basura, Stance activa y registro de eventos locales.
+    - **Ala Derecha (x: 1160..1260):** Altura pico del Bot, cola de basura, PPS objetivo y registro de decisiones de IA.
+    - **Bahía Central (x: 480..800):** Historial cronológico en vivo (*Live Flight Recorder*), comparador PPS dual y barra de adrenalina (*The Punch*).
+* **Crash-Proof Error Handler:**
+  - Si ocurre cualquier excepción en Lua, el motor no se cierra: vuelca la autopsia con el rastro de la pila y los últimos 32 eventos a `saves/crash_report.txt` y mantiene el panel de diagnóstico en pantalla.
+
+---
+
+### 4. 🎥 Pipeline Multimedia & Captura de Alto Rendimiento
+* **Grabador MP4 Silencioso a 60 FPS (`core/clip_recorder.lua`):**
+  - Transmisión en tiempo real de fotogramas RGBA en crudo directo a `ffmpeg.exe` mediante la API Win32 nativa (`CreateProcessA` + `CREATE_NO_WINDOW`).
+  - **Cero consolas de CMD abiertas, cero consumo de memoria RAM acumulativa y guardado instantáneo al presionar `F9`**.
+  - El indicador `● REC 60FPS` se renderiza fuera del canvas del juego para no ensuciar el video final.
+* **Captura Lossless Directa al Portapapeles (`core/screenshot_helper.lua`):**
+  - Presionando `F12`, `F2` o `PrintScreen`, la imagen en resolución completa se inyecta directamente al portapapeles de Windows (`CF_DIB` vía FFI) para pegar con **`Ctrl + V`** al instante, guardando además una copia `.png` en `screenshots/`.
+* **Replays Binarios Deterministas (`core/replay_manager.lua`):**
+  - Grabación automática de partidas en archivos compactos **`.mutrisrec`** ($<10\text{ KB}$) con semilla RNG, marcas de tiempo y flujo de entradas de ambos jugadores.
+
+---
+
+### 5. 🛡️ Corrección de Físicas y Reglas de Techo (Lock-Out / Block-Out)
+* **Lock-Out Oficial:** Si una pieza se fija con bloques en la zona superior de amortiguación ($ty \le 20$) sin limpiar líneas, se declara muerte inmediata.
+* **Block-Out Oficial:** Si una pieza generada colisiona directamente en el punto de aparición $(4, 21)$, se declara muerte inmediata.
+* **Top-Out Bounds Fix:** Se incluyó la validación estricta del límite superior (`ty < 1`) en `Board:canMove`, erradicando bloqueos infinitos durante la anomalía *Anti-Gravity Reverse*.
+* **Death Timer Decrement:** Corregido el ciclo de muerte del tablero (`death_timer = death_timer - dt`) garantizando la transición fluida a la pantalla de victoria/derrota.
+
+---
+
+## 🎮 MAPEO DE CONTROLES ACTUALIZADO
+
+| Acción | Teclado Primario | Teclado Secundario | Gamepad / Mando |
+| :--- | :--- | :--- | :--- |
+| **Mover Izquierda / Derecha** | `Left` / `Right` | `KP 4` / `KP 6` | D-Pad L/R o Stick Izq |
+| **Soft Drop (Caída Suave)** | `Down` | `KP 5` | D-Pad Down o Stick Abajo |
+| **Hard Drop (Fijación)** | `Space` | — | `RB` / `RT` |
+| **Rotación Horaria (CW)** | `A` | `Z` | Botón `A` / `B` |
+| **Rotación Antihoraria (CCW)** | `D` | `X` | Botón `X` / `Y` |
+| **Rotación 180°** | `Up` | `KP 8` | D-Pad `Up` |
+| **Hold (Reserva)** | `S` | `C` | `LB` / `LT` |
+| **Zone Mode** | `Q` | `E` | Gatillo `L2` / `R2` |
+| **Cambio de Postura (Stance)** | `Tab` | `LShift` / `RShift` | `L3` / `R3` / `Back` |
+| **Grabar Clip MP4 60FPS** | `F9` | — | — |
+| **Pantalla Completa (16:9)** | `F11` | `Alt + Enter` | — |
+| **Captura HD a Portapapeles** | `F12` | `F2` / `PrintScreen` | — |
+| **Snapshot de Diagnóstico** | `F8` | — | — |
+| **Reinicio Rápido** | `R` | — | `Start` |
+| **Menú / Salir** | `Escape` | — | — |

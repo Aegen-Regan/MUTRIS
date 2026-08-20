@@ -1,7 +1,11 @@
 ---@diagnostic disable: undefined-global
+-- ============================================================================
+-- MUTRIS ENGINE: ANOMALY MANAGER V2 (1280x720 WIDESCREEN)
+-- ============================================================================
 local AnomalyManager = {}
 local FontCache = require "tetris.font_cache"
 local AudioManager = require "audio_manager"
+local Blackbox = require "core.blackbox"
 
 AnomalyManager.current_anomaly = nil
 AnomalyManager.timer = 0
@@ -11,7 +15,7 @@ AnomalyManager.cooldown = 32.0
 AnomalyManager.time_until_next = 20.0
 
 AnomalyManager.step_timer = 0
-AnomalyManager.laser_x = 80
+AnomalyManager.laser_x = 220
 AnomalyManager.laser_dir = 1
 AnomalyManager.swapped = false
 AnomalyManager.lock_drain_active = false
@@ -46,10 +50,9 @@ function AnomalyManager.init()
     AnomalyManager.timer = 0
     AnomalyManager.duration = 0
     AnomalyManager.warning_timer = 0
-    -- ⚡ En Demo o Gauntlet: Eventos constantes cada 8-10 segundos
     AnomalyManager.time_until_next = (_G.IS_DEMO_MODE or _G.CURRENT_GAME_MODE == "gauntlet") and 8.0 or 25.0
     AnomalyManager.step_timer = 0
-    AnomalyManager.laser_x = 80
+    AnomalyManager.laser_x = 220
     AnomalyManager.laser_dir = 1
     AnomalyManager.swapped = false
     AnomalyManager.lock_drain_active = false
@@ -71,6 +74,8 @@ function AnomalyManager.triggerRandomAnomaly(track_bpm)
     AnomalyManager.swapped = false
     AnomalyManager.lock_drain_active = false
     AnomalyManager.hyper_speed_active = false
+
+    Blackbox.log("ANOMALY", "TRIGGER: " .. selected.name, idx, math.floor(selected.dur))
 
     if selected.id == "blackout_strobe" then
         _G.IsBlackoutActive = true
@@ -141,12 +146,12 @@ function AnomalyManager.update(dt, player, bot)
         end
 
     elseif id == "laser_scan" then
-        AnomalyManager.laser_x = AnomalyManager.laser_x + AnomalyManager.laser_dir * 220 * dt
-        if AnomalyManager.laser_x > 720 then
-            AnomalyManager.laser_x = 720
+        AnomalyManager.laser_x = AnomalyManager.laser_x + AnomalyManager.laser_dir * 300 * dt
+        if AnomalyManager.laser_x > 1060 then
+            AnomalyManager.laser_x = 1060
             AnomalyManager.laser_dir = -1
-        elseif AnomalyManager.laser_x < 80 then
-            AnomalyManager.laser_x = 80
+        elseif AnomalyManager.laser_x < 220 then
+            AnomalyManager.laser_x = 220
             AnomalyManager.laser_dir = 1
         end
 
@@ -167,13 +172,23 @@ function AnomalyManager.update(dt, player, bot)
             if player and not player.is_dying then
                 local pp = player.active_piece
                 if pp and not pp.locked then
-                    while pp:canMove(pp.x, pp.y - 1, pp.rotation) do pp.y = pp.y - 1 end
+                    local steps = 0
+                    while pp:canMove(pp.x, pp.y - 1, pp.rotation) do 
+                        pp.y = pp.y - 1 
+                        steps = steps + 1
+                        if steps > 40 then break end
+                    end
                 end
             end
             if bot and not bot.is_dying then
                 local bp = bot.active_piece
                 if bp and not bp.locked then
-                    while bp:canMove(bp.x, bp.y - 1, bp.rotation) do bp.y = bp.y - 1 end
+                    local steps = 0
+                    while bp:canMove(bp.x, bp.y - 1, bp.rotation) do 
+                        bp.y = bp.y - 1 
+                        steps = steps + 1
+                        if steps > 40 then break end
+                    end
                 end
             end
             AudioManager.playImmediateSFX("rotate", false)
@@ -226,25 +241,25 @@ function AnomalyManager.draw(player, bot)
         local count_sec = math.max(0, math.ceil(wt))
 
         love.graphics.setBlendMode("add")
-        local frame_w = 8 + pulse * 8
+        local frame_w = 10 + pulse * 8
         love.graphics.setColor(1.0, 0.10, 0.12, flash * (0.65 + urgency * 0.35))
-        love.graphics.rectangle("fill", 0, 0, 800, frame_w)
-        love.graphics.rectangle("fill", 0, 600 - frame_w, 800, frame_w)
-        love.graphics.rectangle("fill", 0, 0, frame_w, 600)
-        love.graphics.rectangle("fill", 800 - frame_w, 0, frame_w, 600)
+        love.graphics.rectangle("fill", 0, 0, 1280, frame_w)
+        love.graphics.rectangle("fill", 0, 720 - frame_w, 1280, frame_w)
+        love.graphics.rectangle("fill", 0, 0, frame_w, 720)
+        love.graphics.rectangle("fill", 1280 - frame_w, 0, frame_w, 720)
 
         love.graphics.setBlendMode("alpha")
-        local title_txt = "⚠  ANOMALY INCOMING  ⚠"
-        love.graphics.setFont(FontCache.get(18))
-        local tw = FontCache.get(18):getWidth(title_txt)
+        local title_txt = "!  ANOMALY INCOMING  !"
+        love.graphics.setFont(FontCache.get(22))
+        local tw = FontCache.get(22):getWidth(title_txt)
         love.graphics.setColor(1.0, 1.0, 1.0, flash * (0.8 + urgency * 0.2))
-        love.graphics.print(title_txt, 400 - tw / 2, 140)
+        love.graphics.print(title_txt, 640 - tw / 2, 170)
 
-        love.graphics.setFont(FontCache.get(52))
+        love.graphics.setFont(FontCache.get(64))
         local cstr = tostring(count_sec)
-        local cw = FontCache.get(52):getWidth(cstr)
+        local cw = FontCache.get(64):getWidth(cstr)
         love.graphics.setColor(1.0, 0.25, 0.2, 0.95)
-        love.graphics.print(cstr, 400 - cw / 2, 230)
+        love.graphics.print(cstr, 640 - cw / 2, 240)
     end
 
     if AnomalyManager.current_anomaly then
@@ -252,38 +267,36 @@ function AnomalyManager.draw(player, bot)
         local theme = ANOMALY_THEMES[id] or DEFAULT_THEME
         local c1, c2 = theme.c1, theme.c2
         local t = AnomalyManager.timer
-        local dur = AnomalyManager.duration
-        local progress = math.max(0, math.min(1, t / dur))
 
         love.graphics.setBlendMode("add")
-        local top_h = 30
+        local top_h = 36
         love.graphics.setColor(c1[1], c1[2], c1[3], 0.7 + pulse * 0.3)
-        love.graphics.rectangle("fill", 0, 0, 800, top_h)
-        love.graphics.setColor(c2[1], c2[2], c2[3], 0.9)
-        love.graphics.rectangle("fill", 0, top_h - 2, 800, 2)
+        love.graphics.rectangle("fill", 0, 0, 1280, top_h)
+        love.graphics.setColor(c2[1], c2[2], c2[3], 0.95)
+        love.graphics.rectangle("fill", 0, top_h - 2, 1280, 2)
 
         love.graphics.setBlendMode("alpha")
-        love.graphics.setFont(FontCache.get(11))
-        love.graphics.setColor(1, 1, 1, 0.9)
-        love.graphics.print("ANOMALY: " .. theme.label, 10, 8)
+        love.graphics.setFont(FontCache.get(12))
+        love.graphics.setColor(1, 1, 1, 0.95)
+        love.graphics.print("ANOMALY: " .. theme.label, 20, 10)
 
         local tstr2 = string.format("%.1fs", t)
-        local tw2 = FontCache.get(11):getWidth(tstr2)
-        love.graphics.print(tstr2, 800 - tw2 - 10, 8)
+        local tw2 = FontCache.get(12):getWidth(tstr2)
+        love.graphics.print(tstr2, 1280 - tw2 - 20, 10)
 
         local name = "ACTIVE ANOMALY"
         for _, a in ipairs(ANOMALY_POOL) do
             if a.id == id then name = a.name break end
         end
-        love.graphics.setFont(FontCache.get(12))
-        local nw = FontCache.get(12):getWidth(name)
-        love.graphics.print(name, 400 - nw / 2, 8)
+        love.graphics.setFont(FontCache.get(13))
+        local nw = FontCache.get(13):getWidth(name)
+        love.graphics.print(name, 640 - nw / 2, 10)
 
         if id == "blackout_strobe" then
-            love.graphics.setFont(FontCache.get(14))
+            love.graphics.setFont(FontCache.get(15))
             local vis_alpha = _G.BlackoutStrobeVisibility or 0
             love.graphics.setColor(0, 0.9, 1.0, 0.4 + vis_alpha * 0.6)
-            love.graphics.printf("⚡ 2-BAR STROBE ACTIVE ⚡", 0, 545, 800, "center")
+            love.graphics.printf("! 2-BAR STROBE ACTIVE !", 0, 660, 1280, "center")
         end
     end
 

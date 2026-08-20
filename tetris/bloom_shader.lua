@@ -1,4 +1,7 @@
 ---@diagnostic disable: undefined-global
+-- ============================================================================
+-- MUTRIS ENGINE: BLOOM SHADER & CANVAS RENDER PIPELINE (1280x720 WIDESCREEN)
+-- ============================================================================
 local BloomShader = {}
 
 local shader_code = [[
@@ -11,13 +14,12 @@ local shader_code = [[
     vec4 effect(vec4 color, Image texture, vec2 texture_coords, vec2 screen_coords) {
         vec2 uv = texture_coords;
 
-        // Onda expansiva de distorsión (Shockwave)
         if (u_shock_time > 0.0 && u_shock_time < 1.0) {
             number dist = distance(screen_coords, u_shock_center);
-            number wave_radius = u_shock_time * 650.0;
+            number wave_radius = u_shock_time * 850.0;
             number diff = dist - wave_radius;
-            if (abs(diff) < 40.0) {
-                number factor = (1.0 - abs(diff) / 40.0) * (1.0 - u_shock_time) * 0.025;
+            if (abs(diff) < 45.0) {
+                number factor = (1.0 - abs(diff) / 45.0) * (1.0 - u_shock_time) * 0.025;
                 vec2 dir = normalize(screen_coords - u_shock_center);
                 uv += dir * factor;
             }
@@ -26,12 +28,12 @@ local shader_code = [[
         vec4 base = Texel(texture, uv);
         
         if (u_energy > 0.4 || u_zone > 0.05) {
-            number shift = 0.0007 * (u_energy * 0.4 + u_zone * 0.6);
+            number shift = 0.0006 * (u_energy * 0.4 + u_zone * 0.6);
             base.r = Texel(texture, uv + vec2(shift, 0.0)).r;
             base.b = Texel(texture, uv - vec2(shift, 0.0)).b;
         }
 
-        number blur = 0.0010 + (u_energy * 0.0006) + (u_zone * 0.0008);
+        number blur = 0.0008 + (u_energy * 0.0005) + (u_zone * 0.0006);
         vec4 glow = vec4(0.0);
         glow += Texel(texture, uv + vec2(-blur, -blur)) * 0.12;
         glow += Texel(texture, uv + vec2( blur, -blur)) * 0.12;
@@ -59,9 +61,9 @@ local shader_code = [[
 function BloomShader.init()
     BloomShader.supported = false
     BloomShader.shock_timer = 0
-    BloomShader.shock_x = 400
-    BloomShader.shock_y = 300
-    local status_canvas, canvas = pcall(love.graphics.newCanvas, 800, 600)
+    BloomShader.shock_x = 640
+    BloomShader.shock_y = 360
+    local status_canvas, canvas = pcall(love.graphics.newCanvas, 1280, 720)
     local status_shader, shader = pcall(love.graphics.newShader, shader_code)
     
     if status_canvas and status_shader then
@@ -73,8 +75,8 @@ end
 
 function BloomShader.triggerShockwave(x, y)
     BloomShader.shock_timer = 0.01
-    BloomShader.shock_x = x or 400
-    BloomShader.shock_y = y or 300
+    BloomShader.shock_x = x or 640
+    BloomShader.shock_y = y or 360
 end
 
 function BloomShader.update(dt)
@@ -87,16 +89,20 @@ end
 function BloomShader.beginDraw()
     if BloomShader.supported and BloomShader.canvas then
         love.graphics.setCanvas(BloomShader.canvas)
-        love.graphics.clear(0, 0, 0, 0)
+        love.graphics.clear(0.01, 0.01, 0.03, 1.0)
     end
 end
 
-function BloomShader.endDraw(is_zone)
+function BloomShader.endDraw(is_zone, ox, oy, scale)
+    love.graphics.setCanvas()
+    love.graphics.push("all")
+    love.graphics.setColor(1, 1, 1, 1)
+
+    local target_ox = ox or 0
+    local target_oy = oy or 0
+    local target_sc = scale or 1.0
+
     if BloomShader.supported and BloomShader.canvas and BloomShader.shader then
-        love.graphics.setCanvas()
-        love.graphics.push("all")
-        love.graphics.setColor(1, 1, 1, 1)
-        
         local energy = _G.TrackEnergyPunch or 0
         local pulse = _G.AudioBeatPulse or 0
         local zone = is_zone and 1.0 or 0.0
@@ -108,10 +114,13 @@ function BloomShader.endDraw(is_zone)
         BloomShader.shader:send("u_shock_center", {BloomShader.shock_x, BloomShader.shock_y})
 
         love.graphics.setShader(BloomShader.shader)
-        love.graphics.draw(BloomShader.canvas, 0, 0)
+        love.graphics.draw(BloomShader.canvas, target_ox, target_oy, 0, target_sc, target_sc)
         love.graphics.setShader()
-        love.graphics.pop()
+    elseif BloomShader.canvas then
+        love.graphics.draw(BloomShader.canvas, target_ox, target_oy, 0, target_sc, target_sc)
     end
+
+    love.graphics.pop()
 end
 
 return BloomShader

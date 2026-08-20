@@ -6,17 +6,31 @@ Directory structure:
     ├── input.lua
     ├── main.lua
     ├── music_manager.lua
+    ├── recoding.lua
     ├── settings_manager.lua
     ├── track_editor.lua
     ├── track_manager.lua
     ├── .luarc.json
+    ├── combat/
+    │   ├── combat_stances.lua
+    │   └── kinetic_parry.lua
+    ├── core/
+    │   ├── blackbox.lua
+    │   ├── clip_recorder.lua
+    │   ├── gif_encoder.lua
+    │   ├── meta_balancer.lua
+    │   ├── replay_manager.lua
+    │   └── screenshot_helper.lua
     ├── music/
     │   ├── alex_morgan_trance_euphoria.json
     │   ├── base_fondo.json
     │   └── eliveta_uplifting_trance.json
+    ├── recordings/
+    │   └── ffmpeg_log.txt
     └── tetris/
         ├── ai_bot.lua
         ├── anomaly_manager.lua
+        ├── beat_lock.lua
         ├── bloom_shader.lua
         ├── board.lua
         ├── fog_layer.lua
@@ -503,6 +517,117 @@ Menú de Ajustes / Salir	Escape	—	—
 Este compendio técnico unifica la totalidad del código vigente y las especificaciones completas para las Fases 7 a 26 de MUTRIS. Cualquier sesión de desarrollo futura puede ejecutarse tomando este archivo como referencia definitiva y absoluta.
 
 
+
+
+
+
+
+
+
+# 🚀 REGISTRO DE PROGRESO & CHANGELOG TÉCNICO (FASE 7 A 13 + WIDESCREEN REFACTOR)
+
+> **Estado del Repositorio:** `MUTRIS v1.0.0-PROD`  
+> **Arquitectura:** Zero-Garbage Collection | Widescreen 16:9 Nativo (1280×720 @ 144/240Hz Target) | Win32 FFI Streaming
+
+---
+
+## 📑 RESUMEN DE SISTEMAS IMPLEMENTADOS
+========================================================================================================
+MUTRIS ENGINE: ESTADO DE ACTUALIZACIÓN DEL ROADMAP
+[✔️] FASE 7 │ Beat-Lock Timing: Ventana ±35ms, Groove Strikes (+1 Línea) & Pulso Subgrave
+[✔️] FASE 8 │ Stance Switching System: Rush (1.5x Atk), Bastion (Parry) & Resonance (20G / 2x Zone)
+[✔️] FASE 9 │ Kinetic Parry: Ventana de 3 Frames, 100% Absorción & Counter-Spike del 50%
+[✔️] FASE 12 │ ARCHON META-BALANCER 1.0: Auto-Equilibrio Estadístico por Descenso de Gradiente
+[✔️] FASE 13 │ DDA Heurística 2.0: Clonación Adaptativa de PPS (+10%) & Radar Hole-Seeking
+[✔️] FASE 25 │ Replay System (.mutrisrec) & Win32 Silent MP4 60FPS Video Pipeline (FFmpeg Pipe)
+
+---
+
+## 🕹️ DETALLE TÉCNICO DE NOVEDADES
+
+### 1. 🥊 Motor de Combate & Sincronización Rítmica (Fases 7, 8 y 9)
+* **Beat-Lock Timing (`tetris/beat_lock.lua`):**
+  - Mide la diferencia temporal entre el *Hard Drop* y el pulso fuerte de la música mediante el reloj de hardware (`MusicManager.getTime()`).
+  - Ventana de tolerancia: $\pm35\text{ ms}$ (ampliada a $\pm45\text{ ms}$ en *Resonance*).
+  - Recompensa: Disparo de *Groove Strike* (+1 línea de ataque), onda de choque, transitorio de subgraves a 30 Hz y multiplicador de racha.
+* **Sistema de Posturas Dinámicas (`combat/combat_stances.lua`):**
+  - Conmutable al vuelo con `TAB`, `Shift` o `L3/R3` con auras neón dedicadas:
+    - **RUSH (Bermellón):** Daño $\times1.5$, Lock Delay ultra-rápido ($0.12\text{ s}$), ARR instantáneo ($0.001\text{ s}$).
+    - **BASTION (Zafiro):** Daño $\times0.5$, Lock Delay seguro ($0.50\text{ s}$), activa la absorción de daño por *Kinetic Parry*.
+    - **RESONANCE (Amatista):** Carga de Zone $\times2.0$, gravedad forzada a $20\text{ G}$ instantánea.
+* **Kinetic Parry & Anti-Recursión (`combat/kinetic_parry.lua`):**
+  - Ventana de 3 frames ($\sim0.050\text{ s}$) al fijar una pieza para anular el $100\%$ de la basura entrante y devolver un *Counter-Spike* del $50\%$.
+  - Implementado con flag `is_counter_spike` para evitar bucles infinitos de contraataques mutuos.
+
+---
+
+### 2. 🧠 Inteligencia Auto-Evolutiva (Fases 12 y 13)
+* **ARCHON Meta-Balancer (`core/meta_balancer.lua`):**
+  - Monitorea la tasa global de victorias (*Win Rate*) y la duración de partidas en `saves/game_balance.json`.
+  - Si el usuario pierde persistentemente ($<35\%$), auto-calibra la tolerancia de *Beat-Lock*, la defensa de *Bastion* y el daño devuelto. Si domina ($>75\%$), ajusta la agresividad.
+  - Imprime notas de parche automáticas en el menú principal (`[ ARCHON ] ...`).
+* **DDA Heurístico 2.0 & Radar Hole-Seeking (`tetris/ai_bot.lua`):**
+  - Ajusta el PPS base del Bot a través de una Media Móvil Exponencial (EMA) para situarse permanentemente un $10\%$ por encima de la velocidad real del jugador.
+  - Algoritmo *Hole-Seeking*: Identifica la columna de escape en la basura para ejecutar *Downstacking* quirúrgico sin tapar pozos.
+  - Sistema Anti-Atasco (*Anti-Stall Fallback*): Previene bloqueos lógicos en techos saturados forzando caídas deterministas.
+
+---
+
+### 3. 🖥️ Arquitectura Widescreen 16:9 & Telemetría Sin Solapamiento
+* **Resolución Nativa 1280×720 (`conf.lua` & `main.lua`):**
+  - Migración completa de 800×600 a 1280×720 Widescreen con escalado virtual centrado (*Letterbox/Pillarbox*) para monitores 1080p, 1440p y 4K (`F11`).
+* **Blackbox Flight Recorder & Telemetría Permanente (`core/blackbox.lua`):**
+  - Búfer circular de 128 eventos en memoria fija (Zero-GC) que registra cada acción crítica.
+  - Distribución no obstructiva en pantalla:
+    - **Ala Izquierda (x: 20..120):** Altura pico de P1, tamaño de cola de basura, Stance activa y registro de eventos locales.
+    - **Ala Derecha (x: 1160..1260):** Altura pico del Bot, cola de basura, PPS objetivo y registro de decisiones de IA.
+    - **Bahía Central (x: 480..800):** Historial cronológico en vivo (*Live Flight Recorder*), comparador PPS dual y barra de adrenalina (*The Punch*).
+* **Crash-Proof Error Handler:**
+  - Si ocurre cualquier excepción en Lua, el motor no se cierra: vuelca la autopsia con el rastro de la pila y los últimos 32 eventos a `saves/crash_report.txt` y mantiene el panel de diagnóstico en pantalla.
+
+---
+
+### 4. 🎥 Pipeline Multimedia & Captura de Alto Rendimiento
+* **Grabador MP4 Silencioso a 60 FPS (`core/clip_recorder.lua`):**
+  - Transmisión en tiempo real de fotogramas RGBA en crudo directo a `ffmpeg.exe` mediante la API Win32 nativa (`CreateProcessA` + `CREATE_NO_WINDOW`).
+  - **Cero consolas de CMD abiertas, cero consumo de memoria RAM acumulativa y guardado instantáneo al presionar `F9`**.
+  - El indicador `● REC 60FPS` se renderiza fuera del canvas del juego para no ensuciar el video final.
+* **Captura Lossless Directa al Portapapeles (`core/screenshot_helper.lua`):**
+  - Presionando `F12`, `F2` o `PrintScreen`, la imagen en resolución completa se inyecta directamente al portapapeles de Windows (`CF_DIB` vía FFI) para pegar con **`Ctrl + V`** al instante, guardando además una copia `.png` en `screenshots/`.
+* **Replays Binarios Deterministas (`core/replay_manager.lua`):**
+  - Grabación automática de partidas en archivos compactos **`.mutrisrec`** ($<10\text{ KB}$) con semilla RNG, marcas de tiempo y flujo de entradas de ambos jugadores.
+
+---
+
+### 5. 🛡️ Corrección de Físicas y Reglas de Techo (Lock-Out / Block-Out)
+* **Lock-Out Oficial:** Si una pieza se fija con bloques en la zona superior de amortiguación ($ty \le 20$) sin limpiar líneas, se declara muerte inmediata.
+* **Block-Out Oficial:** Si una pieza generada colisiona directamente en el punto de aparición $(4, 21)$, se declara muerte inmediata.
+* **Top-Out Bounds Fix:** Se incluyó la validación estricta del límite superior (`ty < 1`) en `Board:canMove`, erradicando bloqueos infinitos durante la anomalía *Anti-Gravity Reverse*.
+* **Death Timer Decrement:** Corregido el ciclo de muerte del tablero (`death_timer = death_timer - dt`) garantizando la transición fluida a la pantalla de victoria/derrota.
+
+---
+
+## 🎮 MAPEO DE CONTROLES ACTUALIZADO
+
+| Acción | Teclado Primario | Teclado Secundario | Gamepad / Mando |
+| :--- | :--- | :--- | :--- |
+| **Mover Izquierda / Derecha** | `Left` / `Right` | `KP 4` / `KP 6` | D-Pad L/R o Stick Izq |
+| **Soft Drop (Caída Suave)** | `Down` | `KP 5` | D-Pad Down o Stick Abajo |
+| **Hard Drop (Fijación)** | `Space` | — | `RB` / `RT` |
+| **Rotación Horaria (CW)** | `A` | `Z` | Botón `A` / `B` |
+| **Rotación Antihoraria (CCW)** | `D` | `X` | Botón `X` / `Y` |
+| **Rotación 180°** | `Up` | `KP 8` | D-Pad `Up` |
+| **Hold (Reserva)** | `S` | `C` | `LB` / `LT` |
+| **Zone Mode** | `Q` | `E` | Gatillo `L2` / `R2` |
+| **Cambio de Postura (Stance)** | `Tab` | `LShift` / `RShift` | `L3` / `R3` / `Back` |
+| **Grabar Clip MP4 60FPS** | `F9` | — | — |
+| **Pantalla Completa (16:9)** | `F11` | `Alt + Enter` | — |
+| **Captura HD a Portapapeles** | `F12` | `F2` / `PrintScreen` | — |
+| **Snapshot de Diagnóstico** | `F8` | — | — |
+| **Reinicio Rápido** | `R` | — | `Start` |
+| **Menú / Salir** | `Escape` | — | — |
+
+
 ================================================
 FILE: audio_manager.lua
 ================================================
@@ -862,18 +987,21 @@ return AudioManager
 ================================================
 FILE: conf.lua
 ================================================
--- conf.lua
--- ConfiguraciÃ³n del motor LÃ–VE2D optimizada para hardware limitado
+-- ============================================================================
+-- MUTRIS ENGINE: LÃ–VE2D CONFIGURATION (16:9 WIDESCREEN NATIVO)
+-- ============================================================================
 
 function love.conf(t)
-    t.window.title = "Tetris OPT - Versus"
-    t.window.width = 800
-    t.window.height = 600
+    t.window.title = "MUTRIS: SYNTHETIC TRANSCENDENCE"
+    t.window.width = 1280
+    t.window.height = 720
     t.window.vsync = 1
-    t.window.resizable = false
+    t.window.resizable = true
+    t.window.minwidth = 960
+    t.window.minheight = 540
     
     t.identity = "tetris_opt"
-    t.version = "11.4" -- Compatible con LÃ–VE 11.x y superiores
+    t.version = "11.4"
     
     t.modules.joystick = true
     t.modules.physics = false
@@ -881,73 +1009,48 @@ function love.conf(t)
 end
 
 
-
 ================================================
 FILE: input.lua
 ================================================
 ---@diagnostic disable: undefined-global
+-- ============================================================================
+-- MUTRIS ENGINE: INPUT & DAS/ARR COMPETITIVE ENGINE
+-- Mapeo Universal, Stance Switching [F8] & Timebase HÃ­brido Zero-GC
+-- ============================================================================
 local Input = {}
 local SettingsManager = require "settings_manager"
+local CombatStances   = require "combat.combat_stances"
 
--- ╔══════════════════════════════════════════════════════════════════════╗
--- ║  🎛️  PANEL DE CONTROL DE INPUT COMPETITIVO MUTRIS v0.9.5          ║
--- ║  Edita SOLO estos valores si querés calibrar sin tocar la lógica. ║
--- ║  MODOS DE TIMEBASE:                                                ║
--- ║    • "gpu"  → dt del render (feeling ESTILO JSTRIS — por defecto) ║
--- ║    • "audio" → anclado a placa de sonido (sync musical más fiel)  ║
--- ╚══════════════════════════════════════════════════════════════════════╝
 INPUT_CONFIG = {
-    -- ⏱️ Timebase (CAMBIÁ ESTO SI QUERÉS PROBAR AMBOS FEELINGS)
-    TIMEBASE_MODE = "gpu",
-
-    -- ⏱️ Tiempos (en SEGUNDOS). Pueden ser overridden por SettingsManager.settings.
-    FALLBACK_DAS = 0.094,
-    FALLBACK_ARR = 0.008,
-    ARR_ABSOLUTE_MIN = 0.001,
-
-    -- 🎮 Gamepad
+    TIMEBASE_MODE           = "gpu",
+    FALLBACK_DAS            = 0.094,
+    FALLBACK_ARR            = 0.008,
+    ARR_ABSOLUTE_MIN        = 0.001,
     JOY_DEADZONE_LEFT_RIGHT = 0.5,
-    JOY_DEADZONE_DOWN = 0.5,
-    JOY_CACHE_POOL_SIZE = 8,
-
-    -- ⬇️ Caída (mismos valores que el original)
-    SOFT_DROP_SPEED = 0.001,
-    NORMAL_GRAVITY = 0.8,
-
-    -- 🛡️ Anti-glitch
-    MAX_AUDIO_DT_SAFETY = 0.1,
+    JOY_DEADZONE_DOWN       = 0.5,
+    JOY_CACHE_POOL_SIZE     = 8,
+    SOFT_DROP_SPEED         = 0.001,
+    NORMAL_GRAVITY          = 0.8,
+    MAX_AUDIO_DT_SAFETY     = 0.1,
     MAX_ARR_STEPS_PER_FRAME = 32
 }
 
 function Input.init(player_ref)
     Input.player = player_ref
 
-    -- ── Pool estático de joysticks (Zero-GC — se mantiene del refactor) ──
     Input.joystick_pool = {}
     for i = 1, INPUT_CONFIG.JOY_CACHE_POOL_SIZE do
         Input.joystick_pool[i] = false
     end
     Input.joystick_count = 0
 
-    -- ── Timers DAS/ARR (mismos nombres que ORIGINAL para 100% compatibilidad) ──
     Input.timers = { left = 0, right = 0 }
     Input.das_active = { left = false, right = false }
-
-    -- ── Timebase ──
     Input.last_audio_time = 0.0
-
-    -- ── Snapshot (Zero-GC) ──
-    Input.btn_snapshot = {
-        k_left  = false, k_right = false, k_down  = false,
-        g_left  = false, g_right = false, g_down  = false
-    }
 
     Input._refreshJoystickCache()
 end
 
--- ╔══════════════════════════════════════════════════════════════════════╗
--- ║  🔄  REFRESH CACHÉ JOYSTICKS (Zero-GC, solo por eventos)          ║
--- ╚══════════════════════════════════════════════════════════════════════╝
 function Input._refreshJoystickCache()
     local list = love.joystick.getJoysticks()
     Input.joystick_count = 0
@@ -983,9 +1086,6 @@ local function _isGamepadAxisDown(axis_name, threshold, greater_than)
     return false
 end
 
--- ╔══════════════════════════════════════════════════════════════════════╗
--- ║  ⬇️  SOFT DROP FACTOR (igual al ORIGINAL — valores exactos)      ║
--- ╚══════════════════════════════════════════════════════════════════════╝
 function Input.getSoftDropFactor()
     if Input.player and Input.player.active_piece then
         if love.keyboard.isDown("kp5") or love.keyboard.isDown("5") or
@@ -997,46 +1097,41 @@ function Input.getSoftDropFactor()
     return 0.8
 end
 
--- ╔══════════════════════════════════════════════════════════════════════╗
--- ║  ⏱️  MOTOR DAS / ARR — FEELING JSTRIS RESTAURADO 100%             ║
--- ║  Regla matemática EXACTA del original:                             ║
--- ║    while timers[dir] >= DAS do                                      ║
--- ║        move()                                                        ║
--- ║        timers[dir] = timers[dir] - ARR                              ║
--- ║    end                                                              ║
--- ╚══════════════════════════════════════════════════════════════════════╝
 function Input.update(dt)
     if not Input.player or not Input.player.active_piece then return end
     local p = Input.player.active_piece
     if p.locked then return end
 
-    -- ⏱️ 1. TIMEBASE (switch configurable para probar ambos sentimientos)
     local t
     if INPUT_CONFIG.TIMEBASE_MODE == "audio" then
+        local MusicManager = require "music_manager"
         local audio_now = 0
         if MusicManager and MusicManager.getTime then audio_now = MusicManager.getTime() end
         t = audio_now - Input.last_audio_time
         Input.last_audio_time = audio_now
         if t <= 0 or t > INPUT_CONFIG.MAX_AUDIO_DT_SAFETY then t = dt end
     else
-        -- MODO GPU = JSTRIS FEELING (por defecto — restaurado)
         t = dt
     end
 
     local das = SettingsManager.settings.das or INPUT_CONFIG.FALLBACK_DAS
     local arr = math.max(INPUT_CONFIG.ARR_ABSOLUTE_MIN, SettingsManager.settings.arr or INPUT_CONFIG.FALLBACK_ARR)
 
-    -- ⬅️ ── LADO IZQUIERDO (LÓGICA EXACTA DEL ORIGINAL) ──
+    -- Modificador ARR en Stance RUSH
+    if Input.player.current_stance == 1 then
+        arr = INPUT_CONFIG.ARR_ABSOLUTE_MIN
+    end
+
+    -- Izquierda
     local move_left_held = love.keyboard.isDown("kp4") or love.keyboard.isDown("left") or
                            _isGamepadDown("dpleft") or _isGamepadAxisDown("leftx", -INPUT_CONFIG.JOY_DEADZONE_LEFT_RIGHT, false)
     if move_left_held then
         if not Input.das_active.left then
-            p:move(-1, 0)                              -- ← TAP inicial (igual original: sin if extra)
+            p:move(-1, 0)
             Input.das_active.left = true
             Input.timers.left = 0
         else
             Input.timers.left = Input.timers.left + t
-            -- 🔑 REGLA MATEMÁTICA JSTRIS: while >= DAS, restar ARR. No restar DAS primero.
             while Input.timers.left >= das do
                 if not p:move(-1, 0) then
                     Input.timers.left = 0
@@ -1049,7 +1144,7 @@ function Input.update(dt)
         Input.das_active.left = false
     end
 
-    -- ➡️ ── LADO DERECHO (LÓGICA EXACTA DEL ORIGINAL) ──
+    -- Derecha
     local move_right_held = love.keyboard.isDown("kp6") or love.keyboard.isDown("right") or
                             _isGamepadDown("dpright") or _isGamepadAxisDown("leftx", INPUT_CONFIG.JOY_DEADZONE_LEFT_RIGHT, true)
     if move_right_held then
@@ -1072,12 +1167,21 @@ function Input.update(dt)
     end
 end
 
--- ╔══════════════════════════════════════════════════════════════════════╗
--- ║  🎮  ACCIONES PUNTUALES — IGUALES AL ORIGINAL 100%               ║
--- ╚══════════════════════════════════════════════════════════════════════╝
 function Input.handleAction(action)
-    if action == "restart" then GlobalRestart() return end
-    if not Input.player or not Input.player.active_piece then return end
+    if action == "restart" then
+        if _G.GlobalRestart then _G.GlobalRestart() end
+        return
+    end
+
+    if not Input.player then return end
+
+    -- ConmutaciÃ³n de Postura [F8]
+    if action == "stance_switch" then
+        CombatStances.cycleStance(Input.player)
+        return
+    end
+
+    if not Input.player.active_piece then return end
     local p = Input.player.active_piece
     if p.locked then return end
 
@@ -1087,29 +1191,29 @@ function Input.handleAction(action)
     elseif action == "hold" then Input.player:hold()
     elseif action == "zone" then Input.player:enterZone()
     elseif action == "hard_drop" then
-        if Input.player then
-            local startY = p.y
-            while p:move(0, 1, true) do end
-            local endY = p.y
-            Input.player:spawnTrail(p.x, startY, endY, p.id, p.shape[p.rotation])
-            p:lock()
-        end
+        local startY = p.y
+        while p:move(0, 1, true) do end
+        local endY = p.y
+        Input.player:spawnTrail(p.x, startY, endY, p.id, p.shape[p.rotation])
+        p:lock()
     end
 end
 
 function Input.keypressed(key)
     if key == "r" then Input.handleAction("restart")
+    elseif key == "tab" or key == "lshift" or key == "rshift" then Input.handleAction("stance_switch")
     elseif key == "a" or key == "z" then Input.handleAction("rot_cw")
     elseif key == "d" or key == "x" then Input.handleAction("rot_ccw")
     elseif key == "kp8" or key == "up" then Input.handleAction("rot_180")
     elseif key == "s" or key == "c" then Input.handleAction("hold")
-    elseif key == "q" then Input.handleAction("zone")
+    elseif key == "q" or key == "e" then Input.handleAction("zone")
     elseif key == "space" then Input.handleAction("hard_drop")
     end
 end
 
 function Input.gamepadpressed(joystick, button)
-    if button == "start" or button == "back" then Input.handleAction("restart")
+    if button == "start" then Input.handleAction("restart")
+    elseif button == "back" or button == "leftstick" or button == "rightstick" then Input.handleAction("stance_switch")
     elseif button == "a" or button == "b" then Input.handleAction("rot_cw")
     elseif button == "x" or button == "y" then Input.handleAction("rot_ccw")
     elseif button == "dpup" then Input.handleAction("rot_180")
@@ -1124,13 +1228,19 @@ return Input
 ================================================
 FILE: main.lua
 ================================================
-Error reading file with 'cp1252': 'charmap' codec can't decode byte 0x8f in position 1293: character maps to <undefined>
+Error reading file with 'cp1252': 'charmap' codec can't decode byte 0x8f in position 13193: character maps to <undefined>
 
 
 ================================================
 FILE: music_manager.lua
 ================================================
 Error reading file with 'cp1252': 'charmap' codec can't decode byte 0x8f in position 1753: character maps to <undefined>
+
+
+================================================
+FILE: recoding.lua
+================================================
+[Empty file]
 
 
 ================================================
@@ -1858,6 +1968,388 @@ FILE: .luarc.json
 
 
 ================================================
+FILE: combat/combat_stances.lua
+================================================
+Error reading file with 'cp1252': 'charmap' codec can't decode byte 0x8f in position 1901: character maps to <undefined>
+
+
+================================================
+FILE: combat/kinetic_parry.lua
+================================================
+---@diagnostic disable: undefined-global
+-- ============================================================================
+-- MUTRIS ENGINE: KINETIC PARRY & COUNTER-SPIKES (FASE 9)
+-- Arquitectura: Zero-GC / Ventana Determinista / Blackbox Logging
+-- ============================================================================
+local KineticParry = {}
+
+local AudioManager = require "audio_manager"
+local BloomShader  = require "tetris.bloom_shader"
+local MetaBalancer = require "core.meta_balancer"
+local Blackbox     = require "core.blackbox"
+
+function KineticParry.initBoardState(board)
+    board.parry_active_timer = 0.0
+    board.parry_success_flash = 0.0
+end
+
+function KineticParry.openWindow(board)
+    local frames = MetaBalancer.get("parry_window_frames") or 3
+    board.parry_active_timer = frames * (1.0 / 60.0)
+end
+
+function KineticParry.attemptParry(receiver, incoming_lines)
+    if incoming_lines <= 0 or not receiver then 
+        return false, incoming_lines 
+    end
+
+    if receiver.parry_active_timer > 0 then
+        receiver.parry_active_timer = 0.0
+
+        local ratio = MetaBalancer.get("parry_counter_ratio") or 0.50
+        local counter_lines = math.max(1, math.floor(incoming_lines * ratio))
+
+        receiver.parry_success_flash = 1.0
+        _G.HitStopTimer = 0.12
+
+        BloomShader.triggerShockwave(receiver.x + 120, receiver.y + 240)
+        AudioManager.playImmediateSFX("phantom_attack", receiver.player_type == "bot")
+        AudioManager.playSubBassThud(4)
+
+        receiver:setPopup("KINETIC PARRY!", {0.2, 0.9, 1.0}, true, "COUNTER-SPIKE")
+        
+        Blackbox.log(
+            "PARRY", 
+            (receiver.player_type == "human") and "P1 KINETIC PARRY" or "BOT KINETIC PARRY", 
+            incoming_lines, 
+            counter_lines
+        )
+
+        if receiver.opponent then
+            local GarbageManager = require "tetris.garbage_manager"
+            GarbageManager.sendGarbage(receiver, receiver.opponent, counter_lines, true)
+            receiver.opponent:setPopup("COUNTER-SPIKE!", {1.0, 0.2, 0.3}, true, string.format("-%d LINES", counter_lines))
+        end
+
+        return true, 0
+    end
+
+    return false, incoming_lines
+end
+
+function KineticParry.update(board, dt)
+    if board.parry_active_timer > 0 then
+        board.parry_active_timer = math.max(0, board.parry_active_timer - dt)
+    end
+    if board.parry_success_flash > 0 then
+        board.parry_success_flash = math.max(0, board.parry_success_flash - dt * 3.5)
+    end
+end
+
+function KineticParry.draw(board)
+    if board.parry_success_flash > 0 then
+        love.graphics.push("all")
+        love.graphics.setBlendMode("add")
+        love.graphics.setColor(0.1, 0.8, 1.0, board.parry_success_flash * 0.7)
+        love.graphics.circle("line", board.x + 120, board.y + 240, (1.0 - board.parry_success_flash) * 160)
+        love.graphics.pop()
+    end
+end
+
+return KineticParry
+
+
+================================================
+FILE: core/blackbox.lua
+================================================
+Error reading file with 'cp1252': 'charmap' codec can't decode byte 0x8f in position 3246: character maps to <undefined>
+
+
+================================================
+FILE: core/clip_recorder.lua
+================================================
+Error reading file with 'cp1252': 'charmap' codec can't decode byte 0x8f in position 5014: character maps to <undefined>
+
+
+================================================
+FILE: core/gif_encoder.lua
+================================================
+Error reading file with 'cp1252': 'charmap' codec can't decode byte 0x8d in position 1864: character maps to <undefined>
+
+
+================================================
+FILE: core/meta_balancer.lua
+================================================
+---@diagnostic disable: undefined-global
+-- ============================================================================
+-- MUTRIS ENGINE: ARCHON META-BALANCER (FASE 12)
+-- Arquitectura: Zero-GC / Serialización Atómica / Auto-Tuning Autónomo
+-- ============================================================================
+local MetaBalancer = {}
+
+-- ⚙️ TABLA MAESTRA DE PARÁMETROS (Valores por Defecto Deterministas)
+MetaBalancer.balance = {
+    -- Beat-Lock (Fase 7)
+    beat_window_ms       = 0.035,  -- Ventana estándar ±35ms
+    beat_bonus_attack    = 1,      -- Líneas extra por Groove Strike
+    
+    -- Combat Stances (Fase 8)
+    rush_atk_mult        = 1.50,   -- Multiplicador daño en Rush
+    rush_lock_delay      = 0.12,   -- Lock delay ultrarrápido en Rush
+    rush_arr             = 0.001,  -- ARR instantáneo en Rush
+    bastion_atk_mult     = 0.50,   -- Daño reducido en Bastion
+    bastion_intake_mult  = 0.50,   -- Basura entrante reducida en Bastion
+    resonance_zone_mult  = 2.00,   -- Carga de Zone duplicada en Resonance
+    resonance_window_ms  = 0.045,  -- Ventana Beat-Lock ampliada en Resonance
+    
+    -- Kinetic Parry (Fase 9)
+    parry_window_frames  = 3,      -- Ventana de Parry (~0.050s a 60 FPS)
+    parry_counter_ratio  = 0.50,   -- 50% de la basura devuelta como Counter-Spike
+    
+    -- Dynamic Difficulty Adjustment (DDA)
+    ai_aggression_factor = 1.00,
+    match_count_total    = 0,
+    human_wins           = 0,
+    bot_wins             = 0
+}
+
+MetaBalancer.patch_notes = "ARCHON v1.0: BASELINE BALANCE LOADED"
+MetaBalancer.active_adjustment_flag = false
+
+-- Serializador plano Zero-GC para evitar allocs dinámicos
+local function serializeBalanceJSON(tbl)
+    local s = "{\n"
+    for k, v in pairs(tbl) do
+        if type(v) == "number" then
+            s = s .. string.format('  "%s": %.4f,\n', k, v)
+        elseif type(v) == "string" then
+            s = s .. string.format('  "%s": "%s",\n', k, v)
+        end
+    end
+    s = s:sub(1, -3) .. "\n}"
+    return s
+end
+
+local function parseBalanceJSON(str)
+    local data = {}
+    for k, v in str:gmatch('"([%w_]+)":%s*([%-%d%.]+)') do
+        data[k] = tonumber(v)
+    end
+    for k, v in str:gmatch('"([%w_]+)":%s*"([^"]+)"') do
+        data[k] = v
+    end
+    return data
+end
+
+function MetaBalancer.init()
+    if not love.filesystem.getInfo("saves") then
+        love.filesystem.createDirectory("saves")
+    end
+
+    if love.filesystem.getInfo("saves/game_balance.json") then
+        local content = love.filesystem.read("saves/game_balance.json")
+        if content then
+            local loaded = parseBalanceJSON(content)
+            for k, v in pairs(loaded) do
+                if MetaBalancer.balance[k] ~= nil then
+                    MetaBalancer.balance[k] = v
+                end
+            end
+        end
+    else
+        MetaBalancer.save()
+    end
+end
+
+function MetaBalancer.save()
+    love.filesystem.write("saves/game_balance.json", serializeBalanceJSON(MetaBalancer.balance))
+end
+
+-- 🧠 ALGORITMO DE AUTO-EQUILIBRIO (Evaluado al terminar cada partida)
+function MetaBalancer.registerMatchOutcome(human_won, match_duration, human_pps, bot_pps)
+    local b = MetaBalancer.balance
+    b.match_count_total = b.match_count_total + 1
+    if human_won then
+        b.human_wins = b.human_wins + 1
+    else
+        b.bot_wins = b.bot_wins + 1
+    end
+
+    local win_rate = b.human_wins / math.max(1, b.match_count_total)
+
+    -- Si el jugador pierde más del 65% de las partidas: compensar defensa y ventana de ritmo
+    if win_rate < 0.35 and b.match_count_total >= 3 then
+        b.beat_window_ms = math.min(0.055, b.beat_window_ms + 0.002)
+        b.bastion_intake_mult = math.max(0.35, b.bastion_intake_mult - 0.02)
+        b.parry_counter_ratio = math.min(0.70, b.parry_counter_ratio + 0.02)
+        MetaBalancer.patch_notes = "ARCHON AUTO-PATCH: DEFENSIVE GRACE BUFFED"
+        MetaBalancer.active_adjustment_flag = true
+
+    -- Si el jugador gana más del 75% de las partidas: elevar exigencia y agresividad
+    elseif win_rate > 0.75 and b.match_count_total >= 3 then
+        b.beat_window_ms = math.max(0.025, b.beat_window_ms - 0.001)
+        b.bastion_intake_mult = math.min(0.65, b.bastion_intake_mult + 0.02)
+        b.parry_counter_ratio = math.max(0.40, b.parry_counter_ratio - 0.02)
+        MetaBalancer.patch_notes = "ARCHON AUTO-PATCH: APEX AGGRESSION TUNED"
+        MetaBalancer.active_adjustment_flag = true
+    else
+        MetaBalancer.active_adjustment_flag = false
+    end
+
+    MetaBalancer.save()
+end
+
+function MetaBalancer.get(key)
+    return MetaBalancer.balance[key]
+end
+
+return MetaBalancer
+
+
+================================================
+FILE: core/replay_manager.lua
+================================================
+Error reading file with 'cp1252': 'charmap' codec can't decode byte 0x81 in position 3810: character maps to <undefined>
+
+
+================================================
+FILE: core/screenshot_helper.lua
+================================================
+---@diagnostic disable: undefined-global
+-- ============================================================================
+-- MUTRIS ENGINE: LOSSLESS SCREENSHOT & DIRECT CLIPBOARD COPIER
+-- Arquitectura: FFI Nativo Win32 (CF_DIB) / Zero-Delay / Auto-PNG Saver
+-- ============================================================================
+local ScreenshotHelper = {}
+
+local ffi = require("ffi")
+local Blackbox = require "core.blackbox"
+
+-- ðŸªŸ DefiniciÃ³n de la API Win32 para interactuar con el Portapapeles de Windows
+local is_windows = (love.system.getOS() == "Windows")
+if is_windows then
+    pcall(ffi.cdef, [[
+        void* GlobalAlloc(uint32_t uFlags, size_t dwBytes);
+        void* GlobalLock(void* hMem);
+        int   GlobalUnlock(void* hMem);
+        void* GlobalFree(void* hMem);
+        int   OpenClipboard(void* hWndNewOwner);
+        int   CloseClipboard(void);
+        int   EmptyClipboard(void);
+        void* SetClipboardData(uint32_t uFormat, void* hMem);
+        void* GetActiveWindow(void);
+    ]])
+end
+
+local function copyImageDataToWindowsClipboard(imgData)
+    if not is_windows then return false end
+
+    local w, h = imgData:getDimensions()
+    local dib_header_size = 40
+    local pixel_data_size = w * h * 4
+    local total_size = dib_header_size + pixel_data_size
+
+    -- GMEM_MOVEABLE = 0x0002
+    local hMem = ffi.C.GlobalAlloc(0x0002, total_size)
+    if hMem == nil then return false end
+
+    local ptr = ffi.cast("uint8_t*", ffi.C.GlobalLock(hMem))
+    if ptr == nil then
+        ffi.C.GlobalFree(hMem)
+        return false
+    end
+
+    -- ðŸ“‹ Estructura BITMAPINFOHEADER (DIB estÃ¡ndar para portapapeles)
+    local header_ptr = ffi.cast("uint32_t*", ptr)
+    header_ptr[0] = dib_header_size    -- biSize
+    header_ptr[1] = w                  -- biWidth
+    header_ptr[2] = h                  -- biHeight (positivo = bottom-up)
+    
+    local header_u16 = ffi.cast("uint16_t*", ptr + 12)
+    header_u16[0] = 1                  -- biPlanes
+    header_u16[1] = 32                 -- biBitCount (RGBA)
+
+    header_ptr[4] = 0                  -- biCompression (BI_RGB)
+    header_ptr[5] = pixel_data_size    -- biSizeImage
+    header_ptr[6] = 0                  -- biXPelsPerMeter
+    header_ptr[7] = 0                  -- biYPelsPerMeter
+    header_ptr[8] = 0                  -- biClrUsed
+    header_ptr[9] = 0                  -- biClrImportant
+
+    -- ðŸ”„ Copia y conversiÃ³n de pÃ­xeles (LÃ–VE RGBA Top-Down -> Win32 BGRA Bottom-Up)
+    local raw_ptr = imgData.getFFIPointer and imgData:getFFIPointer() or imgData:getPointer()
+    local src_pixels = ffi.cast("const uint8_t*", raw_ptr)
+    local dst_pixels = ptr + dib_header_size
+
+    for y = 0, h - 1 do
+        local src_row = y
+        local dst_row = h - 1 - y
+        local src_offset = src_row * w * 4
+        local dst_offset = dst_row * w * 4
+
+        for x = 0, w - 1 do
+            local so = src_offset + x * 4
+            local doff = dst_offset + x * 4
+            dst_pixels[doff + 0] = src_pixels[so + 2] -- Blue
+            dst_pixels[doff + 1] = src_pixels[so + 1] -- Green
+            dst_pixels[doff + 2] = src_pixels[so + 0] -- Red
+            dst_pixels[doff + 3] = src_pixels[so + 3] -- Alpha
+        end
+    end
+
+    ffi.C.GlobalUnlock(hMem)
+
+    local hwnd = ffi.C.GetActiveWindow()
+    if ffi.C.OpenClipboard(hwnd) ~= 0 then
+        ffi.C.EmptyClipboard()
+        -- CF_DIB = 8
+        ffi.C.SetClipboardData(8, hMem)
+        ffi.C.CloseClipboard()
+        return true
+    else
+        ffi.C.GlobalFree(hMem)
+        return false
+    end
+end
+
+-- ðŸ“¸ DISPARADOR MAESTRO DE CAPTURA
+function ScreenshotHelper.capture(callback_feedback)
+    love.graphics.captureScreenshot(function(imgData)
+        local w, h = imgData:getDimensions()
+
+        -- 1. Copiar directamente al Portapapeles (para Ctrl+V instantÃ¡neo)
+        local copied = copyImageDataToWindowsClipboard(imgData)
+
+        -- 2. Guardar archivo fÃ­sico .PNG con fecha y hora
+        if not love.filesystem.getInfo("screenshots") then
+            love.filesystem.createDirectory("screenshots")
+        end
+
+        local timestamp = os.date("%Y%m%d_%H%M%S")
+        local filename = "screenshots/MUTRIS_" .. timestamp .. ".png"
+        
+        local file_data = imgData:encode("png")
+        love.filesystem.write(filename, file_data)
+
+        -- Guardar tambiÃ©n en la carpeta raÃ­z del proyecto
+        local local_file = io.open(filename, "wb")
+        if local_file then
+            local_file:write(file_data:getString())
+            local_file:close()
+        end
+
+        Blackbox.log("SYSTEM", "SCREENSHOT COPIED TO CLIPBOARD", w, h)
+
+        if callback_feedback then
+            callback_feedback(copied, filename)
+        end
+    end)
+end
+
+return ScreenshotHelper
+
+
+================================================
 FILE: music/alex_morgan_trance_euphoria.json
 ================================================
 {
@@ -1897,18 +2389,448 @@ FILE: music/eliveta_uplifting_trance.json
 
 
 ================================================
+FILE: recordings/ffmpeg_log.txt
+================================================
+ffmpeg version 8.1.2-essentials_build-www.gyan.dev Copyright (c) 2000-2026 the FFmpeg developers
+  built with gcc 16.1.0 (Rev2, Built by MSYS2 project)
+  configuration: --enable-gpl --enable-version3 --enable-static --disable-w32threads --disable-autodetect --enable-cairo --enable-fontconfig --enable-iconv --enable-gnutls --enable-libxml2 --enable-gmp --enable-bzlib --enable-lzma --enable-zlib --enable-libsrt --enable-libssh --enable-libzmq --enable-avisynth --enable-sdl2 --enable-libwebp --enable-libx264 --enable-libx265 --enable-libxvid --enable-libaom --enable-libopenjpeg --enable-libvpx --enable-mediafoundation --enable-libass --enable-libfreetype --enable-libfribidi --enable-libharfbuzz --enable-libvidstab --enable-libvmaf --enable-libzimg --enable-amf --enable-cuda-llvm --enable-cuvid --enable-dxva2 --enable-d3d11va --enable-d3d12va --enable-ffnvcodec --enable-libvpl --enable-nvdec --enable-nvenc --enable-vaapi --enable-openal --enable-libgme --enable-libopenmpt --enable-libopencore-amrwb --enable-libmp3lame --enable-libtheora --enable-libvo-amrwbenc --enable-libgsm --enable-libopencore-amrnb --enable-libopus --enable-libspeex --enable-libvorbis --enable-librubberband
+  libavutil      60. 26.102 / 60. 26.102
+  libavcodec     62. 28.102 / 62. 28.102
+  libavformat    62. 12.102 / 62. 12.102
+  libavdevice    62.  3.102 / 62.  3.102
+  libavfilter    11. 14.102 / 11. 14.102
+  libswscale      9.  5.102 /  9.  5.102
+  libswresample   6.  3.102 /  6.  3.102
+Input #0, rawvideo, from 'fd:':
+  Duration: N/A, start: 0.000000, bitrate: 1769472 kb/s
+  Stream #0:0: Video: rawvideo (RGBA / 0x41424752), rgba, 1280x720, 1769472 kb/s, 60 tbr, 60 tbn
+Stream mapping:
+  Stream #0:0 -> #0:0 (rawvideo (native) -> h264 (libx264))
+[libx264 @ 000002028f23df80] using cpu capabilities: MMX2 SSE2Fast LZCNT SSSE3 SSE4.2
+[libx264 @ 000002028f23df80] profile Constrained Baseline, level 3.2, 4:2:0, 8-bit
+[libx264 @ 000002028f23df80] 264 - core 165 r3223 0480cb0 - H.264/MPEG-4 AVC codec - Copyleft 2003-2025 - http://www.videolan.org/x264.html - options: cabac=0 ref=1 deblock=0:0:0 analyse=0:0 me=dia subme=0 psy=1 psy_rd=1.00:0.00 mixed_ref=0 me_range=16 chroma_me=1 trellis=0 8x8dct=0 cqm=0 deadzone=21,11 fast_pskip=1 chroma_qp_offset=0 threads=3 lookahead_threads=1 sliced_threads=0 nr=0 decimate=1 interlaced=0 bluray_compat=0 constrained_intra=0 bframes=0 weightp=0 keyint=250 keyint_min=25 scenecut=0 intra_refresh=0 rc=crf mbtree=0 crf=26.0 qcomp=0.60 qpmin=0 qpmax=69 qpstep=4 ip_ratio=1.40 aq=0
+Output #0, mp4, to 'C:\Users\Mati\Desktop\MUTRIS\recordings\MUTRIS_CLIP_20260820_163504.mp4':
+  Metadata:
+    encoder         : Lavf62.12.102
+  Stream #0:0: Video: h264 (avc1 / 0x31637661), yuv420p(tv, progressive), 1280x720, q=2-31, 60 fps, 15360 tbn
+    Metadata:
+      encoder         : Lavc62.28.102 libx264
+    Side data:
+      CPB properties: bitrate max/min/avg: 0/0/0 buffer size: 0 vbv_delay: N/A
+frame=   20 fps=0.0 q=26.0 size=       0KiB time=00:00:00.33 bitrate=   1.2kbits/s speed=0.648x elapsed=0:00:00.51    
+frame=   45 fps= 43 q=21.0 size=     256KiB time=00:00:00.75 bitrate=2796.7kbits/s speed=0.713x elapsed=0:00:01.05    
+frame=   68 fps= 44 q=22.0 size=     512KiB time=00:00:01.13 bitrate=3701.2kbits/s speed=0.727x elapsed=0:00:01.55    
+frame=   92 fps= 44 q=27.0 size=     512KiB time=00:00:01.53 bitrate=2735.7kbits/s speed=0.734x elapsed=0:00:02.08    
+frame=  116 fps= 44 q=27.0 size=     768KiB time=00:00:01.93 bitrate=3254.4kbits/s speed=0.738x elapsed=0:00:02.61    
+frame=  139 fps= 44 q=28.0 size=    1024KiB time=00:00:02.31 bitrate=3621.1kbits/s speed=0.738x elapsed=0:00:03.14    
+frame=  163 fps= 44 q=23.0 size=    1280KiB time=00:00:02.71 bitrate=3859.9kbits/s speed=0.741x elapsed=0:00:03.66    
+frame=  187 fps= 45 q=20.0 size=    1280KiB time=00:00:03.11 bitrate=3364.5kbits/s speed=0.744x elapsed=0:00:04.18    
+frame=  210 fps= 45 q=27.0 size=    1536KiB time=00:00:03.50 bitrate=3595.2kbits/s speed=0.745x elapsed=0:00:04.69    
+frame=  234 fps= 45 q=26.0 size=    1792KiB time=00:00:03.90 bitrate=3764.2kbits/s speed=0.746x elapsed=0:00:05.22    
+frame=  257 fps= 45 q=25.0 size=    2048KiB time=00:00:04.28 bitrate=3916.9kbits/s speed=0.746x elapsed=0:00:05.74    
+frame=  280 fps= 45 q=25.0 size=    2048KiB time=00:00:04.66 bitrate=3595.2kbits/s speed=0.745x elapsed=0:00:06.26    
+frame=  304 fps= 45 q=24.0 size=    2304KiB time=00:00:05.06 bitrate=3725.3kbits/s speed=0.746x elapsed=0:00:06.78    
+frame=  327 fps= 45 q=27.0 size=    2560KiB time=00:00:05.45 bitrate=3848.1kbits/s speed=0.746x elapsed=0:00:07.30    
+frame=  350 fps= 45 q=26.0 size=    2816KiB time=00:00:05.83 bitrate=3954.7kbits/s speed=0.746x elapsed=0:00:07.82    
+frame=  371 fps= 44 q=26.0 size=    2816KiB time=00:00:06.18 bitrate=3730.8kbits/s speed=0.742x elapsed=0:00:08.33    
+frame=  389 fps= 44 q=21.0 size=    3072KiB time=00:00:06.48 bitrate=3881.7kbits/s speed=0.731x elapsed=0:00:08.87    
+frame=  410 fps= 44 q=24.0 size=    3072KiB time=00:00:06.83 bitrate=3682.9kbits/s speed=0.727x elapsed=0:00:09.39    
+frame=  431 fps= 43 q=27.0 size=    3328KiB time=00:00:07.18 bitrate=3795.4kbits/s speed=0.725x elapsed=0:00:09.90    
+frame=  454 fps= 44 q=27.0 size=    3584KiB time=00:00:07.56 bitrate=3880.2kbits/s speed=0.726x elapsed=0:00:10.42    
+frame=  478 fps= 44 q=25.0 size=    3840KiB time=00:00:07.96 bitrate=3948.7kbits/s speed=0.728x elapsed=0:00:10.94    
+frame=  501 fps= 44 q=26.0 size=    3840KiB time=00:00:08.35 bitrate=3767.4kbits/s speed=0.729x elapsed=0:00:11.45    
+frame=  526 fps= 44 q=20.0 size=    4352KiB time=00:00:08.76 bitrate=4066.8kbits/s speed=0.732x elapsed=0:00:11.97    
+frame=  550 fps= 44 q=27.0 size=    4352KiB time=00:00:09.16 bitrate=3889.3kbits/s speed=0.733x elapsed=0:00:12.50    
+frame=  573 fps= 44 q=26.0 size=    4608KiB time=00:00:09.55 bitrate=3952.8kbits/s speed=0.734x elapsed=0:00:13.01    
+frame=  594 fps= 44 q=28.0 size=    4608KiB time=00:00:09.90 bitrate=3813.0kbits/s speed=0.729x elapsed=0:00:13.57    
+frame=  619 fps= 44 q=21.0 size=    4864KiB time=00:00:10.31 bitrate=3862.3kbits/s speed=0.732x elapsed=0:00:14.09    
+frame=  642 fps= 44 q=20.0 size=    5120KiB time=00:00:10.70 bitrate=3919.9kbits/s speed=0.733x elapsed=0:00:14.60    
+frame=  665 fps= 44 q=27.0 size=    5376KiB time=00:00:11.08 bitrate=3973.6kbits/s speed=0.733x elapsed=0:00:15.11    
+frame=  689 fps= 44 q=27.0 size=    5376KiB time=00:00:11.48 bitrate=3835.2kbits/s speed=0.734x elapsed=0:00:15.65    
+frame=  712 fps= 44 q=26.0 size=    5632KiB time=00:00:11.86 bitrate=3888.0kbits/s speed=0.734x elapsed=0:00:16.17    
+frame=  740 fps= 44 q=23.0 size=    5888KiB time=00:00:12.33 bitrate=3910.9kbits/s speed=0.734x elapsed=0:00:16.80    
+frame=  763 fps= 44 q=28.0 size=    5888KiB time=00:00:12.71 bitrate=3793.0kbits/s speed=0.734x elapsed=0:00:17.31    
+frame=  786 fps= 44 q=27.0 size=    6144KiB time=00:00:13.10 bitrate=3842.1kbits/s speed=0.735x elapsed=0:00:17.82    
+frame=  809 fps= 44 q=26.0 size=    6400KiB time=00:00:13.48 bitrate=3888.4kbits/s speed=0.735x elapsed=0:00:18.35    
+frame=  832 fps= 44 q=21.0 size=    6656KiB time=00:00:13.86 bitrate=3932.2kbits/s speed=0.735x elapsed=0:00:18.87    
+frame=  854 fps= 44 q=21.0 size=    6656KiB time=00:00:14.23 bitrate=3830.9kbits/s speed=0.734x elapsed=0:00:19.39    
+frame=  876 fps= 44 q=27.0 size=    6912KiB time=00:00:14.60 bitrate=3878.3kbits/s speed=0.733x elapsed=0:00:19.90    
+frame=  898 fps= 44 q=27.0 size=    6912KiB time=00:00:14.96 bitrate=3783.3kbits/s speed=0.732x elapsed=0:00:20.45    
+frame=  919 fps= 44 q=25.0 size=    7168KiB time=00:00:15.31 bitrate=3833.8kbits/s speed=0.731x elapsed=0:00:20.96    
+frame=  948 fps= 44 q=28.0 size=    7424KiB time=00:00:15.80 bitrate=3849.2kbits/s speed=0.73x elapsed=0:00:21.65    
+frame=  969 fps= 44 q=25.0 size=    7680KiB time=00:00:16.15 bitrate=3895.7kbits/s speed=0.729x elapsed=0:00:22.16    
+frame=  991 fps= 44 q=26.0 size=    7680KiB time=00:00:16.51 bitrate=3809.2kbits/s speed=0.727x elapsed=0:00:22.72    
+frame= 1013 fps= 44 q=21.0 size=    7936KiB time=00:00:16.88 bitrate=3850.7kbits/s speed=0.726x elapsed=0:00:23.24    
+frame= 1035 fps= 43 q=27.0 size=    8192KiB time=00:00:17.25 bitrate=3890.4kbits/s speed=0.725x elapsed=0:00:23.80    
+frame= 1057 fps= 43 q=28.0 size=    8192KiB time=00:00:17.61 bitrate=3809.4kbits/s speed=0.724x elapsed=0:00:24.33    
+frame= 1079 fps= 43 q=25.0 size=    8448KiB time=00:00:17.98 bitrate=3848.4kbits/s speed=0.723x elapsed=0:00:24.86    
+frame= 1101 fps= 43 q=23.0 size=    8704KiB time=00:00:18.35 bitrate=3885.8kbits/s speed=0.723x elapsed=0:00:25.39    
+frame= 1122 fps= 43 q=20.0 size=    8704KiB time=00:00:18.70 bitrate=3813.0kbits/s speed=0.722x elapsed=0:00:25.90    
+frame= 1144 fps= 43 q=28.0 size=    8960KiB time=00:00:19.06 bitrate=3849.7kbits/s speed=0.722x elapsed=0:00:26.42    
+frame= 1167 fps= 43 q=26.0 size=    8960KiB time=00:00:19.45 bitrate=3773.8kbits/s speed=0.72x elapsed=0:00:27.00    
+frame= 1187 fps= 43 q=24.0 size=    9216KiB time=00:00:19.78 bitrate=3816.2kbits/s speed=0.719x elapsed=0:00:27.51    
+frame= 1208 fps= 42 q=28.0 size=    9472KiB time=00:00:20.13 bitrate=3854.1kbits/s speed=0.708x elapsed=0:00:28.45    
+frame= 1240 fps= 43 q=27.0 size=    9728KiB time=00:00:20.66 bitrate=3856.1kbits/s speed=0.709x elapsed=0:00:29.15    
+frame= 1262 fps= 42 q=23.0 size=    9984KiB time=00:00:21.03 bitrate=3888.6kbits/s speed=0.707x elapsed=0:00:29.76    
+frame= 1281 fps= 42 q=28.0 size=    9984KiB time=00:00:21.35 bitrate=3830.9kbits/s speed=0.696x elapsed=0:00:30.66    
+frame= 1306 fps= 42 q=28.0 size=   10240KiB time=00:00:21.76 bitrate=3853.9kbits/s speed=0.698x elapsed=0:00:31.19    
+frame= 1327 fps= 42 q=27.0 size=   10496KiB time=00:00:22.11 bitrate=3887.7kbits/s speed=0.697x elapsed=0:00:31.73    
+frame= 1345 fps= 42 q=28.0 size=   10752KiB time=00:00:22.41 bitrate=3929.3kbits/s speed=0.695x elapsed=0:00:32.24    
+frame= 1366 fps= 42 q=23.0 size=   10752KiB time=00:00:22.76 bitrate=3868.8kbits/s speed=0.695x elapsed=0:00:32.76    
+frame= 1386 fps= 42 q=22.0 size=   11008KiB time=00:00:23.10 bitrate=3903.8kbits/s speed=0.694x elapsed=0:00:33.29    
+frame= 1406 fps= 42 q=28.0 size=   11264KiB time=00:00:23.43 bitrate=3937.8kbits/s speed=0.693x elapsed=0:00:33.80    
+frame= 1427 fps= 42 q=28.0 size=   11520KiB time=00:00:23.78 bitrate=3968.0kbits/s speed=0.693x elapsed=0:00:34.34    
+frame= 1447 fps= 42 q=25.0 size=   11520KiB time=00:00:24.11 bitrate=3913.2kbits/s speed=0.692x elapsed=0:00:34.85    
+frame= 1468 fps= 41 q=22.0 size=   11776KiB time=00:00:24.46 bitrate=3942.9kbits/s speed=0.692x elapsed=0:00:35.37    
+frame= 1484 fps= 41 q=23.0 size=   12032KiB time=00:00:24.73 bitrate=3985.2kbits/s speed=0.689x elapsed=0:00:35.89    
+frame= 1484 fps= 41 q=23.0 size=   12032KiB time=00:00:24.73 bitrate=3985.2kbits/s speed=0.679x elapsed=0:00:36.40    
+frame= 1501 fps= 41 q=29.0 size=   12032KiB time=00:00:25.01 bitrate=3940.0kbits/s speed=0.677x elapsed=0:00:36.92    
+frame= 1514 fps= 40 q=23.0 size=   12288KiB time=00:00:25.23 bitrate=3989.3kbits/s speed=0.674x elapsed=0:00:37.43    
+frame= 1532 fps= 40 q=28.0 size=   12288KiB time=00:00:25.53 bitrate=3942.4kbits/s speed=0.662x elapsed=0:00:38.56    
+frame= 1556 fps= 40 q=24.0 size=   12800KiB time=00:00:25.93 bitrate=4043.4kbits/s speed=0.664x elapsed=0:00:39.08    
+frame= 1559 fps= 39 q=29.0 size=   12800KiB time=00:00:25.98 bitrate=4035.6kbits/s speed=0.656x elapsed=0:00:39.59    
+frame= 1588 fps= 39 q=27.0 size=   13056KiB time=00:00:26.46 bitrate=4041.1kbits/s speed=0.644x elapsed=0:00:41.07    
+frame= 1596 fps= 38 q=24.0 size=   13056KiB time=00:00:26.60 bitrate=4020.9kbits/s speed=0.64x elapsed=0:00:41.59    
+frame= 1606 fps= 38 q=22.0 size=   13312KiB time=00:00:26.76 bitrate=4074.2kbits/s speed=0.636x elapsed=0:00:42.10    
+frame= 1614 fps= 38 q=22.0 size=   13312KiB time=00:00:26.90 bitrate=4054.0kbits/s speed=0.631x elapsed=0:00:42.61    
+[out#0/mp4 @ 000002028f1e5140] video:13455KiB audio:0KiB subtitle:0KiB other streams:0KiB global headers:0KiB muxing overhead: 0.054923%
+frame= 1628 fps= 38 q=-1.0 Lsize=   13462KiB time=00:00:27.13 bitrate=4064.4kbits/s speed=0.63x elapsed=0:00:43.04    
+[libx264 @ 000002028f23df80] frame I:7     Avg QP:22.00  size: 74655
+[libx264 @ 000002028f23df80] frame P:1621  Avg QP:24.66  size:  8177
+[libx264 @ 000002028f23df80] mb I  I16..4: 100.0%  0.0%  0.0%
+[libx264 @ 000002028f23df80] mb P  I16..4: 23.7%  0.0%  0.0%  P16..4: 15.6%  0.0%  0.0%  0.0%  0.0%    skip:60.8%
+[libx264 @ 000002028f23df80] coded y,uvDC,uvAC intra: 18.0% 23.5% 12.4% inter: 6.9% 9.6% 2.4%
+[libx264 @ 000002028f23df80] i16 v,h,dc,p: 64% 28%  5%  3%
+[libx264 @ 000002028f23df80] i8c dc,h,v,p: 40% 25% 32%  2%
+[libx264 @ 000002028f23df80] kb/s:4062.01
+
+
+
+================================================
 FILE: tetris/ai_bot.lua
 ================================================
-Error reading file with 'cp1252': 'charmap' codec can't decode byte 0x8f in position 6780: character maps to <undefined>
+---@diagnostic disable: undefined-global
+-- ============================================================================
+-- MUTRIS ENGINE: DDA HEURISTIC BOT ENGINE 2.0 (FASE 13)
+-- Arquitectura: Zero-GC / Buffer Plano / Anti-Stall / Radar Downstacking
+-- ============================================================================
+local AIBot = {}
+
+local SRS = require "tetris.rotation_systems.srs"
+local MetaBalancer = require "core.meta_balancer"
+local Blackbox = require "core.blackbox"
+
+_G.AI_ADAPTIVE_PROFILE = {
+    player_avg_pps = 1.20,
+    ai_target_pps  = 1.45,
+    player_wins    = 0,
+    bot_wins       = 0,
+    total_matches  = 0
+}
+
+AIBot.board = nil
+AIBot.base_pps = 1.45
+AIBot.pps = 1.45
+AIBot.step_timer = 0.0
+AIBot.has_target = false
+AIBot.target_x = 4
+AIBot.target_rot = 1
+AIBot.hole_seeking_col = 5
+
+local _sim_grid = {}
+for r = 1, 40 do
+    _sim_grid[r] = {}
+    for c = 1, 10 do _sim_grid[r][c] = 0 end
+end
+
+local function serializeJSON(tbl)
+    local s = "{\n"
+    for k, v in pairs(tbl) do
+        if type(v) == "number" then
+            s = s .. string.format('  "%s": %.4f,\n', k, v)
+        end
+    end
+    s = s:sub(1, -3) .. "\n}"
+    return s
+end
+
+local function parseJSON(str)
+    local data = {}
+    for k, v in str:gmatch('"([%w_]+)":%s*([%-%d%.]+)') do
+        data[k] = tonumber(v)
+    end
+    return data
+end
+
+function AIBot.loadProfile()
+    if love.filesystem.getInfo("saves/ai_profile.json") then
+        local contents = love.filesystem.read("saves/ai_profile.json")
+        if contents then
+            local loaded = parseJSON(contents)
+            for k, v in pairs(loaded) do
+                _G.AI_ADAPTIVE_PROFILE[k] = v
+            end
+        end
+    elseif love.filesystem.getInfo("ai_profile.json") then
+        local contents = love.filesystem.read("ai_profile.json")
+        if contents then
+            local loaded = parseJSON(contents)
+            for k, v in pairs(loaded) do
+                _G.AI_ADAPTIVE_PROFILE[k] = v
+            end
+        end
+    end
+    AIBot.base_pps = _G.AI_ADAPTIVE_PROFILE.ai_target_pps or 1.45
+    AIBot.pps = AIBot.base_pps
+end
+
+function AIBot.saveProfile()
+    if not love.filesystem.getInfo("saves") then
+        love.filesystem.createDirectory("saves")
+    end
+    love.filesystem.write("saves/ai_profile.json", serializeJSON(_G.AI_ADAPTIVE_PROFILE))
+end
+
+function AIBot.init(self_or_board, maybe_board)
+    local board = (type(self_or_board) == "table" and self_or_board.grid) and self_or_board or maybe_board
+    AIBot.board = board
+    if board then board.ai = AIBot end
+
+    AIBot.loadProfile()
+    AIBot.has_target = false
+    AIBot.step_timer = 0.0
+end
+
+local function findGarbageHoleColumn(board)
+    for r = 40, 21, -1 do
+        local hole_col = 0
+        local solid_count = 0
+        for c = 1, 10 do
+            if board.grid[r][c] == 8 then
+                solid_count = solid_count + 1
+            elseif board.grid[r][c] == 0 then
+                hole_col = c
+            end
+        end
+        if solid_count >= 8 and hole_col > 0 then
+            return hole_col
+        end
+    end
+    return 10
+end
+
+local function evaluatePlacement(board, piece, target_rot, target_x)
+    local shape = piece.shape[target_rot]
+    if not shape then return -999999 end
+
+    for r = 1, #shape do
+        for c = 1, #shape[r] do
+            if shape[r][c] ~= 0 then
+                local tx = target_x + c - 1
+                if tx < 1 or tx > 10 then return -999999 end
+                if board.grid[21][tx] ~= 0 then return -999999 end
+            end
+        end
+    end
+
+    local drop_y = 21
+    while true do
+        local collision = false
+        for r = 1, #shape do
+            for c = 1, #shape[r] do
+                if shape[r][c] ~= 0 then
+                    local tx = target_x + c - 1
+                    local ty = drop_y + r
+                    if ty > 40 or (ty >= 1 and board.grid[ty][tx] ~= 0) then
+                        collision = true
+                        break
+                    end
+                end
+            end
+            if collision then break end
+        end
+        if collision then break end
+        drop_y = drop_y + 1
+    end
+
+    for r = 1, 40 do
+        for c = 1, 10 do _sim_grid[r][c] = board.grid[r][c] end
+    end
+
+    for r = 1, #shape do
+        for c = 1, #shape[r] do
+            if shape[r][c] ~= 0 then
+                local tx = target_x + c - 1
+                local ty = drop_y + r - 1
+                if ty >= 1 and ty <= 40 and tx >= 1 and tx <= 10 then
+                    _sim_grid[ty][tx] = piece.id
+                end
+            end
+        end
+    end
+
+    local lines_cleared = 0
+    for r = 40, 21, -1 do
+        local full = true
+        for c = 1, 10 do
+            if _sim_grid[r][c] == 0 then full = false break end
+        end
+        if full then lines_cleared = lines_cleared + 1 end
+    end
+
+    local agg_height = 0
+    local holes = 0
+    local bumpiness = 0
+    local prev_h = 0
+
+    for c = 1, 10 do
+        local h = 0
+        local found_block = false
+        for r = 21, 40 do
+            if _sim_grid[r][c] ~= 0 then
+                if not found_block then
+                    h = 41 - r
+                    found_block = true
+                end
+            elseif found_block then
+                holes = holes + 1
+            end
+        end
+        agg_height = agg_height + h
+        if c > 1 then bumpiness = bumpiness + math.abs(h - prev_h) end
+        prev_h = h
+    end
+
+    local hole_col = AIBot.hole_seeking_col or 10
+    local hole_penalty = 0
+    if _sim_grid[40][hole_col] ~= 0 and lines_cleared == 0 then
+        hole_penalty = 120
+    end
+
+    local score = (-0.51 * agg_height) + (0.85 * lines_cleared * lines_cleared) - (0.95 * holes * 12) - (0.28 * bumpiness) - hole_penalty
+    return score
+end
+
+function AIBot.findBestMove(board)
+    if not board or not board.active_piece then return end
+    local p = board.active_piece
+    AIBot.hole_seeking_col = findGarbageHoleColumn(board)
+
+    local best_score = -9999999
+    local best_rot = p.rotation
+    local best_x = p.x
+
+    local max_rot = (p.shape and #p.shape) or 4
+    for rot = 1, max_rot do
+        for x = -2, 10 do
+            local score = evaluatePlacement(board, p, rot, x)
+            if score > best_score then
+                best_score = score
+                best_rot = rot
+                best_x = x
+            end
+        end
+    end
+
+    AIBot.target_rot = best_rot
+    AIBot.target_x = best_x
+    AIBot.has_target = true
+end
+
+-- âš¡ BUCLE ANTI-BLOQUEO (Desatasca y fuerza el Hard Drop cuando el techo estÃ¡ saturado)
+function AIBot.update(self_or_dt, maybe_dt)
+    local dt = (type(self_or_dt) == "number") and self_or_dt or maybe_dt
+    local board = AIBot.board
+    if not board or board.is_dying or not board.active_piece then return end
+
+    local p = board.active_piece
+    if p.locked then
+        AIBot.has_target = false
+        return
+    end
+
+    local punch = _G.TrackEnergyPunch or 0
+    AIBot.base_pps = _G.AI_ADAPTIVE_PROFILE.ai_target_pps or 1.45
+    AIBot.pps = AIBot.base_pps + (punch * 0.40)
+
+    if not AIBot.has_target then
+        AIBot.findBestMove(board)
+    end
+
+    local step_interval = 1.0 / math.max(0.5, AIBot.pps * 4.0)
+    AIBot.step_timer = AIBot.step_timer + dt
+
+    while AIBot.step_timer >= step_interval do
+        AIBot.step_timer = AIBot.step_timer - step_interval
+
+        -- 1. OrientaciÃ³n con Fallback Anti-Atasco
+        if p.rotation ~= AIBot.target_rot then
+            local dir = (AIBot.target_rot > p.rotation) and 1 or -1
+            if not p:rotate(dir) then
+                -- Si no puede rotar por falta de espacio en el techo, acepta la rotaciÃ³n actual
+                AIBot.target_rot = p.rotation
+            else
+                return
+            end
+        end
+
+        -- 2. AlineaciÃ³n Horizontal con Fallback Anti-Atasco
+        if p.x < AIBot.target_x then
+            if not p:move(1, 0) then
+                AIBot.target_x = p.x -- Si estÃ¡ bloqueado por bloques altos, se adapta a la X actual
+            else
+                return
+            end
+        elseif p.x > AIBot.target_x then
+            if not p:move(-1, 0) then
+                AIBot.target_x = p.x
+            else
+                return
+            end
+        end
+
+        -- 3. Hard Drop garantizado (Dispara la muerte por desborde si el techo fue alcanzado)
+        local startY = p.y
+        while p:move(0, 1, true) do end
+        local endY = p.y
+        board:spawnTrail(p.x, startY, endY, p.id, p.shape[p.rotation])
+        p:lock()
+        AIBot.has_target = false
+        break
+    end
+end
+
+function AIBot.registerMatchOutcome(human_won, player_pps)
+    local prof = _G.AI_ADAPTIVE_PROFILE
+    prof.total_matches = (prof.total_matches or 0) + 1
+    if human_won then
+        prof.player_wins = (prof.player_wins or 0) + 1
+    else
+        prof.bot_wins = (prof.bot_wins or 0) + 1
+    end
+
+    local valid_player_pps = math.max(0.5, math.min(5.0, player_pps or 1.2))
+    prof.player_avg_pps = (prof.player_avg_pps * 0.70) + (valid_player_pps * 0.30)
+    prof.ai_target_pps = math.max(0.9, math.min(4.5, prof.player_avg_pps * 1.10))
+
+    AIBot.base_pps = prof.ai_target_pps
+    AIBot.saveProfile()
+end
+
+return AIBot
 
 
 ================================================
 FILE: tetris/anomaly_manager.lua
 ================================================
 ---@diagnostic disable: undefined-global
+-- ============================================================================
+-- MUTRIS ENGINE: ANOMALY MANAGER V2 (1280x720 WIDESCREEN)
+-- ============================================================================
 local AnomalyManager = {}
 local FontCache = require "tetris.font_cache"
 local AudioManager = require "audio_manager"
+local Blackbox = require "core.blackbox"
 
 AnomalyManager.current_anomaly = nil
 AnomalyManager.timer = 0
@@ -1918,7 +2840,7 @@ AnomalyManager.cooldown = 32.0
 AnomalyManager.time_until_next = 20.0
 
 AnomalyManager.step_timer = 0
-AnomalyManager.laser_x = 80
+AnomalyManager.laser_x = 220
 AnomalyManager.laser_dir = 1
 AnomalyManager.swapped = false
 AnomalyManager.lock_drain_active = false
@@ -1953,10 +2875,9 @@ function AnomalyManager.init()
     AnomalyManager.timer = 0
     AnomalyManager.duration = 0
     AnomalyManager.warning_timer = 0
-    -- âš¡ En Demo o Gauntlet: Eventos constantes cada 8-10 segundos
     AnomalyManager.time_until_next = (_G.IS_DEMO_MODE or _G.CURRENT_GAME_MODE == "gauntlet") and 8.0 or 25.0
     AnomalyManager.step_timer = 0
-    AnomalyManager.laser_x = 80
+    AnomalyManager.laser_x = 220
     AnomalyManager.laser_dir = 1
     AnomalyManager.swapped = false
     AnomalyManager.lock_drain_active = false
@@ -1978,6 +2899,8 @@ function AnomalyManager.triggerRandomAnomaly(track_bpm)
     AnomalyManager.swapped = false
     AnomalyManager.lock_drain_active = false
     AnomalyManager.hyper_speed_active = false
+
+    Blackbox.log("ANOMALY", "TRIGGER: " .. selected.name, idx, math.floor(selected.dur))
 
     if selected.id == "blackout_strobe" then
         _G.IsBlackoutActive = true
@@ -2048,12 +2971,12 @@ function AnomalyManager.update(dt, player, bot)
         end
 
     elseif id == "laser_scan" then
-        AnomalyManager.laser_x = AnomalyManager.laser_x + AnomalyManager.laser_dir * 220 * dt
-        if AnomalyManager.laser_x > 720 then
-            AnomalyManager.laser_x = 720
+        AnomalyManager.laser_x = AnomalyManager.laser_x + AnomalyManager.laser_dir * 300 * dt
+        if AnomalyManager.laser_x > 1060 then
+            AnomalyManager.laser_x = 1060
             AnomalyManager.laser_dir = -1
-        elseif AnomalyManager.laser_x < 80 then
-            AnomalyManager.laser_x = 80
+        elseif AnomalyManager.laser_x < 220 then
+            AnomalyManager.laser_x = 220
             AnomalyManager.laser_dir = 1
         end
 
@@ -2074,13 +2997,23 @@ function AnomalyManager.update(dt, player, bot)
             if player and not player.is_dying then
                 local pp = player.active_piece
                 if pp and not pp.locked then
-                    while pp:canMove(pp.x, pp.y - 1, pp.rotation) do pp.y = pp.y - 1 end
+                    local steps = 0
+                    while pp:canMove(pp.x, pp.y - 1, pp.rotation) do 
+                        pp.y = pp.y - 1 
+                        steps = steps + 1
+                        if steps > 40 then break end
+                    end
                 end
             end
             if bot and not bot.is_dying then
                 local bp = bot.active_piece
                 if bp and not bp.locked then
-                    while bp:canMove(bp.x, bp.y - 1, bp.rotation) do bp.y = bp.y - 1 end
+                    local steps = 0
+                    while bp:canMove(bp.x, bp.y - 1, bp.rotation) do 
+                        bp.y = bp.y - 1 
+                        steps = steps + 1
+                        if steps > 40 then break end
+                    end
                 end
             end
             AudioManager.playImmediateSFX("rotate", false)
@@ -2133,25 +3066,25 @@ function AnomalyManager.draw(player, bot)
         local count_sec = math.max(0, math.ceil(wt))
 
         love.graphics.setBlendMode("add")
-        local frame_w = 8 + pulse * 8
+        local frame_w = 10 + pulse * 8
         love.graphics.setColor(1.0, 0.10, 0.12, flash * (0.65 + urgency * 0.35))
-        love.graphics.rectangle("fill", 0, 0, 800, frame_w)
-        love.graphics.rectangle("fill", 0, 600 - frame_w, 800, frame_w)
-        love.graphics.rectangle("fill", 0, 0, frame_w, 600)
-        love.graphics.rectangle("fill", 800 - frame_w, 0, frame_w, 600)
+        love.graphics.rectangle("fill", 0, 0, 1280, frame_w)
+        love.graphics.rectangle("fill", 0, 720 - frame_w, 1280, frame_w)
+        love.graphics.rectangle("fill", 0, 0, frame_w, 720)
+        love.graphics.rectangle("fill", 1280 - frame_w, 0, frame_w, 720)
 
         love.graphics.setBlendMode("alpha")
-        local title_txt = "âš   ANOMALY INCOMING  âš "
-        love.graphics.setFont(FontCache.get(18))
-        local tw = FontCache.get(18):getWidth(title_txt)
+        local title_txt = "!  ANOMALY INCOMING  !"
+        love.graphics.setFont(FontCache.get(22))
+        local tw = FontCache.get(22):getWidth(title_txt)
         love.graphics.setColor(1.0, 1.0, 1.0, flash * (0.8 + urgency * 0.2))
-        love.graphics.print(title_txt, 400 - tw / 2, 140)
+        love.graphics.print(title_txt, 640 - tw / 2, 170)
 
-        love.graphics.setFont(FontCache.get(52))
+        love.graphics.setFont(FontCache.get(64))
         local cstr = tostring(count_sec)
-        local cw = FontCache.get(52):getWidth(cstr)
+        local cw = FontCache.get(64):getWidth(cstr)
         love.graphics.setColor(1.0, 0.25, 0.2, 0.95)
-        love.graphics.print(cstr, 400 - cw / 2, 230)
+        love.graphics.print(cstr, 640 - cw / 2, 240)
     end
 
     if AnomalyManager.current_anomaly then
@@ -2159,38 +3092,36 @@ function AnomalyManager.draw(player, bot)
         local theme = ANOMALY_THEMES[id] or DEFAULT_THEME
         local c1, c2 = theme.c1, theme.c2
         local t = AnomalyManager.timer
-        local dur = AnomalyManager.duration
-        local progress = math.max(0, math.min(1, t / dur))
 
         love.graphics.setBlendMode("add")
-        local top_h = 30
+        local top_h = 36
         love.graphics.setColor(c1[1], c1[2], c1[3], 0.7 + pulse * 0.3)
-        love.graphics.rectangle("fill", 0, 0, 800, top_h)
-        love.graphics.setColor(c2[1], c2[2], c2[3], 0.9)
-        love.graphics.rectangle("fill", 0, top_h - 2, 800, 2)
+        love.graphics.rectangle("fill", 0, 0, 1280, top_h)
+        love.graphics.setColor(c2[1], c2[2], c2[3], 0.95)
+        love.graphics.rectangle("fill", 0, top_h - 2, 1280, 2)
 
         love.graphics.setBlendMode("alpha")
-        love.graphics.setFont(FontCache.get(11))
-        love.graphics.setColor(1, 1, 1, 0.9)
-        love.graphics.print("ANOMALY: " .. theme.label, 10, 8)
+        love.graphics.setFont(FontCache.get(12))
+        love.graphics.setColor(1, 1, 1, 0.95)
+        love.graphics.print("ANOMALY: " .. theme.label, 20, 10)
 
         local tstr2 = string.format("%.1fs", t)
-        local tw2 = FontCache.get(11):getWidth(tstr2)
-        love.graphics.print(tstr2, 800 - tw2 - 10, 8)
+        local tw2 = FontCache.get(12):getWidth(tstr2)
+        love.graphics.print(tstr2, 1280 - tw2 - 20, 10)
 
         local name = "ACTIVE ANOMALY"
         for _, a in ipairs(ANOMALY_POOL) do
             if a.id == id then name = a.name break end
         end
-        love.graphics.setFont(FontCache.get(12))
-        local nw = FontCache.get(12):getWidth(name)
-        love.graphics.print(name, 400 - nw / 2, 8)
+        love.graphics.setFont(FontCache.get(13))
+        local nw = FontCache.get(13):getWidth(name)
+        love.graphics.print(name, 640 - nw / 2, 10)
 
         if id == "blackout_strobe" then
-            love.graphics.setFont(FontCache.get(14))
+            love.graphics.setFont(FontCache.get(15))
             local vis_alpha = _G.BlackoutStrobeVisibility or 0
             love.graphics.setColor(0, 0.9, 1.0, 0.4 + vis_alpha * 0.6)
-            love.graphics.printf("âš¡ 2-BAR STROBE ACTIVE âš¡", 0, 545, 800, "center")
+            love.graphics.printf("! 2-BAR STROBE ACTIVE !", 0, 660, 1280, "center")
         end
     end
 
@@ -2201,9 +3132,99 @@ return AnomalyManager
 
 
 ================================================
+FILE: tetris/beat_lock.lua
+================================================
+---@diagnostic disable: undefined-global
+-- ============================================================================
+-- MUTRIS ENGINE: BEAT-LOCK TIMING ENGINE (FASE 7)
+-- Arquitectura: Zero-GC / Hardware Clock Anclado / Groove Strikes
+-- ============================================================================
+local BeatLock = {}
+
+local AudioManager = require "audio_manager"
+local MusicManager = require "music_manager"
+local MetaBalancer = require "core.meta_balancer"
+
+-- Estructura de estado estÃ¡tica pre-alocada por jugador
+function BeatLock.initBoardState(board)
+    board.groove_streak = 0
+    board.groove_multiplier = 1.0
+    board.beat_lock_flash = 0.0
+    board.beat_lock_hit = false
+    board.last_lock_timing_delta = 0.0
+end
+
+-- âš¡ EVALUACIÃ“N DETERMINISTA DEL HARD DROP
+function BeatLock.evaluate(board, is_resonance_stance)
+    local song_time = MusicManager.getTime()
+    if song_time <= 0.001 then
+        song_time = _G.RealMatchTimer or 0.0
+    end
+
+    local bpm = AudioManager.current_bpm or 120
+    local beat_duration = 60.0 / bpm
+    local current_beat = song_time / beat_duration
+    local fraction = current_beat - math.floor(current_beat)
+    
+    -- Distancia en segundos al pulso mÃ¡s cercano (hacia adelante o atrÃ¡s)
+    local dist_to_nearest_beat = math.min(fraction, 1.0 - fraction) * beat_duration
+    board.last_lock_timing_delta = dist_to_nearest_beat
+
+    -- Obtener ventana calibrada por ARCHON (o bonus de Stance Resonance)
+    local window = is_resonance_stance 
+        and (MetaBalancer.get("resonance_window_ms") or 0.045)
+        or (MetaBalancer.get("beat_window_ms") or 0.035)
+
+    if dist_to_nearest_beat <= window then
+        -- ðŸŽ¯ GROOVE STRIKE EXITOSO
+        board.beat_lock_hit = true
+        board.groove_streak = board.groove_streak + 1
+        board.groove_multiplier = math.min(2.0, 1.0 + (board.groove_streak * 0.10))
+        board.beat_lock_flash = 1.0
+
+        -- Rampa de energÃ­a y transitorio de graves
+        _G.AudioBeatPulse = 1.0
+        AudioManager.playSubBassThud(2)
+        return true, MetaBalancer.get("beat_bonus_attack") or 1
+    else
+        -- Desfase: Reinicia la racha de Groove
+        board.beat_lock_hit = false
+        board.groove_streak = 0
+        board.groove_multiplier = 1.0
+        return false, 0
+    end
+end
+
+function BeatLock.update(board, dt)
+    if board.beat_lock_flash > 0 then
+        board.beat_lock_flash = math.max(0, board.beat_lock_flash - dt * 4.5)
+    end
+end
+
+function BeatLock.drawFeedback(board)
+    if board.beat_lock_flash > 0 then
+        love.graphics.push("all")
+        love.graphics.setBlendMode("add")
+        love.graphics.setColor(1.0, 0.85, 0.2, board.beat_lock_flash * 0.45)
+        love.graphics.rectangle("fill", board.x, board.y, 240, 480, 4)
+        
+        love.graphics.setLineWidth(2.5)
+        love.graphics.setColor(1.0, 1.0, 0.4, board.beat_lock_flash * 0.8)
+        love.graphics.rectangle("line", board.x - 2, board.y - 2, 244, 484, 4)
+        love.graphics.pop()
+    end
+end
+
+return BeatLock
+
+
+================================================
 FILE: tetris/bloom_shader.lua
 ================================================
 ---@diagnostic disable: undefined-global
+-- ============================================================================
+-- MUTRIS ENGINE: BLOOM SHADER & CANVAS RENDER PIPELINE (1280x720 WIDESCREEN)
+-- ============================================================================
 local BloomShader = {}
 
 local shader_code = [[
@@ -2216,13 +3237,12 @@ local shader_code = [[
     vec4 effect(vec4 color, Image texture, vec2 texture_coords, vec2 screen_coords) {
         vec2 uv = texture_coords;
 
-        // Onda expansiva de distorsiÃ³n (Shockwave)
         if (u_shock_time > 0.0 && u_shock_time < 1.0) {
             number dist = distance(screen_coords, u_shock_center);
-            number wave_radius = u_shock_time * 650.0;
+            number wave_radius = u_shock_time * 850.0;
             number diff = dist - wave_radius;
-            if (abs(diff) < 40.0) {
-                number factor = (1.0 - abs(diff) / 40.0) * (1.0 - u_shock_time) * 0.025;
+            if (abs(diff) < 45.0) {
+                number factor = (1.0 - abs(diff) / 45.0) * (1.0 - u_shock_time) * 0.025;
                 vec2 dir = normalize(screen_coords - u_shock_center);
                 uv += dir * factor;
             }
@@ -2231,12 +3251,12 @@ local shader_code = [[
         vec4 base = Texel(texture, uv);
         
         if (u_energy > 0.4 || u_zone > 0.05) {
-            number shift = 0.0007 * (u_energy * 0.4 + u_zone * 0.6);
+            number shift = 0.0006 * (u_energy * 0.4 + u_zone * 0.6);
             base.r = Texel(texture, uv + vec2(shift, 0.0)).r;
             base.b = Texel(texture, uv - vec2(shift, 0.0)).b;
         }
 
-        number blur = 0.0010 + (u_energy * 0.0006) + (u_zone * 0.0008);
+        number blur = 0.0008 + (u_energy * 0.0005) + (u_zone * 0.0006);
         vec4 glow = vec4(0.0);
         glow += Texel(texture, uv + vec2(-blur, -blur)) * 0.12;
         glow += Texel(texture, uv + vec2( blur, -blur)) * 0.12;
@@ -2264,9 +3284,9 @@ local shader_code = [[
 function BloomShader.init()
     BloomShader.supported = false
     BloomShader.shock_timer = 0
-    BloomShader.shock_x = 400
-    BloomShader.shock_y = 300
-    local status_canvas, canvas = pcall(love.graphics.newCanvas, 800, 600)
+    BloomShader.shock_x = 640
+    BloomShader.shock_y = 360
+    local status_canvas, canvas = pcall(love.graphics.newCanvas, 1280, 720)
     local status_shader, shader = pcall(love.graphics.newShader, shader_code)
     
     if status_canvas and status_shader then
@@ -2278,8 +3298,8 @@ end
 
 function BloomShader.triggerShockwave(x, y)
     BloomShader.shock_timer = 0.01
-    BloomShader.shock_x = x or 400
-    BloomShader.shock_y = y or 300
+    BloomShader.shock_x = x or 640
+    BloomShader.shock_y = y or 360
 end
 
 function BloomShader.update(dt)
@@ -2292,16 +3312,20 @@ end
 function BloomShader.beginDraw()
     if BloomShader.supported and BloomShader.canvas then
         love.graphics.setCanvas(BloomShader.canvas)
-        love.graphics.clear(0, 0, 0, 0)
+        love.graphics.clear(0.01, 0.01, 0.03, 1.0)
     end
 end
 
-function BloomShader.endDraw(is_zone)
+function BloomShader.endDraw(is_zone, ox, oy, scale)
+    love.graphics.setCanvas()
+    love.graphics.push("all")
+    love.graphics.setColor(1, 1, 1, 1)
+
+    local target_ox = ox or 0
+    local target_oy = oy or 0
+    local target_sc = scale or 1.0
+
     if BloomShader.supported and BloomShader.canvas and BloomShader.shader then
-        love.graphics.setCanvas()
-        love.graphics.push("all")
-        love.graphics.setColor(1, 1, 1, 1)
-        
         local energy = _G.TrackEnergyPunch or 0
         local pulse = _G.AudioBeatPulse or 0
         local zone = is_zone and 1.0 or 0.0
@@ -2313,10 +3337,13 @@ function BloomShader.endDraw(is_zone)
         BloomShader.shader:send("u_shock_center", {BloomShader.shock_x, BloomShader.shock_y})
 
         love.graphics.setShader(BloomShader.shader)
-        love.graphics.draw(BloomShader.canvas, 0, 0)
+        love.graphics.draw(BloomShader.canvas, target_ox, target_oy, 0, target_sc, target_sc)
         love.graphics.setShader()
-        love.graphics.pop()
+    elseif BloomShader.canvas then
+        love.graphics.draw(BloomShader.canvas, target_ox, target_oy, 0, target_sc, target_sc)
     end
+
+    love.graphics.pop()
 end
 
 return BloomShader
@@ -2325,25 +3352,29 @@ return BloomShader
 ================================================
 FILE: tetris/board.lua
 ================================================
-Error reading file with 'cp1252': 'charmap' codec can't decode byte 0x81 in position 37205: character maps to <undefined>
+Error reading file with 'cp1252': 'charmap' codec can't decode byte 0x8f in position 12287: character maps to <undefined>
 
 
 ================================================
 FILE: tetris/fog_layer.lua
 ================================================
 ---@diagnostic disable: undefined-global
+-- ============================================================================
+-- MUTRIS ENGINE: VOLUMETRIC FOG LAYER (1280x720 WIDESCREEN)
+-- Arquitectura: Zero-GC / Niebla Reactiva a Camelot & Beat
+-- ============================================================================
 local FogLayer = {}
 local TrackManager = require "track_manager"
 
-local NUM_FOG_NODES = 12
+local NUM_FOG_NODES = 16
 local nodes = {}
 
 function FogLayer.init()
     for i = 1, NUM_FOG_NODES do
         nodes[i] = {
-            x = (i / NUM_FOG_NODES) * 800,
-            y = 150 + math.sin(i * 1.5) * 120,
-            radius = 120 + math.random(40, 90),
+            x = (i / NUM_FOG_NODES) * 1280,
+            y = 200 + math.sin(i * 1.5) * 150,
+            radius = 160 + math.random(50, 110),
             speed = 0.2 + (i % 3) * 0.15,
             phase = i * 0.5
         }
@@ -2355,7 +3386,7 @@ function FogLayer.update(dt)
     for i = 1, NUM_FOG_NODES do
         local n = nodes[i]
         n.phase = n.phase + dt * n.speed * (1.0 + energy * 2.0)
-        n.y = 300 + math.sin(n.phase) * (80 + energy * 40)
+        n.y = 360 + math.sin(n.phase) * (100 + energy * 50)
     end
 end
 
@@ -2375,15 +3406,15 @@ function FogLayer.draw()
     for i = 1, NUM_FOG_NODES do
         local n = nodes[i]
         local dynamic_rad = n.radius * (1.0 + pulse * 0.15 * (0.5 + energy * 0.5))
-        local alpha = (0.04 + pulse * 0.05 + energy * 0.06)
+        local alpha = (0.035 + pulse * 0.04 + energy * 0.05)
 
         love.graphics.setColor(base_color[1], base_color[2], base_color[3], alpha)
         love.graphics.circle("fill", n.x, n.y, dynamic_rad)
     end
 
     if energy > 0.05 then
-        love.graphics.setColor(base_color[1] * 1.2, base_color[2] * 0.8, base_color[3] * 1.3, energy * 0.12 * (0.7 + pulse * 0.3))
-        love.graphics.rectangle("fill", 0, 0, 800, 600)
+        love.graphics.setColor(base_color[1] * 1.2, base_color[2] * 0.8, base_color[3] * 1.3, energy * 0.10 * (0.7 + pulse * 0.3))
+        love.graphics.rectangle("fill", 0, 0, 1280, 720)
     end
 
     love.graphics.setBlendMode("alpha")
@@ -2432,171 +3463,16 @@ Error reading file with 'cp1252': 'charmap' codec can't decode byte 0x8f in posi
 ================================================
 FILE: tetris/garbage_manager.lua
 ================================================
----@diagnostic disable: undefined-global
-local GarbageManager = {}
-
-local ATTACK_TABLE = {
-    single = 0, double = 1, triple = 2, tetris = 4,
-    t_spin_single = 2, t_spin_double = 4, t_spin_triple = 6
-}
-local COMBO_TABLE = {0, 0, 1, 1, 1, 2, 2, 3, 3, 4, 4, 4, 5}
-
-local ZONE_ATTACK_TIERS = {
-    [1] = 1, [2] = 2, [3] = 3, [4] = 5,
-    [5] = 7, [6] = 9, [7] = 11, [8] = 13,       -- Octoris
-    [9] = 15, [10] = 17, [11] = 19, [12] = 21,   -- Dodecatris
-    [13] = 23, [14] = 25, [15] = 27, [16] = 30,   -- Decahexatris
-    [18] = 36, [20] = 44, [21] = 50              -- Ultimatris
-}
-
-function GarbageManager.calculateAttack(lines, is_tspin, is_mini, combo, b2b, board)
-    local attack = 0
-    local message = ""
-    local color = {1, 1, 1}
-
-    local charge_boost = (lines / 4) * 0.4
-    if is_tspin or lines == 4 then 
-        charge_boost = 1.0 
-        board.eq_power = 1.0
-        board.eq_flash = 1.0
-    end
-
-    if combo > 0 then
-        charge_boost = charge_boost + (combo * 0.18)
-        board.eq_power = math.max(board.eq_power, 0.5)
-    end
-
-    board.eq_charge = math.min(1.0, board.eq_charge + charge_boost)
-
-    if not board.is_zone_active then
-        local zone_gain = lines * 0.038
-        if is_tspin then zone_gain = zone_gain + 0.06 end
-        if lines == 4 then zone_gain = zone_gain + 0.05 end
-        board.zone_meter = math.min(1.0, board.zone_meter + zone_gain)
-    end
-
-    if is_tspin then
-        if lines == 1 then attack, message, color = 2, "T-SPIN SINGLE", {0.8, 0.2, 1}
-        elseif lines == 2 then attack, message, color = 4, "T-SPIN DOUBLE", {0.8, 0.2, 1}
-        elseif lines == 3 then attack, message, color = 6, "T-SPIN TRIPLE", {0.8, 0.2, 1}
-        end
-    else
-        if lines == 2 then attack, message = 1, "DOUBLE"
-        elseif lines == 3 then attack, message = 2, "TRIPLE"
-        elseif lines == 4 then attack, message, color = 4, "TETRIS!", {0, 0.8, 1}
-        end
-    end
-
-    if b2b > 0 and (lines == 4 or is_tspin) then 
-        attack = attack + 1 
-        if message ~= "" then message = "B2B " .. message end
-    end
-
-    if combo > 0 then 
-        attack = attack + (COMBO_TABLE[math.min(combo, #COMBO_TABLE)] or 5)
-        if combo >= 2 then board:setPopup("COMBO " .. combo, {1, 0.8, 0}) end
-    end
-
-    -- DETONACIÃ“N DE PHANTOM DUEL (Interferencia Espectral al Rival)
-    if (lines == 4 or is_tspin or (b2b > 0 and lines >= 2)) and board.opponent and board.active_piece then
-        local p = board.active_piece
-        board.opponent:spawnPhantom(p.x, math.random(22, 34), p.id, p.shape[p.rotation])
-        local AudioManager = require "audio_manager"
-        AudioManager.playImmediateSFX("phantom_attack", board.player_type == "bot")
-    end
-
-    if message ~= "" then board:setPopup(message, color) end
-    return attack
-end
-
-function GarbageManager.calculateZoneBurst(lines_cleared, is_perfect_clear, is_hyper_zone)
-    if is_perfect_clear then
-        return 50, "PERFECT CLEAR ZONE!", {1.0, 0.85, 0.2}
-    end
-
-    if lines_cleared <= 0 then 
-        return 0, "ZONE END", {0.5, 0.8, 1} 
-    end
-
-    local base = ZONE_ATTACK_TIERS[lines_cleared] or math.floor(lines_cleared * 2.3)
-    
-    if is_hyper_zone then
-        base = base + 3
-    end
-
-    local name = "ZONE " .. lines_cleared
-    local color = {0, 0.9, 1}
-
-    if lines_cleared >= 20 then 
-        name, color = "ULTIMATRIS (" .. lines_cleared .. ")", {1.0, 0.85, 0.2}
-    elseif lines_cleared >= 16 then 
-        name, color = "DECAHEXATRIS (" .. lines_cleared .. ")", {1, 0.2, 0.8}
-    elseif lines_cleared >= 12 then 
-        name, color = "DODECATRIS (" .. lines_cleared .. ")", {0.8, 0.2, 1}
-    elseif lines_cleared >= 8 then 
-        name, color = "OCTORIS (" .. lines_cleared .. ")", {0.2, 1, 0.5}
-    elseif lines_cleared >= 4 then 
-        name, color = "TETRIS ZONE (" .. lines_cleared .. ")", {0, 0.8, 1}
-    end
-
-    if is_hyper_zone then
-        name = "â˜… HYPER " .. name
-        color = {1.0, 0.9, 0.3}
-    end
-
-    return base, name, color
-end
-
-function GarbageManager.sendGarbage(sender, receiver, amount)
-    if amount <= 0 then return end
-    
-    if receiver and receiver.is_zone_active then
-        return
-    end
-
-    local rem = amount
-    while rem > 0 and #sender.garbage_queue > 0 do
-        if sender.garbage_queue[1] <= rem then 
-            rem = rem - table.remove(sender.garbage_queue, 1)
-        else 
-            sender.garbage_queue[1] = sender.garbage_queue[1] - rem
-            rem = 0 
-        end
-    end
-
-    if rem > 0 and receiver then 
-        table.insert(receiver.garbage_queue, rem)
-        receiver:triggerShake(rem * 4, 0.25)
-        receiver.eq_charge = math.min(1.0, receiver.eq_charge + 0.4)
-    end
-end
-
-function GarbageManager.pushToGrid(board)
-    if board.is_zone_active or #board.garbage_queue == 0 then return end
-    
-    local lines = math.min(table.remove(board.garbage_queue, 1), 8)
-    local hole = math.random(1, 10)
-    for i = 1, lines do
-        table.remove(board.grid, 1)
-        local row = {}
-        for c = 1, 10 do row[c] = (c == hole) and 0 or 8 end
-        table.insert(board.grid, row)
-    end
-    
-    local AudioManager = require "audio_manager"
-    if AudioManager and AudioManager.triggerGlitch then
-        AudioManager.triggerGlitch(lines * 0.08)
-    end
-    board:triggerShake(lines * 5, 0.3)
-end
-
-return GarbageManager
+Error reading file with 'cp1252': 'charmap' codec can't decode byte 0x8d in position 1954: character maps to <undefined>
 
 
 ================================================
 FILE: tetris/hud_center.lua
 ================================================
 ---@diagnostic disable: undefined-global
+-- ============================================================================
+-- MUTRIS ENGINE: CENTER VS BADGE & PPS COMPARATOR (1280x720 WIDESCREEN)
+-- ============================================================================
 local HUDCenter = {}
 local FontCache = require "tetris.font_cache"
 
@@ -2606,47 +3482,47 @@ function HUDCenter.draw(player, bot)
     local pulse = _G.AudioBeatPulse or 0
     local scale = 1 + pulse * (0.04 + active_punch * 0.03)
     
-    love.graphics.translate(400, 260)
+    -- Centrado milimÃ©trico en el eje central de 1280px (x = 640, y = 145)
+    love.graphics.translate(640, 145)
     love.graphics.scale(scale, scale)
 
-    -- Placa central oscura con borde neÃ³n traslÃºcido para aislar del fondo
-    love.graphics.setColor(0.01, 0.02, 0.05, 0.85)
-    love.graphics.rectangle("fill", -52, -18, 104, 36, 6)
+    -- Placa central con marco neÃ³n
+    love.graphics.setColor(0.01, 0.02, 0.05, 0.88)
+    love.graphics.rectangle("fill", -54, -20, 108, 40, 6)
     love.graphics.setLineWidth(1.5)
-    love.graphics.setColor(0, 0.7, 1, 0.25 + pulse * 0.2)
-    love.graphics.rectangle("line", -52, -18, 104, 36, 6)
+    love.graphics.setColor(0, 0.7, 1, 0.30 + pulse * 0.25)
+    love.graphics.rectangle("line", -54, -20, 108, 40, 6)
 
-    -- Separador VS NeÃ³n
+    -- Divisor VS
     love.graphics.setFont(FontCache.get(10))
-    love.graphics.setColor(1, 1, 1, 0.4 + pulse * 0.4)
-    love.graphics.printf("VS", -15, -6, 30, "center")
+    love.graphics.setColor(1, 1, 1, 0.45 + pulse * 0.4)
+    love.graphics.printf("VS", -15, -7, 30, "center")
 
-    -- Marcador Humano (P1 - Cian / Alerta Roja)
-    local p1_val = (player and player.current_pps_display) or 0
-    local bot_val = (bot and bot.current_pps_display) or 0
+    -- Marcador P1
+    local p1_val = (player and player.current_pps_display) or 0.0
+    local bot_val = (bot and bot.current_pps_display) or 0.0
     local p1_better = p1_val >= bot_val
 
-    love.graphics.setFont(FontCache.get(12))
+    love.graphics.setFont(FontCache.get(13))
     if p1_better then
         love.graphics.setColor(0, 0.95, 1, 0.95)
     else
         love.graphics.setColor(1, 0.35, 0.35, 0.85)
     end
-    love.graphics.printf(string.format("%.1f", p1_val), -48, -7, 32, "center")
+    love.graphics.printf(string.format("%.1f", p1_val), -50, -8, 34, "center")
 
-    -- Marcador Bot (AI - Alerta Roja / Verde / Violeta)
+    -- Marcador Bot
     local bot_better = bot_val > p1_val
     if bot_better then
         love.graphics.setColor(1, 0.25, 0.3, 0.95)
     else
         love.graphics.setColor(0.5, 0.6, 0.75, 0.8)
     end
-    love.graphics.printf(string.format("%.1f", bot_val), 16, -7, 32, "center")
+    love.graphics.printf(string.format("%.1f", bot_val), 16, -8, 34, "center")
 
-    -- SubtÃ­tulo PPS
     love.graphics.setFont(FontCache.get(8))
-    love.graphics.setColor(0.5, 0.6, 0.7, 0.6)
-    love.graphics.printf("PPS", -20, 9, 40, "center")
+    love.graphics.setColor(0.5, 0.6, 0.7, 0.65)
+    love.graphics.printf("PPS", -20, 10, 40, "center")
 
     love.graphics.pop()
 end
@@ -2658,33 +3534,37 @@ return HUDCenter
 FILE: tetris/hud_panels.lua
 ================================================
 ---@diagnostic disable: undefined-global
+-- ============================================================================
+-- MUTRIS ENGINE: HUD PANELS (NEXT / HOLD / ZONE BAR) (1280x720 WIDESCREEN)
+-- ============================================================================
 local HUDPanels = {}
 local SRS = require "tetris.rotation_systems.srs"
 local FontCache = require "tetris.font_cache"
 
 local PREVIEW_CONFIG = {
-    [1] = { ox = 6,  oy = 18, scale = 0.55 },
-    [2] = { ox = 12, oy = 18, scale = 0.55 },
-    [3] = { ox = 12, oy = 18, scale = 0.55 },
-    [4] = { ox = 19, oy = 24, scale = 0.55 },
-    [5] = { ox = 12, oy = 18, scale = 0.55 },
-    [6] = { ox = 12, oy = 18, scale = 0.55 },
-    [7] = { ox = 12, oy = 18, scale = 0.55 }
+    [1] = { ox = 6,  oy = 20, scale = 0.58 },
+    [2] = { ox = 12, oy = 20, scale = 0.58 },
+    [3] = { ox = 12, oy = 20, scale = 0.58 },
+    [4] = { ox = 20, oy = 26, scale = 0.58 },
+    [5] = { ox = 12, oy = 20, scale = 0.58 },
+    [6] = { ox = 12, oy = 20, scale = 0.58 },
+    [7] = { ox = 12, oy = 20, scale = 0.58 }
 }
 
 function HUDPanels.draw(board)
     love.graphics.push("all")
     local is_human = (board.player_type == "human")
     
-    local hold_x = is_human and (board.x - 72) or (board.x + 248)
-    local next_x = is_human and (board.x + 244) or (board.x - 68)
+    -- En 1280x720 los paneles quedan perfectamente alineados a los costados
+    local hold_x = is_human and (board.x - 76) or (board.x + 248)
+    local next_x = is_human and (board.x + 248) or (board.x - 76)
     local panel_y = board.y + 10
     
     local pulse = _G.AudioBeatPulse or 0
     
     local function drawNeonPanel(x, y, label)
-        local p_w = 64
-        local p_h = 64
+        local p_w = 68
+        local p_h = 68
         
         love.graphics.setColor(0.02, 0.03, 0.06, 0.88)
         love.graphics.rectangle("fill", x, y, p_w, p_h, 4)
@@ -2694,7 +3574,7 @@ function HUDPanels.draw(board)
         love.graphics.rectangle("line", x, y, p_w, p_h, 4)
         
         love.graphics.setFont(FontCache.get(9))
-        love.graphics.setColor(1, 1, 1, 0.65)
+        love.graphics.setColor(1, 1, 1, 0.70)
         love.graphics.printf(label, x, y + 4, p_w, "center")
     end
 
@@ -2702,7 +3582,7 @@ function HUDPanels.draw(board)
     drawNeonPanel(hold_x, panel_y, "HOLD")
     if board.hold_piece then
         local pid = board.hold_piece.id
-        local cfg = PREVIEW_CONFIG[pid] or { ox = 12, oy = 18, scale = 0.55 }
+        local cfg = PREVIEW_CONFIG[pid] or { ox = 12, oy = 20, scale = 0.58 }
         local shape = SRS.shapes[pid][1]
         
         love.graphics.push()
@@ -2712,7 +3592,7 @@ function HUDPanels.draw(board)
         for r = 1, #shape do
             for c = 1, #shape[r] do
                 if shape[r][c] ~= 0 then
-                    board:drawBlock((c - 1) * 24, (r - 1) * 24, pid, 0.85)
+                    board:drawBlock((c - 1) * 24, (r - 1) * 24, pid, 0.88)
                 end
             end
         end
@@ -2725,7 +3605,7 @@ function HUDPanels.draw(board)
     if board.bag then
         local next_id = board.bag:peek(1)[1]
         if next_id then
-            local cfg = PREVIEW_CONFIG[next_id] or { ox = 12, oy = 18, scale = 0.55 }
+            local cfg = PREVIEW_CONFIG[next_id] or { ox = 12, oy = 20, scale = 0.58 }
             local shape = SRS.shapes[next_id][1]
             
             love.graphics.push()
@@ -2735,7 +3615,7 @@ function HUDPanels.draw(board)
             for r = 1, #shape do
                 for c = 1, #shape[r] do
                     if shape[r][c] ~= 0 then
-                        board:drawBlock((c - 1) * 24, (r - 1) * 24, next_id, 0.85)
+                        board:drawBlock((c - 1) * 24, (r - 1) * 24, next_id, 0.88)
                     end
                 end
             end
@@ -2744,10 +3624,10 @@ function HUDPanels.draw(board)
         end
     end
 
-    -- BARRA LATERAL ZONE METER (REACTIVA Y DISTINCIÃ“N 100%)
+    -- BARRA LATERAL ZONE METER
     local zone_x = is_human and (board.x - 14) or (board.x + 246)
-    local zone_y = board.y + 120
-    local zone_h = 240
+    local zone_y = board.y + 110
+    local zone_h = 260
     
     love.graphics.setColor(0.01, 0.02, 0.05, 0.8)
     love.graphics.rectangle("fill", zone_x, zone_y, 8, zone_h, 2)
@@ -2769,7 +3649,6 @@ function HUDPanels.draw(board)
                 love.graphics.setColor(0.1, 0.9, 1.0, 0.9 + pulse * 0.1)
             end
         elseif is_full_100 then
-            -- Indicador 100% clavado (Hyper Oro/Diamante)
             local flash = 0.6 + math.sin(time * 16) * 0.4
             love.graphics.setColor(1.0, 0.85 * flash, 0.2, 0.95)
         elseif board.zone_meter >= 0.25 then
@@ -2904,181 +3783,7 @@ return ParticleSystem
 ================================================
 FILE: tetris/piece.lua
 ================================================
----@diagnostic disable: undefined-global
-local Piece = {}
-Piece.__index = Piece
-local AudioManager = require "audio_manager"
-local PPSCounter = require "tetris.pps_counter"
-
-function Piece.new(id, board)
-    local self = setmetatable({}, Piece)
-    self.id, self.board = id, board
-    local SRS = require "tetris.rotation_systems.srs"
-    self.shape = (SRS and SRS.shapes) and SRS.shapes[id] or { {{1,1,1,1}} }
-    self.rotation, self.x, self.y = 1, 4, 21
-    self.locked, self.gravity_timer, self.lock_timer = false, 0, 0
-    self.lock_delay, self.move_count, self.max_resets = 0.5, 0, 15
-    self.spawn_timer = 0.2
-    self.last_move_was_rotate = false 
-    return self
-end
-
-function Piece:resetLock()
-    if self.move_count < self.max_resets then 
-        self.lock_timer, self.move_count = 0, self.move_count + 1 
-    end
-end
-
-function Piece:move(dx, dy, is_gravity)
-    if self.board:canMove(self.x + dx, self.y + dy, self.rotation) then
-        self.x, self.y = self.x + dx, self.y + dy
-        if not is_gravity then 
-            AudioManager.playImmediateSFX("move", self.board.player_type == "bot") 
-            self:resetLock() 
-            self.last_move_was_rotate = false
-        end
-        return true
-    end
-    return false
-end
-
-function Piece:rotate(dir)
-    local SRS = require "tetris.rotation_systems.srs"
-    local max_rot = #self.shape
-    local old_rot = self.rotation
-    local next_rot = ((self.rotation + dir - 1) % max_rot) + 1
-    local kicks = SRS.getKicks(self.id, old_rot, next_rot)
-    if kicks then
-        for _, kick in ipairs(kicks) do
-            if self.board:canMove(self.x + kick[1], self.y - kick[2], next_rot) then
-                self.x, self.y, self.rotation = self.x + kick[1], self.y - kick[2], next_rot
-                AudioManager.playImmediateSFX("rotate", self.board.player_type == "bot")
-                self:resetLock()
-                self.last_move_was_rotate = true
-                return true
-            end
-        end
-    end
-    return false
-end
-
-function Piece:checkTSpin()
-    if self.id ~= 6 or not self.last_move_was_rotate then return false end
-    local occupied = 0
-    local corners = {{x=0,y=0}, {x=2,y=0}, {x=0,y=2}, {x=2,y=2}}
-    for _, c in ipairs(corners) do
-        local tx, ty = self.x+c.x, self.y+c.y
-        if tx<1 or tx>10 or ty>40 or (ty>=1 and self.board.grid[ty][tx]~=0) then occupied = occupied+1 end
-    end
-    return occupied >= 3
-end
-
-function Piece:canMove(px, py, pr) return self.board:canMove(px, py, pr) end
-
-function Piece:update(dt, gravity_speed)
-    if self.locked then return end
-    if self.spawn_timer > 0 then self.spawn_timer = self.spawn_timer - dt end
-    self.gravity_timer = self.gravity_timer + dt
-    
-    -- En Zone Mode la gravedad automÃ¡tica se congela
-    local limit = self.board.is_zone_active and 999.0 or (gravity_speed or 0.8)
-    while self.gravity_timer >= limit do
-        if self:move(0, 1, true) then 
-            self.gravity_timer = self.gravity_timer - limit
-        else 
-            self.gravity_timer = 0
-            break 
-        end
-    end
-
-    if not self.board:canMove(self.x, self.y + 1, self.rotation) then
-        self.lock_timer = self.lock_timer + dt
-        if self.lock_timer >= self.lock_delay then self:lock() end
-    else 
-        self.lock_timer = 0 
-    end
-end
-
-function Piece:lock()
-    if self.locked then return end
-    self.board.can_hold, self.board.lock_impact = true, 1.0
-    local is_tspin = self:checkTSpin()
-    local shape = self.shape[self.rotation]
-    for r = 1, #shape do
-        for c = 1, #shape[r] do
-            if shape[r][c] ~= 0 then
-                local tx, ty = self.x + c - 1, self.y + r - 1
-                if ty >= 1 and ty <= 40 then self.board.grid[ty][tx] = self.id end
-            end
-        end
-    end
-    self.locked = true
-    PPSCounter.register(self.board)
-    AudioManager.playImmediateSFX("drop", self.board.player_type == "bot", self.y)
-    self.board:checkLines(is_tspin)
-end
-
-function Piece:draw(bx, by)
-    local shape = self.shape[self.rotation]
-    local energy, pulse = _G.TrackEnergyPunch or 0, _G.AudioBeatPulse or 0
-    love.graphics.push("all")
-
-    -- SPAWN BLOOM
-    if self.spawn_timer > 0 then
-        local p = self.spawn_timer / 0.2
-        local clr = self.board.colors[self.id]
-        love.graphics.setBlendMode("add")
-        for r = 1, #shape do 
-            for c = 1, #shape[r] do 
-                if shape[r][c] ~= 0 then
-                    local x, y = bx + (self.x + c - 2) * 24, by + (self.y + r - 22) * 24
-                    love.graphics.setColor(clr[1], clr[2], clr[3], p * 0.4)
-                    love.graphics.rectangle("fill", x - 6 * p, y - 6 * p, 24 + 12 * p, 24 + 12 * p, 4)
-                    love.graphics.setColor(1, 1, 1, p * 0.6)
-                    love.graphics.rectangle("fill", x, y, 24, 24, 2)
-                end 
-            end 
-        end
-        love.graphics.setBlendMode("alpha")
-    end
-
-    -- GHOST PIECE (SOMBRA REACTIVA AL BEAT & ALTA LEGIBILIDAD)
-    if self.board and bx == self.board.x and by == self.board.y then
-        local gy = self.y
-        while self.board:canMove(self.x, gy + 1, self.rotation) do gy = gy + 1 end
-        local clr = self.board.colors[self.id]
-        local ghost_pulse = 0.25 + pulse * 0.3 + energy * 0.15
-        
-        for r = 1, #shape do 
-            for c = 1, #shape[r] do 
-                if shape[r][c] ~= 0 then
-                    local gx, g_y = bx + (self.x + c - 2) * 24, by + (gy + r - 22) * 24
-                    
-                    -- Relleno tenue
-                    love.graphics.setColor(clr[1], clr[2], clr[3], 0.12)
-                    love.graphics.rectangle("fill", gx + 2, g_y + 2, 20, 20, 2)
-                    
-                    -- Borde neÃ³n pulsante
-                    love.graphics.setLineWidth(1.8)
-                    love.graphics.setColor(clr[1], clr[2], clr[3], ghost_pulse)
-                    love.graphics.rectangle("line", gx + 2, g_y + 2, 20, 20, 2)
-                end 
-            end 
-        end
-    end
-
-    -- ACTIVE PIECE
-    for r = 1, #shape do 
-        for c = 1, #shape[r] do 
-            if shape[r][c] ~= 0 then
-                self.board:drawBlock(bx + (self.x + c - 2) * 24, by + (self.y + r - 22) * 24, self.id)
-            end 
-        end 
-    end
-    love.graphics.pop()
-end
-
-return Piece
+Error reading file with 'cp1252': 'charmap' codec can't decode byte 0x8f in position 5889: character maps to <undefined>
 
 
 ================================================
@@ -3161,61 +3866,64 @@ return Shaker
 FILE: tetris/telemetry.lua
 ================================================
 ---@diagnostic disable: undefined-global
+-- ============================================================================
+-- MUTRIS ENGINE: CENTRAL TELEMETRY CARD (1280x720 WIDESCREEN)
+-- ============================================================================
 local Telemetry = {}
 local FontCache = require "tetris.font_cache"
 
 function Telemetry.draw(player, bot)
     love.graphics.push("all")
     local energy = _G.TrackEnergyPunch or 0
-    local px, py = 290, 526
-    local pw, ph = 220, 64
+    -- UbicaciÃ³n central espaciosa en 1280x720 (x: 480..800, y: 485..600)
+    local px, py = 480, 485
+    local pw, ph = 320, 115
     
-    -- Panel translÃºcido central
-    love.graphics.setColor(0.01, 0.02, 0.04, 0.85)
+    love.graphics.setColor(0.01, 0.02, 0.04, 0.88)
     love.graphics.rectangle("fill", px, py, pw, ph, 4)
-    love.graphics.setColor(0, 0.7, 1, 0.25 + energy * 0.35)
+    love.graphics.setColor(0, 0.7, 1, 0.30 + energy * 0.35)
     love.graphics.setLineWidth(1.5)
     love.graphics.rectangle("line", px, py, pw, ph, 4)
 
-    -- Encabezado: VersiÃ³n y Tiempo
-    love.graphics.setFont(FontCache.get(9))
-    love.graphics.setColor(0.4, 0.85, 1.0, 0.9)
-    love.graphics.print(_G.ENGINE_VERSION or "MUTRIS v1.0.0", px + 8, py + 4)
+    -- Encabezado
+    love.graphics.setFont(FontCache.get(10))
+    love.graphics.setColor(0.4, 0.85, 1.0, 0.95)
+    love.graphics.print(_G.ENGINE_VERSION or "MUTRIS v1.0.0", px + 12, py + 8)
 
-    love.graphics.setColor(1, 1, 1, 0.8)
-    love.graphics.print(string.format("T: %.1fs", _G.RealMatchTimer or 0), px + 124, py + 4)
-    love.graphics.print(string.format("%d FPS", love.timer.getFPS()), px + 172, py + 4)
+    love.graphics.setColor(1, 1, 1, 0.85)
+    love.graphics.print(string.format("TIME: %.1fs", _G.RealMatchTimer or 0), px + 170, py + 8)
+    love.graphics.print(string.format("%d FPS", love.timer.getFPS()), px + 260, py + 8)
 
-    -- Barra de Adrenalina Musical
-    love.graphics.setColor(0, 0.8, 1, 0.12)
-    love.graphics.rectangle("fill", px + 8, py + 18, 204, 3, 1)
-    love.graphics.setColor(0, 0.85, 1, 0.85)
-    love.graphics.rectangle("fill", px + 8, py + 18, 204 * energy, 3, 1)
+    -- Barra de Adrenalina Musical (The Punch)
+    love.graphics.setColor(0, 0.8, 1, 0.15)
+    love.graphics.rectangle("fill", px + 12, py + 26, 296, 4, 1)
+    love.graphics.setColor(0, 0.9, 1, 0.90)
+    love.graphics.rectangle("fill", px + 12, py + 26, 296 * energy, 4, 1)
 
-    -- Lectura de Velocidad PPS en Vivo
+    -- PPS en Vivo
     if player and bot then
-        love.graphics.setFont(FontCache.get(10))
+        love.graphics.setFont(FontCache.get(12))
         love.graphics.setColor(0.2, 0.95, 1.0, 0.95)
-        love.graphics.print(string.format("P1: %.1f PPS", player.current_pps_display or 0), px + 8, py + 25)
+        love.graphics.print(string.format("P1: %.2f PPS", player.current_pps_display or 0), px + 12, py + 38)
         
         love.graphics.setColor(1.0, 0.35, 0.4, 0.95)
-        love.graphics.print(string.format("AI LIVE: %.1f", bot.current_pps_display or 0), px + 120, py + 25)
+        love.graphics.print(string.format("BOT: %.2f PPS", bot.current_pps_display or 0), px + 170, py + 38)
     end
 
-    -- ðŸŽ¯ MONITOR DE DIFICULTAD ADAPTATIVA (Lee ai_profile.json en tiempo real)
+    -- Monitor DDA ARCHON
     local prof = _G.AI_ADAPTIVE_PROFILE
     if prof and _G.CURRENT_GAME_MODE == "versus" then
-        love.graphics.setFont(FontCache.get(9))
+        love.graphics.setFont(FontCache.get(10))
         local target_pps = prof.ai_target_pps or 1.45
         
         if target_pps >= 2.5 then love.graphics.setColor(1.0, 0.25, 0.35, 0.95)
         elseif target_pps >= 1.6 then love.graphics.setColor(1.0, 0.85, 0.2, 0.95)
         else love.graphics.setColor(0.1, 0.95, 0.7, 0.95) end
         
-        love.graphics.print(string.format("AI BASE: %.2f PPS", target_pps), px + 8, py + 44)
+        love.graphics.print(string.format("AI TARGET: %.2f PPS", target_pps), px + 12, py + 68)
 
-        love.graphics.setColor(0.6, 0.75, 0.85, 0.8)
-        love.graphics.print(string.format("W/L: %d-%d (P1: %.2f)", prof.player_wins or 0, prof.bot_wins or 0, prof.player_avg_pps or 1.0), px + 105, py + 44)
+        love.graphics.setColor(0.6, 0.75, 0.85, 0.85)
+        love.graphics.print(string.format("RECORD: %d-%d (AVG P1: %.2f)", prof.player_wins or 0, prof.bot_wins or 0, prof.player_avg_pps or 1.0), px + 12, py + 88)
     end
 
     love.graphics.pop()

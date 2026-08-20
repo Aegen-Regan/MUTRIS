@@ -1,0 +1,14 @@
+# Grabaciones y archivos temporales pesados
+recordings/*.bin
+recordings/*.mp4
+recordings/*.gif
+recordings/*.png
+recordings/ffmpeg_log.txt
+
+# Capturas de pantalla
+screenshots/*.png
+
+# Reportes de crasheos y volcados de depuración
+saves/*.txt
+saves/crash_report.txt
+saves/manual_snapshot.txt
