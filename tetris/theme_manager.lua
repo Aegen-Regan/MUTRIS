@@ -1,23 +1,26 @@
 -- ============================================================================
 -- MUTRIS ENGINE: DYNAMIC THEME & SKIN SWITCHER ENGINE (1280x720 WIDESCREEN)
--- Arquitectura: Zero-GC / 4 Universos Visuales / Lazy-Resolve Blackbox
+-- Arquitectura: Zero-GC / 4 Universos Visuales / Engage Wipes / Garbage Gauge
 -- ============================================================================
 local ThemeManager = {}
 
 local FontCache       = require "tetris.font_cache"
 local SettingsManager = require "settings_manager"
-local Blackbox        = nil -- Lazy load para erradicar ciclos
+local Blackbox        = nil
 
 ThemeManager.SKINS = {
-    CYBER_DAW     = 1, -- 01 // CYBER-DAW HARDWARE RACK
-    NEO_KINETIC   = 2, -- 02 // NEO-KINETIC STRIKE (Fighter/Persona Style)
-    ESPORTS_GLASS = 3, -- 03 // HYPER-CLEAN ESPORTS GLASSMORPHISM
-    COSMIC_VOID   = 4  -- 04 // SINESTESIA COSMICA / PRISMATIC VOID
+    CYBER_DAW     = 1,
+    NEO_KINETIC   = 2,
+    ESPORTS_GLASS = 3,
+    COSMIC_VOID   = 4
 }
 
 ThemeManager.current_theme = 1
 ThemeManager.toast_timer = 0.0
 ThemeManager.toast_text = ""
+
+-- Búfer de física elástica para el menú (Zero-GC)
+ThemeManager.menu_offsets = {0, 0, 0, 0}
 
 -- ============================================================================
 -- 📦 BUFFERS ESTÁTICOS ZERO-GC
@@ -103,6 +106,7 @@ function ThemeManager.init()
     local saved = SettingsManager.get("theme_skin")
     ThemeManager.current_theme = (type(saved) == "number" and saved >= 1 and saved <= 4) and saved or 1
     ThemeManager.toast_timer = 0.0
+    ThemeManager.menu_offsets = {0, 0, 0, 0}
 end
 
 function ThemeManager.getCurrent()
@@ -143,6 +147,12 @@ function ThemeManager.update(dt)
     local energy = _G.TrackEnergyPunch or 0
     local pulse  = _G.AudioBeatPulse or 0
 
+    -- Animación de botones con física elástica
+    for i = 1, 4 do
+        local target = (i == _G.MenuSelectionIndex) and 18.0 or 0.0
+        ThemeManager.menu_offsets[i] = ThemeManager.menu_offsets[i] + (target - ThemeManager.menu_offsets[i]) * 14.0 * dt
+    end
+
     if ThemeManager.current_theme == 4 then
         for i = 1, NUM_STARS do
             local s = stars[i]
@@ -162,6 +172,129 @@ function ThemeManager.update(dt)
             vu_meters[i] = math.max(0.05, math.min(1.0, vu_meters[i]))
         end
     end
+end
+
+-- ============================================================================
+-- 🎬 TRANSICIÓN CINEMÁTICA DE ENTRADA AL COMBATE (ENGAGE WIPE)
+-- ============================================================================
+function ThemeManager.drawEngageTransition(timer, duration)
+    if timer <= 0 then return end
+    local progress = timer / duration
+    local t = ThemeManager.getCurrent()
+
+    love.graphics.push("all")
+
+    if ThemeManager.current_theme == 1 then
+        local scan_y = (1.0 - progress) * 720
+        love.graphics.setColor(0, 1.0, 0.55, progress * 0.85)
+        love.graphics.rectangle("fill", 0, scan_y - 20, 1280, 40)
+        love.graphics.setLineWidth(3)
+        love.graphics.setColor(1, 1, 1, progress)
+        love.graphics.line(0, scan_y, 1280, scan_y)
+
+    elseif ThemeManager.current_theme == 2 then
+        local offset = (1.0 - progress) * 900
+        love.graphics.setColor(1.0, 0.08, 0.25, 0.95)
+        love.graphics.polygon("fill", -100, 0, 740 - offset, 0, 540 - offset, 720, -100, 720)
+        love.graphics.setColor(1.0, 0.85, 0.0, 0.95)
+        love.graphics.polygon("fill", 1380, 720, 540 + offset, 720, 740 + offset, 0, 1380, 0)
+
+    elseif ThemeManager.current_theme == 3 then
+        local aperture = (1.0 - progress) * 640
+        love.graphics.setColor(0.0, 0.9, 1.0, progress * 0.7)
+        love.graphics.rectangle("fill", 0, 0, 640 - aperture, 720)
+        love.graphics.rectangle("fill", 640 + aperture, 0, 640 - aperture, 720)
+
+    elseif ThemeManager.current_theme == 4 then
+        local rad = progress * 600
+        love.graphics.setBlendMode("add")
+        love.graphics.setColor(0.6, 0.35, 1.0, progress * 0.6)
+        love.graphics.circle("fill", 640, 360, rad)
+        love.graphics.setColor(0.1, 0.9, 1.0, progress * 0.8)
+        love.graphics.circle("line", 640, 360, rad * 1.2)
+        love.graphics.setBlendMode("alpha")
+    end
+
+    love.graphics.pop()
+end
+
+-- ============================================================================
+-- ⚠️ BARRA DE BASURA ENTRANTE PELIGROSA (GARBAGE WARNING GAUGE - DEFENSIVA)
+-- ============================================================================
+function ThemeManager.drawGarbageBar(board)
+    if not board or not board.garbage_queue then return end
+    local q_count = #board.garbage_queue
+    if q_count <= 0 then return end
+
+    local total_lines = 0
+    for i = 1, q_count do
+        local item = board.garbage_queue[i]
+        if type(item) == "number" then
+            total_lines = total_lines + item
+        elseif type(item) == "table" then
+            total_lines = total_lines + (item.lines or item.amount or item[1] or 0)
+        end
+    end
+    if total_lines <= 0 then return end
+
+    local pulse = _G.AudioBeatPulse or 0
+    local is_human = (board.player_type == "human")
+    local gx = is_human and (board.x - 6) or (board.x + 242)
+    local gy = board.y + 480
+    local max_h = 480
+    local cur_h = math.min(max_h, total_lines * 24)
+
+    love.graphics.push("all")
+    love.graphics.setBlendMode("add")
+
+    local flash = 0.7 + pulse * 0.3
+    love.graphics.setColor(1.0, 0.15, 0.20, flash * 0.9)
+    love.graphics.rectangle("fill", gx, gy - cur_h, 4, cur_h)
+
+    love.graphics.setColor(1.0, 0.85, 0.2, flash)
+    love.graphics.rectangle("fill", gx - 1, gy - cur_h - 4, 6, 4)
+
+    love.graphics.setBlendMode("alpha")
+    love.graphics.pop()
+end
+
+-- ============================================================================
+-- 🛡️ AURAS DINÁMICAS DE POSTURAS DE COMBATE (STANCE FX)
+-- ============================================================================
+function ThemeManager.drawStanceAura(board)
+    local st = board.current_stance or 0
+    if st == 0 then return end
+
+    local pulse = _G.AudioBeatPulse or 0
+    local time = love.timer.getTime()
+    local bx, by, bw, bh = board.x, board.y, 240, 480
+
+    love.graphics.push("all")
+    love.graphics.setBlendMode("add")
+
+    if st == 1 then
+        love.graphics.setColor(1.0, 0.15, 0.25, 0.25 + pulse * 0.25)
+        for i = 1, 6 do
+            local wave = math.sin(time * 12 + i) * 6
+            love.graphics.line(bx - 3, by + bh - i * 75, bx - 3 + wave, by + bh - (i + 1) * 75)
+            love.graphics.line(bx + bw + 3, by + bh - i * 75, bx + bw + 3 - wave, by + bh - (i + 1) * 75)
+        end
+
+    elseif st == 2 then
+        local is_parry_active = (board.parry_active_timer and board.parry_active_timer > 0)
+        local shield_alpha = is_parry_active and 0.8 or (0.15 + pulse * 0.15)
+        love.graphics.setColor(0.1, 0.85, 1.0, shield_alpha)
+        love.graphics.setLineWidth(is_parry_active and 3.0 or 1.5)
+        love.graphics.rectangle("line", bx - 6, by - 6, bw + 12, bh + 12, 6)
+
+    elseif st == 3 then
+        love.graphics.setColor(0.65, 0.3, 1.0, 0.20 + pulse * 0.25)
+        local ring_y = by + ((time * 220) % bh)
+        love.graphics.line(bx - 12, ring_y, bx + bw + 12, ring_y)
+    end
+
+    love.graphics.setBlendMode("alpha")
+    love.graphics.pop()
 end
 
 function ThemeManager.drawBackground()
@@ -422,6 +555,7 @@ function ThemeManager.drawGhostPiece(piece, bx, by, shape, gy, ghost_alpha)
 end
 
 function ThemeManager.drawMenu(menuItems, menuSubtitles, menuSelection, MetaBalancer)
+    _G.MenuSelectionIndex = menuSelection
     local t = ThemeManager.getCurrent()
     local pulse = _G.AudioBeatPulse or 0
     local energy = _G.TrackEnergyPunch or 0
@@ -441,32 +575,33 @@ function ThemeManager.drawMenu(menuItems, menuSubtitles, menuSelection, MetaBala
         local fader_w, fader_h = 580, 78
 
         for i, item in ipairs(menuItems) do
+            local off_x = ThemeManager.menu_offsets[i] or 0
             local fy = start_y + (i - 1) * 92
             local is_sel = (i == menuSelection)
 
             love.graphics.setColor(0.02, 0.04, 0.08, 0.92)
-            love.graphics.rectangle("fill", start_x, fy, fader_w, fader_h, 3)
+            love.graphics.rectangle("fill", start_x + off_x, fy, fader_w, fader_h, 3)
             love.graphics.setColor(is_sel and {0, 1, 0.55, 0.95} or {0, 0.6, 0.4, 0.35})
             love.graphics.setLineWidth(is_sel and 2.0 or 1.0)
-            love.graphics.rectangle("line", start_x, fy, fader_w, fader_h, 3)
+            love.graphics.rectangle("line", start_x + off_x, fy, fader_w, fader_h, 3)
 
             love.graphics.setColor(0.04, 0.08, 0.15, 0.9)
-            love.graphics.rectangle("fill", start_x + 10, fy + 12, 64, 22, 2)
+            love.graphics.rectangle("fill", start_x + off_x + 10, fy + 12, 64, 22, 2)
             love.graphics.setFont(FontCache.get(9))
             love.graphics.setColor(0, 1, 0.55, 0.9)
-            love.graphics.printf(string.format("CH.0%d", i), start_x + 10, fy + 17, 64, "center")
+            love.graphics.printf(string.format("CH.0%d", i), start_x + off_x + 10, fy + 17, 64, "center")
 
             love.graphics.setFont(FontCache.get(15))
             love.graphics.setColor(is_sel and {1, 1, 1, 1} or {0.7, 0.8, 0.9, 0.8})
-            love.graphics.print(item, start_x + 85, fy + 14)
+            love.graphics.print(item, start_x + off_x + 85, fy + 14)
 
             love.graphics.setFont(FontCache.get(9))
             love.graphics.setColor(0.4, 0.8, 0.7, is_sel and 0.9 or 0.5)
-            love.graphics.print(menuSubtitles[i] or "", start_x + 85, fy + 42)
+            love.graphics.print(menuSubtitles[i] or "", start_x + off_x + 85, fy + 42)
 
             local vu_val = vu_meters[i] or 0.2
             for seg = 1, 8 do
-                local seg_x = start_x + fader_w - 90 + (seg - 1) * 9
+                local seg_x = start_x + off_x + fader_w - 90 + (seg - 1) * 9
                 local seg_on = (seg / 8) <= vu_val
                 if seg <= 5 then
                     love.graphics.setColor(seg_on and {0, 1, 0.3, 0.95} or {0, 0.25, 0.1, 0.4})
@@ -532,24 +667,25 @@ function ThemeManager.drawMenu(menuItems, menuSubtitles, menuSelection, MetaBala
         local ribbon_w, ribbon_h = 620, 68
 
         for i, item in ipairs(menuItems) do
+            local off_x = ThemeManager.menu_offsets[i] or 0
             local ry = start_y + (i - 1) * 88
             local is_sel = (i == menuSelection)
             local slant = 35
 
             if is_sel then
                 love.graphics.setColor(1.0, 0.08, 0.25, 0.95)
-                love.graphics.polygon("fill", 100 + slant, ry, 100 + ribbon_w + slant, ry, 100 + ribbon_w, ry + ribbon_h, 100, ry + ribbon_h)
+                love.graphics.polygon("fill", 100 + off_x + slant, ry, 100 + off_x + ribbon_w + slant, ry, 100 + off_x + ribbon_w, ry + ribbon_h, 100 + off_x, ry + ribbon_h)
 
                 love.graphics.setColor(1, 0.85, 0, 1.0)
-                love.graphics.polygon("fill", 100, ry, 100 + 18, ry, 100 + 18 - slant, ry + ribbon_h, 100 - slant, ry + ribbon_h)
+                love.graphics.polygon("fill", 100 + off_x, ry, 100 + off_x + 18, ry, 100 + off_x + 18 - slant, ry + ribbon_h, 100 + off_x - slant, ry + ribbon_h)
 
                 love.graphics.setFont(FontCache.get(18))
                 love.graphics.setColor(1, 1, 1, 1)
-                love.graphics.print(string.format("/// 0%d.  %s", i, item), 130, ry + 12)
+                love.graphics.print(string.format("/// 0%d.  %s", i, item), 130 + off_x, ry + 12)
 
                 love.graphics.setFont(FontCache.get(9))
                 love.graphics.setColor(1, 0.9, 0.3, 0.95)
-                love.graphics.print(menuSubtitles[i] or "", 130, ry + 40)
+                love.graphics.print(menuSubtitles[i] or "", 130 + off_x, ry + 40)
             else
                 love.graphics.setColor(0.08, 0.08, 0.12, 0.88)
                 love.graphics.polygon("fill", 100 + slant, ry, 100 + ribbon_w + slant, ry, 100 + ribbon_w, ry + ribbon_h, 100, ry + ribbon_h)
@@ -608,28 +744,29 @@ function ThemeManager.drawMenu(menuItems, menuSubtitles, menuSelection, MetaBala
         local card_w, card_h = 520, 95
 
         for i, item in ipairs(menuItems) do
+            local off_x = ThemeManager.menu_offsets[i] or 0
             local cy = start_y + (i - 1) * 110
             local is_sel = (i == menuSelection)
 
             love.graphics.setColor(0.02, 0.03, 0.07, 0.85)
-            love.graphics.rectangle("fill", 100, cy, card_w, card_h, 6)
+            love.graphics.rectangle("fill", 100 + off_x, cy, card_w, card_h, 6)
             love.graphics.setLineWidth(is_sel and 1.8 or 1.0)
             love.graphics.setColor(is_sel and {0, 0.9, 1.0, 0.95} or {0, 0.6, 0.8, 0.3})
-            love.graphics.rectangle("line", 100, cy, card_w, card_h, 6)
+            love.graphics.rectangle("line", 100 + off_x, cy, card_w, card_h, 6)
 
             love.graphics.setColor(is_sel and {0, 0.9, 1.0, 0.25} or {0.1, 0.15, 0.25, 0.4})
-            love.graphics.rectangle("fill", 100 + card_w - 110, cy + 16, 95, 22, 10)
+            love.graphics.rectangle("fill", 100 + off_x + card_w - 110, cy + 16, 95, 22, 10)
             love.graphics.setFont(FontCache.get(8))
             love.graphics.setColor(is_sel and {0, 0.95, 1.0, 1.0} or {0.5, 0.6, 0.7, 0.7})
-            love.graphics.printf(is_sel and "ENGAGE [A]" or "READY", 100 + card_w - 110, cy + 22, 95, "center")
+            love.graphics.printf(is_sel and "ENGAGE [A]" or "READY", 100 + off_x + card_w - 110, cy + 22, 95, "center")
 
             love.graphics.setFont(FontCache.get(16))
             love.graphics.setColor(is_sel and {1, 1, 1, 1} or {0.7, 0.8, 0.9, 0.85})
-            love.graphics.print(item, 125, cy + 18)
+            love.graphics.print(item, 125 + off_x, cy + 18)
 
             love.graphics.setFont(FontCache.get(9))
             love.graphics.setColor(0.0, 0.9, 1.0, is_sel and 0.9 or 0.5)
-            love.graphics.print(menuSubtitles[i] or "", 125, cy + 50)
+            love.graphics.print(menuSubtitles[i] or "", 125 + off_x, cy + 50)
         end
 
         local p_x, p_w = 660, 520
@@ -678,32 +815,33 @@ function ThemeManager.drawMenu(menuItems, menuSubtitles, menuSelection, MetaBala
         local node_x = 640 - (node_w / 2)
 
         for i, item in ipairs(menuItems) do
+            local off_x = ThemeManager.menu_offsets[i] or 0
             local cy = start_y + (i - 1) * 88
             local is_sel = (i == menuSelection)
 
             if is_sel then
                 love.graphics.setBlendMode("add")
                 love.graphics.setColor(0.6, 0.35, 1.0, 0.35 + pulse * 0.25)
-                love.graphics.circle("fill", 640, cy + node_h/2, 45 + pulse * 15)
+                love.graphics.circle("fill", 640 + off_x, cy + node_h/2, 45 + pulse * 15)
                 love.graphics.setBlendMode("alpha")
 
                 love.graphics.setColor(0.03, 0.02, 0.08, 0.94)
-                love.graphics.rectangle("fill", node_x, cy, node_w, node_h, 8)
+                love.graphics.rectangle("fill", node_x + off_x, cy, node_w, node_h, 8)
                 love.graphics.setColor(1.0, 0.85, 0.25, 0.95)
                 love.graphics.setLineWidth(2.0)
-                love.graphics.rectangle("line", node_x, cy, node_w, node_h, 8)
+                love.graphics.rectangle("line", node_x + off_x, cy, node_w, node_h, 8)
 
                 love.graphics.setColor(1.0, 0.85, 0.25, 0.95)
-                love.graphics.polygon("fill", node_x + 35, cy + 22, node_x + 41, cy + 32, node_x + 35, cy + 42, node_x + 29, cy + 32)
-                love.graphics.polygon("fill", node_x + node_w - 35, cy + 22, node_x + node_w - 29, cy + 32, node_x + node_w - 35, cy + 42, node_x + node_w - 41, cy + 32)
+                love.graphics.polygon("fill", node_x + off_x + 35, cy + 22, node_x + off_x + 41, cy + 32, node_x + off_x + 35, cy + 42, node_x + off_x + 29, cy + 32)
+                love.graphics.polygon("fill", node_x + off_x + node_w - 35, cy + 22, node_x + off_x + node_w - 29, cy + 32, node_x + off_x + node_w - 35, cy + 42, node_x + off_x + node_w - 41, cy + 32)
 
                 love.graphics.setFont(FontCache.get(16))
                 love.graphics.setColor(1, 1, 1, 1.0)
-                love.graphics.printf(item, node_x, cy + 12, node_w, "center")
+                love.graphics.printf(item, node_x + off_x, cy + 12, node_w, "center")
 
                 love.graphics.setFont(FontCache.get(9))
                 love.graphics.setColor(0.1, 0.9, 1.0, 0.95)
-                love.graphics.printf(menuSubtitles[i] or "", node_x, cy + 36, node_w, "center")
+                love.graphics.printf(menuSubtitles[i] or "", node_x + off_x, cy + 36, node_w, "center")
             else
                 love.graphics.setColor(0.01, 0.01, 0.04, 0.80)
                 love.graphics.rectangle("fill", node_x, cy, node_w, node_h, 8)

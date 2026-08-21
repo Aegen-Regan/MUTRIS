@@ -1,3 +1,6 @@
+-- ================================================================
+-- FILE: tetris/anomaly_manager.lua
+-- ================================================================
 ---@diagnostic disable: undefined-global
 -- ============================================================================
 -- MUTRIS ENGINE: ANOMALY MANAGER V2 (1280x720 WIDESCREEN)
@@ -267,33 +270,37 @@ function AnomalyManager.draw(player, bot)
         local theme = ANOMALY_THEMES[id] or DEFAULT_THEME
         local c1, c2 = theme.c1, theme.c2
         local t = AnomalyManager.timer
+        local total_d = AnomalyManager.duration > 0 and AnomalyManager.duration or 10.0
+        local prog = math.max(0, math.min(1, t / total_d))
 
         love.graphics.setBlendMode("add")
-        local top_h = 36
-        love.graphics.setColor(c1[1], c1[2], c1[3], 0.7 + pulse * 0.3)
+        local top_h = 32
+        love.graphics.setColor(c1[1], c1[2], c1[3], 0.75 + pulse * 0.25)
         love.graphics.rectangle("fill", 0, 0, 1280, top_h)
+
+        -- Barra de progreso que se drena
         love.graphics.setColor(c2[1], c2[2], c2[3], 0.95)
-        love.graphics.rectangle("fill", 0, top_h - 2, 1280, 2)
+        love.graphics.rectangle("fill", 0, top_h - 3, 1280 * prog, 3)
 
         love.graphics.setBlendMode("alpha")
-        love.graphics.setFont(FontCache.get(12))
+        love.graphics.setFont(FontCache.get(11))
         love.graphics.setColor(1, 1, 1, 0.95)
-        love.graphics.print("ANOMALY: " .. theme.label, 20, 10)
+        love.graphics.print("ANOMALY: " .. theme.label, 24, 8)
 
         local tstr2 = string.format("%.1fs", t)
-        local tw2 = FontCache.get(12):getWidth(tstr2)
-        love.graphics.print(tstr2, 1280 - tw2 - 20, 10)
+        local tw2 = FontCache.get(11):getWidth(tstr2)
+        love.graphics.print(tstr2, 1280 - tw2 - 24, 8)
 
         local name = "ACTIVE ANOMALY"
         for _, a in ipairs(ANOMALY_POOL) do
             if a.id == id then name = a.name break end
         end
-        love.graphics.setFont(FontCache.get(13))
-        local nw = FontCache.get(13):getWidth(name)
-        love.graphics.print(name, 640 - nw / 2, 10)
+        love.graphics.setFont(FontCache.get(12))
+        local nw = FontCache.get(12):getWidth(name)
+        love.graphics.print(name, 640 - nw / 2, 8)
 
         if id == "blackout_strobe" then
-            love.graphics.setFont(FontCache.get(15))
+            love.graphics.setFont(FontCache.get(14))
             local vis_alpha = _G.BlackoutStrobeVisibility or 0
             love.graphics.setColor(0, 0.9, 1.0, 0.4 + vis_alpha * 0.6)
             love.graphics.printf("! 2-BAR STROBE ACTIVE !", 0, 660, 1280, "center")

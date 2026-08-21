@@ -18,14 +18,14 @@ function Telemetry.draw(player, bot)
     
     ThemeManager.drawPanel(px, py, pw, ph, "", false)
 
-    -- Encabezado
+    -- Encabezado y Reloj Monospace
     love.graphics.setFont(FontCache.get(10))
     love.graphics.setColor(t.primary[1], t.primary[2], t.primary[3], 0.95)
     love.graphics.print(_G.ENGINE_VERSION or "MUTRIS v1.0.0", px + 12, py + 8)
 
     love.graphics.setColor(1, 1, 1, 0.85)
-    love.graphics.print(string.format("TIME: %.1fs", _G.RealMatchTimer or 0), px + 170, py + 8)
-    love.graphics.print(string.format("%d FPS", love.timer.getFPS()), px + 260, py + 8)
+    love.graphics.print(string.format("TIME: %05.1fs", _G.RealMatchTimer or 0), px + 168, py + 8)
+    love.graphics.print(string.format("%3d FPS", love.timer.getFPS()), px + 264, py + 8)
 
     -- Barra de Adrenalina Musical (The Punch)
     love.graphics.setColor(t.primary[1], t.primary[2], t.primary[3], 0.15)
@@ -37,10 +37,10 @@ function Telemetry.draw(player, bot)
     if player and bot then
         love.graphics.setFont(FontCache.get(12))
         love.graphics.setColor(t.primary[1], t.primary[2], t.primary[3], 0.95)
-        love.graphics.print(string.format("P1: %.2f PPS", player.current_pps_display or 0), px + 12, py + 38)
+        love.graphics.print(string.format("P1:  %.2f PPS", player.current_pps_display or 0), px + 12, py + 38)
         
         love.graphics.setColor(1.0, 0.35, 0.4, 0.95)
-        love.graphics.print(string.format("BOT: %.2f PPS", bot.current_pps_display or 0), px + 170, py + 38)
+        love.graphics.print(string.format("BOT: %.2f PPS", bot.current_pps_display or 0), px + 168, py + 38)
     end
 
     -- Monitor DDA ARCHON

@@ -4,7 +4,7 @@
 ---@diagnostic disable: undefined-global
 -- ============================================================================
 -- MUTRIS ENGINE: THE MATRIX GRID BOARD (10x40)
--- Zero-GC Architecture / Theme-Driven Battle Frames / Combat Stances
+-- Zero-GC / Clean Popups / Ground Slam / Theme Integration
 -- ============================================================================
 local Board = {}
 Board.__index = Board
@@ -25,14 +25,14 @@ local ThemeManager   = require "tetris.theme_manager"
 local Blackbox       = require "core.blackbox"
 
 Board.colors = {
-    [1] = {0.0, 0.9, 1.0},   -- I (Cian)
-    [2] = {0.1, 0.3, 1.0},   -- J (Azul)
-    [3] = {1.0, 0.5, 0.0},   -- L (Naranja)
-    [4] = {1.0, 0.9, 0.0},   -- O (Amarillo)
-    [5] = {0.1, 1.0, 0.2},   -- S (Verde)
-    [6] = {0.8, 0.1, 1.0},   -- T (Púrpura)
-    [7] = {1.0, 0.1, 0.2},   -- Z (Rojo)
-    [8] = {0.5, 0.5, 0.55}   -- Garbage (Gris Acero)
+    [1] = {0.0, 0.9, 1.0},
+    [2] = {0.1, 0.3, 1.0},
+    [3] = {1.0, 0.5, 0.0},
+    [4] = {1.0, 0.9, 0.0},
+    [5] = {0.1, 1.0, 0.2},
+    [6] = {0.8, 0.1, 1.0},
+    [7] = {1.0, 0.1, 0.2},
+    [8] = {0.5, 0.5, 0.55}
 }
 
 function Board.new(x, y, player_type)
@@ -349,13 +349,21 @@ function Board:shiftColumnsGlobal(other, dir)
     other:triggerShake(6, 0.2)
 end
 
+-- 🛡️ FILTRO ANTI-GLIFOS ROTOS
 function Board:setPopup(text, color, is_high_tier, subtext)
-    self.popup_text = text
-    self.popup_sub = subtext or ""
+    local raw_t = tostring(text or "")
+    local raw_s = tostring(subtext or "")
+    
+    -- Limpieza estricta de caracteres ASCII imprimibles (erradica '▯')
+    local clean_t = raw_t:gsub("[^\32-\126]", ""):gsub("^%s*(.-)%s*$", "%1")
+    local clean_s = raw_s:gsub("[^\32-\126]", ""):gsub("^%s*(.-)%s*$", "%1")
+
+    self.popup_text = clean_t
+    self.popup_sub = clean_s
     self.popup_color = color or {1, 1, 1}
     self.popup_timer = 1.2
     self.popup_max_time = 1.2
-    self.popup_scale = is_high_tier and 1.85 or 1.45
+    self.popup_scale = is_high_tier and 1.65 or 1.35
     self.popup_is_high_tier = is_high_tier or false
 end
 
@@ -441,10 +449,8 @@ function Board:draw()
     love.graphics.push("all")
     Shaker.apply(self)
 
-    -- Marco temático dedicado de combate
     ThemeManager.drawMatrixFrame(self)
 
-    -- Líneas de rejilla interna
     local t = ThemeManager.getCurrent()
     love.graphics.setColor(t.primary[1], t.primary[2], t.primary[3], 0.04)
     for r = 1, 20 do
@@ -491,10 +497,19 @@ function Board:draw()
         self.active_piece:draw(self.x, self.y)
     end
 
+    -- Hard Drop Ground Slam
+    if self.lock_impact > 0 then
+        love.graphics.setBlendMode("add")
+        love.graphics.setColor(t.secondary[1], t.secondary[2], t.secondary[3], self.lock_impact * 0.5)
+        love.graphics.rectangle("fill", self.x, self.y + 474, 240, 6, 2)
+        love.graphics.setBlendMode("alpha")
+    end
+
     ParticleSystem.draw(self)
     BeatLock.drawFeedback(self)
     CombatStances.drawAura(self)
     KineticParry.draw(self)
+    ThemeManager.drawGarbageBar(self)
 
     if self.tspin_flash > 0 then
         love.graphics.push("all")
@@ -504,13 +519,13 @@ function Board:draw()
         love.graphics.pop()
     end
 
-    -- Popups de Acción
+    -- 🎯 POPUPS DE COMBATE ELEVADOS (Zona de spawn 100% visible)
     if self.popup_timer > 0 then
         local progress = self.popup_timer / self.popup_max_time
-        local alpha = math.min(1.0, progress * 1.8)
-        local float_y = (1.0 - progress) * 38.0
+        local alpha = math.min(1.0, progress * 1.9)
+        local float_y = (1.0 - progress) * 45.0
         local cx = self.x + 120
-        local cy = self.y + 190 - float_y
+        local cy = self.y + 135 - float_y
         local sc = self.popup_scale
         local clr = self.popup_color
 
@@ -520,26 +535,26 @@ function Board:draw()
 
         love.graphics.setBlendMode("add")
         if self.popup_is_high_tier then
-            love.graphics.setFont(FontCache.get(18))
-            love.graphics.setColor(0.1, 0.9, 1.0, alpha * 0.55)
+            love.graphics.setFont(FontCache.get(17))
+            love.graphics.setColor(0.1, 0.9, 1.0, alpha * 0.60)
             love.graphics.printf(self.popup_text, -142, -10, 280, "center")
-            love.graphics.setColor(1.0, 0.1, 0.5, alpha * 0.55)
+            love.graphics.setColor(1.0, 0.1, 0.5, alpha * 0.60)
             love.graphics.printf(self.popup_text, -138, -10, 280, "center")
         else
-            love.graphics.setFont(FontCache.get(16))
+            love.graphics.setFont(FontCache.get(15))
             love.graphics.setColor(clr[1], clr[2], clr[3], alpha * 0.45)
             love.graphics.printf(self.popup_text, -140, -10, 280, "center")
         end
 
         love.graphics.setBlendMode("alpha")
-        love.graphics.setFont(FontCache.get(self.popup_is_high_tier and 18 or 16))
+        love.graphics.setFont(FontCache.get(self.popup_is_high_tier and 17 or 15))
         love.graphics.setColor(1.0, 1.0, 1.0, alpha * 0.98)
         love.graphics.printf(self.popup_text, -140, -10, 280, "center")
 
         if self.popup_sub ~= "" then
-            love.graphics.setFont(FontCache.get(10))
+            love.graphics.setFont(FontCache.get(9))
             love.graphics.setColor(clr[1], clr[2], clr[3], alpha * 0.90)
-            love.graphics.printf(self.popup_sub, -140, 14, 280, "center")
+            love.graphics.printf(self.popup_sub, -140, 13, 280, "center")
         end
 
         love.graphics.pop()

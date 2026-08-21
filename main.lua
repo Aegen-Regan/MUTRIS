@@ -4,7 +4,7 @@
 ---@diagnostic disable: undefined-global
 -- ============================================================================
 -- MUTRIS ENGINE: SYNTHETIC TRANSCENDENCE [KERNEL CENTRAL 1280x720 WIDESCREEN]
--- Master Calibration Suite / Multi-Theme Engine [F5] / Zero-GC Core
+-- Master Calibration Suite / Multi-Theme Engine [F5] / Engage Sequence
 -- ============================================================================
 
 _G.ENGINE_VERSION           = "MUTRIS v1.0.0"
@@ -47,6 +47,9 @@ local pauseSelection = 1
 
 local active_tab_index = 1
 local active_item_index = 1
+
+local engage_timer = 0.0
+local engage_duration = 0.35
 
 local menuItems = {
     "VS BOT DUEL",
@@ -102,14 +105,12 @@ function _G.TakeScreenshot()
     AudioManager.playSliderTick()
     screenshot_flash_timer = 1.8
     ScreenshotHelper.capture(function(copied, filename)
-        -- Toast inferior dedicado, sin sobrecargar la matriz de combate
     end)
 end
 
 function _G.ToggleRecording()
     AudioManager.playSliderTick()
     ClipRecorder.toggle(function(frames, base_path, mode)
-        -- Toast inferior dedicado
     end)
 end
 
@@ -186,6 +187,10 @@ end
 function love.update(dt)
     if screenshot_flash_timer > 0 then
         screenshot_flash_timer = math.max(0, screenshot_flash_timer - dt)
+    end
+
+    if engage_timer > 0 then
+        engage_timer = math.max(0, engage_timer - dt)
     end
 
     if _G.HitStopTimer > 0 then
@@ -526,7 +531,6 @@ function love.draw()
         if gameState == "pause" then
             drawCyberPause()
         elseif gameState == "gameover" then
-            -- 🏆 Modal de Fin de Partida: 100% Sólido, Sin Bleed-Through y Cristalino
             local t = ThemeManager.getCurrent()
             local is_victory = (BotBoard and BotBoard.is_dying)
             local modal_w, modal_h = 460, 220
@@ -578,7 +582,6 @@ function love.draw()
         TrackEditor.draw()
     end
 
-    -- ⚠️ DIRECTIVA PRIMARIA PERMANENTE + MARCADOR DE SKIN ACTIVA
     love.graphics.push("all")
     local t = ThemeManager.getCurrent()
     love.graphics.setFont(FontCache.get(10))
@@ -586,6 +589,10 @@ function love.draw()
     local watermark = string.format("%s  |  SKIN: %s", _G.ENGINE_VERSION, t.name)
     love.graphics.print(watermark, 16, 698)
     love.graphics.pop()
+
+    if engage_timer > 0 then
+        ThemeManager.drawEngageTransition(engage_timer, engage_duration)
+    end
 
     BloomShader.endDraw(PlayerBoard and PlayerBoard.is_zone_active, view_ox, view_oy, view_scale)
 
@@ -595,7 +602,6 @@ function love.draw()
 
     ClipRecorder.drawHUDIndicator()
 
-    -- Toast de Captura a Portapapeles
     if screenshot_flash_timer > 0 then
         local a = math.min(1.0, screenshot_flash_timer * 1.5)
         local t_cur = ThemeManager.getCurrent()
@@ -746,10 +752,12 @@ function love.keypressed(key)
             AudioManager.playMenuClick()
             if menuSelection == 1 then
                 _G.CURRENT_GAME_MODE = "versus"
+                engage_timer = engage_duration
                 _G.GlobalRestart(true)
                 gameState = "versus"
             elseif menuSelection == 2 then
                 _G.CURRENT_GAME_MODE = "gauntlet"
+                engage_timer = engage_duration
                 _G.GlobalRestart(true)
                 gameState = "gauntlet"
             elseif menuSelection == 3 then
@@ -869,10 +877,12 @@ function love.mousepressed(x, y, button)
                 AudioManager.playMenuClick()
                 if i == 1 then
                     _G.CURRENT_GAME_MODE = "versus"
+                    engage_timer = engage_duration
                     _G.GlobalRestart(true)
                     gameState = "versus"
                 elseif i == 2 then
                     _G.CURRENT_GAME_MODE = "gauntlet"
+                    engage_timer = engage_duration
                     _G.GlobalRestart(true)
                     gameState = "gauntlet"
                 elseif i == 3 then

@@ -4,7 +4,7 @@
 ---@diagnostic disable: undefined-global
 -- ============================================================================
 -- MUTRIS ENGINE: BLACKBOX FLIGHT RECORDER & TELEMETRY HUB (1280x720)
--- Arquitectura: Zero-GC / Búfer Circular 128 Slots / Smart GameOver Scrim
+-- Arquitectura: Zero-GC / Búfer Circular 128 Slots / Calibrated Event Log
 -- ============================================================================
 local Blackbox = {}
 
@@ -129,16 +129,15 @@ function Blackbox.drawPermanentHUD(player, bot)
     love.graphics.setColor(t.secondary[1], t.secondary[2], t.secondary[3], 0.85)
     love.graphics.printf("EVENT LOG", p1_x, p1_y + 88, p1_w, "center")
 
-    -- Log de Eventos de P1
     local log_y = p1_y + 108
     local shown = 0
     for i = 1, MAX_EVENTS do
         local idx = ((buffer_head - 1 - i + MAX_EVENTS) % MAX_EVENTS) + 1
         local ev = events_buffer[idx]
         if ev and ev.active and (ev.category:match("P1") or ev.category == "MATCH") then
-            love.graphics.setColor(0.85, 0.85, 0.90, 0.85)
+            love.graphics.setColor(0.85, 0.85, 0.90, 0.80)
             love.graphics.printf(ev.category:sub(1, 10), p1_x + 8, log_y, p1_w - 16, "left")
-            love.graphics.setColor(t.primary[1], t.primary[2], t.primary[3], 0.70)
+            love.graphics.setColor(t.primary[1], t.primary[2], t.primary[3], 0.65)
             love.graphics.printf(string.format("T: %.1fs", ev.time), p1_x + 8, log_y + 11, p1_w - 16, "left")
 
             log_y = log_y + 26
@@ -192,9 +191,9 @@ function Blackbox.drawPermanentHUD(player, bot)
         local idx = ((buffer_head - 1 - i + MAX_EVENTS) % MAX_EVENTS) + 1
         local ev = events_buffer[idx]
         if ev and ev.active and (ev.category:match("BOT") or ev.category == "ANOMALY") then
-            love.graphics.setColor(0.85, 0.80, 0.90, 0.85)
+            love.graphics.setColor(0.85, 0.80, 0.90, 0.80)
             love.graphics.printf(ev.category:sub(1, 10), bot_x + 8, bot_log_y, bot_w - 16, "left")
-            love.graphics.setColor(1.0, 0.35, 0.45, 0.70)
+            love.graphics.setColor(1.0, 0.35, 0.45, 0.65)
             love.graphics.printf(string.format("T: %.1fs", ev.time), bot_x + 8, bot_log_y + 11, bot_w - 16, "left")
 
             bot_log_y = bot_log_y + 26
@@ -204,14 +203,14 @@ function Blackbox.drawPermanentHUD(player, bot)
     end
 
     -- ────────────────────────────────────────────────────────────────────────
-    -- 3. BAHÍA CENTRAL: LIVE FLIGHT RECORDER (Oculto en GameOver para evitar colisiones)
+    -- 3. BAHÍA CENTRAL: LIVE FLIGHT RECORDER (Contraste Atenuado al 65%)
     -- ────────────────────────────────────────────────────────────────────────
     if _G.GameState ~= "gameover" then
         local cr_x, cr_y, cr_w, cr_h = 480, 240, 320, 230
         ThemeManager.drawPanel(cr_x, cr_y, cr_w, cr_h, "", false)
 
         love.graphics.setFont(FontCache.get(9))
-        love.graphics.setColor(t.primary[1], t.primary[2], t.primary[3], 0.95)
+        love.graphics.setColor(t.primary[1], t.primary[2], t.primary[3], 0.90)
         love.graphics.printf("LIVE FLIGHT RECORDER", cr_x, cr_y + 8, cr_w, "center")
 
         local ev_y = cr_y + 28
@@ -221,10 +220,10 @@ function Blackbox.drawPermanentHUD(player, bot)
             local ev = events_buffer[idx]
             if ev and ev.active then
                 love.graphics.setFont(FontCache.get(8))
-                love.graphics.setColor(t.secondary[1], t.secondary[2], t.secondary[3], 0.9)
+                love.graphics.setColor(t.secondary[1], t.secondary[2], t.secondary[3], 0.75)
                 love.graphics.print(string.format("[%04.1fs] %-8s", ev.time, ev.category:sub(1, 8)), cr_x + 12, ev_y)
 
-                love.graphics.setColor(1, 1, 1, 0.85)
+                love.graphics.setColor(0.85, 0.85, 0.90, 0.65)
                 love.graphics.print("| " .. ev.action:sub(1, 24), cr_x + 105, ev_y)
 
                 ev_y = ev_y + 17
@@ -238,7 +237,6 @@ function Blackbox.drawPermanentHUD(player, bot)
 end
 
 function Blackbox.draw()
-    -- Callback de compatibilidad
 end
 
 return Blackbox

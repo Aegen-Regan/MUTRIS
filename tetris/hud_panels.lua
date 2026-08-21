@@ -11,14 +11,15 @@ local SRS          = require "tetris.rotation_systems.srs"
 local FontCache    = require "tetris.font_cache"
 local ThemeManager = require "tetris.theme_manager"
 
+-- Calibración submétrica exacta para centrar cada una de las 7 piezas en 70x70
 local PREVIEW_CONFIG = {
-    [1] = { ox = 6,  oy = 20, scale = 0.58 },
-    [2] = { ox = 12, oy = 20, scale = 0.58 },
-    [3] = { ox = 12, oy = 20, scale = 0.58 },
-    [4] = { ox = 20, oy = 26, scale = 0.58 },
-    [5] = { ox = 12, oy = 20, scale = 0.58 },
-    [6] = { ox = 12, oy = 20, scale = 0.58 },
-    [7] = { ox = 12, oy = 20, scale = 0.58 }
+    [1] = { ox = 11, oy = 14, scale = 0.50 }, -- I piece (4x4)
+    [2] = { ox = 15, oy = 18, scale = 0.55 }, -- J piece (3x3)
+    [3] = { ox = 15, oy = 18, scale = 0.55 }, -- L piece (3x3)
+    [4] = { ox = 22, oy = 24, scale = 0.55 }, -- O piece (2x2)
+    [5] = { ox = 15, oy = 18, scale = 0.55 }, -- S piece (3x3)
+    [6] = { ox = 15, oy = 18, scale = 0.55 }, -- T piece (3x3)
+    [7] = { ox = 15, oy = 18, scale = 0.55 }  -- Z piece (3x3)
 }
 
 function HUDPanels.draw(board)
@@ -39,7 +40,6 @@ function HUDPanels.draw(board)
     -- ────────────────────────────────────────────────────────────────────────
     local function drawThemedPanel(x, y, label)
         if theme_idx == 1 then
-            -- Synth Eurorack Module
             love.graphics.setColor(0.02, 0.03, 0.06, 0.94)
             love.graphics.rectangle("fill", x, y, p_w, p_h, 2)
             love.graphics.setLineWidth(1.5)
@@ -55,7 +55,6 @@ function HUDPanels.draw(board)
             love.graphics.printf(label, x, y + 4, p_w, "center")
 
         elseif theme_idx == 2 then
-            -- Persona Slashed Cut-in Box
             love.graphics.setColor(0.06, 0.06, 0.09, 0.96)
             love.graphics.rectangle("fill", x, y, p_w, p_h)
             love.graphics.setLineWidth(2.5)
@@ -70,7 +69,6 @@ function HUDPanels.draw(board)
             love.graphics.printf(label, x, y + 3, p_w, "center")
 
         elseif theme_idx == 3 then
-            -- Esports Frosted Glass Plate
             love.graphics.setColor(0.01, 0.02, 0.05, 0.85)
             love.graphics.rectangle("fill", x, y, p_w, p_h, 6)
             love.graphics.setLineWidth(1.2)
@@ -82,7 +80,6 @@ function HUDPanels.draw(board)
             love.graphics.printf(label, x, y + 4, p_w, "center")
 
         elseif theme_idx == 4 then
-            -- Sacred Celestial Ring
             love.graphics.setColor(0.01, 0.01, 0.03, 0.80)
             love.graphics.rectangle("fill", x, y, p_w, p_h, 8)
             love.graphics.setBlendMode("add")
@@ -96,11 +93,10 @@ function HUDPanels.draw(board)
         end
     end
 
-    -- Dibujar Paneles
     drawThemedPanel(hold_x, panel_y, (theme_idx == 2 and "RESERVE") or "HOLD")
     if board.hold_piece then
         local pid = board.hold_piece.id
-        local cfg = PREVIEW_CONFIG[pid] or { ox = 12, oy = 20, scale = 0.58 }
+        local cfg = PREVIEW_CONFIG[pid] or { ox = 15, oy = 18, scale = 0.55 }
         local shape = SRS.shapes[pid][1]
         
         love.graphics.push()
@@ -122,7 +118,7 @@ function HUDPanels.draw(board)
     if board.bag then
         local next_id = board.bag:peek(1)[1]
         if next_id then
-            local cfg = PREVIEW_CONFIG[next_id] or { ox = 12, oy = 20, scale = 0.58 }
+            local cfg = PREVIEW_CONFIG[next_id] or { ox = 15, oy = 18, scale = 0.55 }
             local shape = SRS.shapes[next_id][1]
             
             love.graphics.push()
@@ -142,7 +138,7 @@ function HUDPanels.draw(board)
     end
 
     -- ────────────────────────────────────────────────────────────────────────
-    -- 2. BARRA DE ZONE METER TRANSFORMADA POR TEMA
+    -- 2. BARRA DE ZONE METER
     -- ────────────────────────────────────────────────────────────────────────
     local zone_x = is_human and (board.x - 16) or (board.x + 246)
     local zone_y = board.y + 90
@@ -153,14 +149,12 @@ function HUDPanels.draw(board)
     fill_val = math.max(0, math.min(1, fill_val))
     local current_h = zone_h * fill_val
 
-    -- SKIN 1: Vúmetro Analógico con Marcas de Decibelios
     if theme_idx == 1 then
         love.graphics.setColor(0.01, 0.02, 0.04, 0.9)
         love.graphics.rectangle("fill", zone_x, zone_y, zone_w, zone_h, 1)
         love.graphics.setColor(0, 0.8, 0.4, 0.3)
         love.graphics.rectangle("line", zone_x, zone_y, zone_w, zone_h, 1)
 
-        -- Segmentos LED (15 segmentos)
         local num_segs = 15
         for seg = 1, num_segs do
             local seg_y = zone_y + zone_h - (seg * 20)
@@ -175,7 +169,6 @@ function HUDPanels.draw(board)
             love.graphics.rectangle("fill", zone_x + 1, seg_y + 2, zone_w - 2, 16, 1)
         end
 
-    -- SKIN 2: Super Burst / Overdrive Gauge de Juego de Pelea
     elseif theme_idx == 2 then
         love.graphics.setColor(0.06, 0.06, 0.09, 0.95)
         love.graphics.rectangle("fill", zone_x, zone_y, zone_w + 2, zone_h)
@@ -194,7 +187,6 @@ function HUDPanels.draw(board)
             love.graphics.printf("BURST", zone_x - 18, zone_y + zone_h + 6, 48, "center")
         end
 
-    -- SKIN 3: Cápsula Segmentada de Alta Precisión
     elseif theme_idx == 3 then
         love.graphics.setColor(0.01, 0.02, 0.05, 0.85)
         love.graphics.rectangle("fill", zone_x, zone_y, zone_w, zone_h, 4)
@@ -206,7 +198,6 @@ function HUDPanels.draw(board)
             love.graphics.rectangle("fill", zone_x + 1, zone_y + zone_h - current_h + 1, zone_w - 2, current_h - 2, 3)
         end
 
-    -- SKIN 4: Medidor de Resonancia Líquida Astral
     elseif theme_idx == 4 then
         love.graphics.setColor(0.01, 0.01, 0.03, 0.85)
         love.graphics.rectangle("fill", zone_x, zone_y, zone_w, zone_h, 5)
