@@ -1,10 +1,15 @@
+-- ================================================================
+-- FILE: tetris/hud_panels.lua
+-- ================================================================
 ---@diagnostic disable: undefined-global
 -- ============================================================================
--- MUTRIS ENGINE: HUD PANELS (NEXT / HOLD / ZONE BAR) (1280x720 WIDESCREEN)
+-- MUTRIS ENGINE: DYNAMIC HUD PANELS (NEXT / HOLD / ZONE BAR) (1280x720)
+-- 4 Universos Visuales: Eurorack Synth / Persona Slash / Glass / Celestial
 -- ============================================================================
 local HUDPanels = {}
-local SRS = require "tetris.rotation_systems.srs"
-local FontCache = require "tetris.font_cache"
+local SRS          = require "tetris.rotation_systems.srs"
+local FontCache    = require "tetris.font_cache"
+local ThemeManager = require "tetris.theme_manager"
 
 local PREVIEW_CONFIG = {
     [1] = { ox = 6,  oy = 20, scale = 0.58 },
@@ -17,34 +22,82 @@ local PREVIEW_CONFIG = {
 }
 
 function HUDPanels.draw(board)
-    love.graphics.push("all")
+    local t = ThemeManager.getCurrent()
+    local theme_idx = ThemeManager.current_theme
+    local pulse = _G.AudioBeatPulse or 0
     local is_human = (board.player_type == "human")
     
-    -- En 1280x720 los paneles quedan perfectamente alineados a los costados
-    local hold_x = is_human and (board.x - 76) or (board.x + 248)
-    local next_x = is_human and (board.x + 248) or (board.x - 76)
+    local hold_x = is_human and (board.x - 78) or (board.x + 250)
+    local next_x = is_human and (board.x + 250) or (board.x - 78)
     local panel_y = board.y + 10
-    
-    local pulse = _G.AudioBeatPulse or 0
-    
-    local function drawNeonPanel(x, y, label)
-        local p_w = 68
-        local p_h = 68
-        
-        love.graphics.setColor(0.02, 0.03, 0.06, 0.88)
-        love.graphics.rectangle("fill", x, y, p_w, p_h, 4)
-        
-        love.graphics.setLineWidth(1.5)
-        love.graphics.setColor(0, 0.6, 1, 0.35 + pulse * 0.3)
-        love.graphics.rectangle("line", x, y, p_w, p_h, 4)
-        
-        love.graphics.setFont(FontCache.get(9))
-        love.graphics.setColor(1, 1, 1, 0.70)
-        love.graphics.printf(label, x, y + 4, p_w, "center")
+    local p_w, p_h = 70, 70
+
+    love.graphics.push("all")
+
+    -- ────────────────────────────────────────────────────────────────────────
+    -- 1. RENDERIZADO DE PANELES NEXT & HOLD POR TEMA
+    -- ────────────────────────────────────────────────────────────────────────
+    local function drawThemedPanel(x, y, label)
+        if theme_idx == 1 then
+            -- Synth Eurorack Module
+            love.graphics.setColor(0.02, 0.03, 0.06, 0.94)
+            love.graphics.rectangle("fill", x, y, p_w, p_h, 2)
+            love.graphics.setLineWidth(1.5)
+            love.graphics.setColor(0, 0.9, 0.45, 0.45 + pulse * 0.25)
+            love.graphics.rectangle("line", x, y, p_w, p_h, 2)
+
+            love.graphics.setColor(1, 1, 1, 0.3)
+            love.graphics.rectangle("fill", x + 2, y + 2, 2, 2)
+            love.graphics.rectangle("fill", x + p_w - 4, y + 2, 2, 2)
+
+            love.graphics.setFont(FontCache.get(8))
+            love.graphics.setColor(0, 1.0, 0.55, 0.9)
+            love.graphics.printf(label, x, y + 4, p_w, "center")
+
+        elseif theme_idx == 2 then
+            -- Persona Slashed Cut-in Box
+            love.graphics.setColor(0.06, 0.06, 0.09, 0.96)
+            love.graphics.rectangle("fill", x, y, p_w, p_h)
+            love.graphics.setLineWidth(2.5)
+            love.graphics.setColor(1.0, 0.08, 0.25, 0.9)
+            love.graphics.rectangle("line", x, y, p_w, p_h)
+
+            love.graphics.setColor(1.0, 0.85, 0.0, 1.0)
+            love.graphics.polygon("fill", x, y, x + 12, y, x, y + 12)
+
+            love.graphics.setFont(FontCache.get(8))
+            love.graphics.setColor(1, 0.9, 0.2, 1.0)
+            love.graphics.printf(label, x, y + 3, p_w, "center")
+
+        elseif theme_idx == 3 then
+            -- Esports Frosted Glass Plate
+            love.graphics.setColor(0.01, 0.02, 0.05, 0.85)
+            love.graphics.rectangle("fill", x, y, p_w, p_h, 6)
+            love.graphics.setLineWidth(1.2)
+            love.graphics.setColor(0.0, 0.9, 1.0, 0.4 + pulse * 0.3)
+            love.graphics.rectangle("line", x, y, p_w, p_h, 6)
+
+            love.graphics.setFont(FontCache.get(8))
+            love.graphics.setColor(0.0, 0.95, 1.0, 0.85)
+            love.graphics.printf(label, x, y + 4, p_w, "center")
+
+        elseif theme_idx == 4 then
+            -- Sacred Celestial Ring
+            love.graphics.setColor(0.01, 0.01, 0.03, 0.80)
+            love.graphics.rectangle("fill", x, y, p_w, p_h, 8)
+            love.graphics.setBlendMode("add")
+            love.graphics.setColor(0.6, 0.35, 1.0, 0.35 + pulse * 0.2)
+            love.graphics.circle("line", x + p_w/2, y + p_h/2, 32)
+            love.graphics.setBlendMode("alpha")
+
+            love.graphics.setFont(FontCache.get(8))
+            love.graphics.setColor(0.6, 0.35, 1.0, 0.95)
+            love.graphics.printf(label, x, y + 3, p_w, "center")
+        end
     end
 
-    -- PANEL HOLD
-    drawNeonPanel(hold_x, panel_y, "HOLD")
+    -- Dibujar Paneles
+    drawThemedPanel(hold_x, panel_y, (theme_idx == 2 and "RESERVE") or "HOLD")
     if board.hold_piece then
         local pid = board.hold_piece.id
         local cfg = PREVIEW_CONFIG[pid] or { ox = 12, oy = 20, scale = 0.58 }
@@ -57,7 +110,7 @@ function HUDPanels.draw(board)
         for r = 1, #shape do
             for c = 1, #shape[r] do
                 if shape[r][c] ~= 0 then
-                    board:drawBlock((c - 1) * 24, (r - 1) * 24, pid, 0.88)
+                    board:drawBlock((c - 1) * 24, (r - 1) * 24, pid, 0.92)
                 end
             end
         end
@@ -65,8 +118,7 @@ function HUDPanels.draw(board)
         love.graphics.pop()
     end
 
-    -- PANEL NEXT
-    drawNeonPanel(next_x, panel_y, "NEXT")
+    drawThemedPanel(next_x, panel_y, (theme_idx == 2 and "INCOMING") or "NEXT")
     if board.bag then
         local next_id = board.bag:peek(1)[1]
         if next_id then
@@ -80,7 +132,7 @@ function HUDPanels.draw(board)
             for r = 1, #shape do
                 for c = 1, #shape[r] do
                     if shape[r][c] ~= 0 then
-                        board:drawBlock((c - 1) * 24, (r - 1) * 24, next_id, 0.88)
+                        board:drawBlock((c - 1) * 24, (r - 1) * 24, next_id, 0.92)
                     end
                 end
             end
@@ -89,56 +141,84 @@ function HUDPanels.draw(board)
         end
     end
 
-    -- BARRA LATERAL ZONE METER
-    local zone_x = is_human and (board.x - 14) or (board.x + 246)
-    local zone_y = board.y + 110
-    local zone_h = 260
-    
-    love.graphics.setColor(0.01, 0.02, 0.05, 0.8)
-    love.graphics.rectangle("fill", zone_x, zone_y, 8, zone_h, 2)
-    love.graphics.setColor(0, 0.6, 1, 0.3)
-    love.graphics.rectangle("line", zone_x, zone_y, 8, zone_h, 2)
+    -- ────────────────────────────────────────────────────────────────────────
+    -- 2. BARRA DE ZONE METER TRANSFORMADA POR TEMA
+    -- ────────────────────────────────────────────────────────────────────────
+    local zone_x = is_human and (board.x - 16) or (board.x + 246)
+    local zone_y = board.y + 90
+    local zone_h = 300
+    local zone_w = 10
 
     local fill_val = board.is_zone_active and (board.zone_timer / (board.zone_max_time * math.max(0.1, board.zone_meter))) or board.zone_meter
     fill_val = math.max(0, math.min(1, fill_val))
     local current_h = zone_h * fill_val
 
-    if current_h > 0 then
-        local is_full_100 = board.zone_meter >= 0.999
-        local time = love.timer.getTime()
-        
-        if board.is_zone_active then
-            if board.zone_tier == 2 then
-                love.graphics.setColor(1.0, 0.85, 0.2, 0.95 + pulse * 0.05)
-            else
-                love.graphics.setColor(0.1, 0.9, 1.0, 0.9 + pulse * 0.1)
-            end
-        elseif is_full_100 then
-            local flash = 0.6 + math.sin(time * 16) * 0.4
-            love.graphics.setColor(1.0, 0.85 * flash, 0.2, 0.95)
-        elseif board.zone_meter >= 0.25 then
-            local shimmer = 0.7 + math.sin(time * 10) * 0.3
-            love.graphics.setColor(0.1 * shimmer, 0.95, 0.8 * shimmer, 0.9)
-        else
-            love.graphics.setColor(0.0, 0.7, 0.5, 0.75)
-        end
-        love.graphics.rectangle("fill", zone_x + 1, zone_y + zone_h - current_h + 1, 6, current_h - 2, 2)
-    end
+    -- SKIN 1: Vúmetro Analógico con Marcas de Decibelios
+    if theme_idx == 1 then
+        love.graphics.setColor(0.01, 0.02, 0.04, 0.9)
+        love.graphics.rectangle("fill", zone_x, zone_y, zone_w, zone_h, 1)
+        love.graphics.setColor(0, 0.8, 0.4, 0.3)
+        love.graphics.rectangle("line", zone_x, zone_y, zone_w, zone_h, 1)
 
-    -- Indicador [Q]
-    if not board.is_zone_active and is_human then
-        local time = love.timer.getTime()
-        if board.zone_meter >= 0.999 then
-            local alpha = 0.7 + math.sin(time * 14) * 0.3
-            love.graphics.setFont(FontCache.get(8))
-            love.graphics.setColor(1.0, 0.85, 0.2, alpha)
-            love.graphics.printf("[Q] 100%", zone_x - 22, zone_y + zone_h + 6, 52, "center")
-        elseif board.zone_meter >= 0.25 then
-            local alpha = 0.5 + math.sin(time * 8) * 0.4
-            love.graphics.setFont(FontCache.get(8))
-            love.graphics.setColor(0.1, 0.95, 1.0, alpha)
-            love.graphics.printf("[Q]", zone_x - 16, zone_y + zone_h + 6, 40, "center")
+        -- Segmentos LED (15 segmentos)
+        local num_segs = 15
+        for seg = 1, num_segs do
+            local seg_y = zone_y + zone_h - (seg * 20)
+            local is_lit = (seg / num_segs) <= fill_val
+            if seg <= 9 then
+                love.graphics.setColor(is_lit and {0, 1, 0.3, 0.95} or {0, 0.2, 0.08, 0.3})
+            elseif seg <= 13 then
+                love.graphics.setColor(is_lit and {1, 0.8, 0.0, 0.95} or {0.25, 0.2, 0.0, 0.3})
+            else
+                love.graphics.setColor(is_lit and {1, 0.1, 0.2, 0.95} or {0.25, 0.05, 0.05, 0.3})
+            end
+            love.graphics.rectangle("fill", zone_x + 1, seg_y + 2, zone_w - 2, 16, 1)
         end
+
+    -- SKIN 2: Super Burst / Overdrive Gauge de Juego de Pelea
+    elseif theme_idx == 2 then
+        love.graphics.setColor(0.06, 0.06, 0.09, 0.95)
+        love.graphics.rectangle("fill", zone_x, zone_y, zone_w + 2, zone_h)
+        love.graphics.setLineWidth(1.8)
+        love.graphics.setColor(1.0, 0.08, 0.25, 0.8)
+        love.graphics.rectangle("line", zone_x, zone_y, zone_w + 2, zone_h)
+
+        if current_h > 0 then
+            love.graphics.setColor(1.0, 0.85, 0.0, 0.95)
+            love.graphics.rectangle("fill", zone_x + 1, zone_y + zone_h - current_h, zone_w, current_h)
+        end
+
+        if board.zone_meter >= 0.999 and not board.is_zone_active then
+            love.graphics.setFont(FontCache.get(8))
+            love.graphics.setColor(1, 0.08, 0.25, 0.95 + pulse * 0.05)
+            love.graphics.printf("BURST", zone_x - 18, zone_y + zone_h + 6, 48, "center")
+        end
+
+    -- SKIN 3: Cápsula Segmentada de Alta Precisión
+    elseif theme_idx == 3 then
+        love.graphics.setColor(0.01, 0.02, 0.05, 0.85)
+        love.graphics.rectangle("fill", zone_x, zone_y, zone_w, zone_h, 4)
+        love.graphics.setColor(0.0, 0.9, 1.0, 0.35)
+        love.graphics.rectangle("line", zone_x, zone_y, zone_w, zone_h, 4)
+
+        if current_h > 0 then
+            love.graphics.setColor(0.0, 0.95, 1.0, 0.95)
+            love.graphics.rectangle("fill", zone_x + 1, zone_y + zone_h - current_h + 1, zone_w - 2, current_h - 2, 3)
+        end
+
+    -- SKIN 4: Medidor de Resonancia Líquida Astral
+    elseif theme_idx == 4 then
+        love.graphics.setColor(0.01, 0.01, 0.03, 0.85)
+        love.graphics.rectangle("fill", zone_x, zone_y, zone_w, zone_h, 5)
+        love.graphics.setBlendMode("add")
+        love.graphics.setColor(0.6, 0.35, 1.0, 0.40)
+        love.graphics.rectangle("line", zone_x, zone_y, zone_w, zone_h, 5)
+
+        if current_h > 0 then
+            love.graphics.setColor(0.6, 0.35, 1.0, 0.85)
+            love.graphics.rectangle("fill", zone_x + 1, zone_y + zone_h - current_h + 1, zone_w - 2, current_h - 2, 4)
+        end
+        love.graphics.setBlendMode("alpha")
     end
 
     love.graphics.pop()

@@ -4,7 +4,7 @@
 ---@diagnostic disable: undefined-global
 -- ============================================================================
 -- MUTRIS ENGINE: TETROMINO PIECE PHYSICS & RHYTHM LOCK
--- SRS 180°, 3-Corners T-Spin Juice, Lock Out Rules & Blackbox Telemetry
+-- SRS 180°, 3-Corners T-Spin, Themed Ghost Piece & Blackbox Telemetry
 -- ============================================================================
 local Piece = {}
 Piece.__index = Piece
@@ -16,6 +16,7 @@ local BeatLock        = require "tetris.beat_lock"
 local CombatStances   = require "combat.combat_stances"
 local KineticParry    = require "combat.kinetic_parry"
 local BloomShader     = require "tetris.bloom_shader"
+local ThemeManager    = require "tetris.theme_manager"
 local Blackbox        = require "core.blackbox"
 
 function Piece.new(id, board)
@@ -26,7 +27,6 @@ function Piece.new(id, board)
     self.rotation, self.x, self.y = 1, 4, 21
     self.locked, self.gravity_timer, self.lock_timer = false, 0, 0
 
-    -- Conexión dinámica con los ajustes del usuario
     self.lock_delay = SettingsManager.get("lock_delay") or 0.50
     self.move_count = 0
     self.max_resets = math.floor(SettingsManager.get("max_resets") or 15)
@@ -190,27 +190,9 @@ end
 
 function Piece:draw(bx, by)
     local shape = self.shape[self.rotation]
-    local energy, pulse = _G.TrackEnergyPunch or 0, _G.AudioBeatPulse or 0
     love.graphics.push("all")
 
-    if self.spawn_timer > 0 then
-        local p = self.spawn_timer / 0.2
-        local clr = self.board.colors[self.id] or {1, 1, 1}
-        love.graphics.setBlendMode("add")
-        for r = 1, #shape do 
-            for c = 1, #shape[r] do 
-                if shape[r][c] ~= 0 then
-                    local x, y = bx + (self.x + c - 2) * 24, by + (self.y + r - 22) * 24
-                    love.graphics.setColor(clr[1], clr[2], clr[3], p * 0.4)
-                    love.graphics.rectangle("fill", x - 6 * p, y - 6 * p, 24 + 12 * p, 24 + 12 * p, 4)
-                    love.graphics.setColor(1, 1, 1, p * 0.6)
-                    love.graphics.rectangle("fill", x, y, 24, 24, 2)
-                end 
-            end 
-        end
-        love.graphics.setBlendMode("alpha")
-    end
-
+    -- Ghost Piece
     if self.board and bx == self.board.x and by == self.board.y then
         local gy = self.y
         local loop_g = 0
@@ -220,27 +202,13 @@ function Piece:draw(bx, by)
             if not Blackbox.guardLoop("GHOST_CALC", 40, loop_g) then break end
         end
 
-        local clr = self.board.colors[self.id] or {1, 1, 1}
-        
-        -- Opacidad del Ghost Piece reactiva al ajuste del usuario
         local ghost_alpha_setting = SettingsManager.get("ghost_alpha") or 0.35
         if ghost_alpha_setting > 1.0 then ghost_alpha_setting = ghost_alpha_setting / 100.0 end
-        local ghost_pulse = ghost_alpha_setting * (0.8 + pulse * 0.4 + energy * 0.2)
         
-        for r = 1, #shape do 
-            for c = 1, #shape[r] do 
-                if shape[r][c] ~= 0 then
-                    local gx, g_y = bx + (self.x + c - 2) * 24, by + (gy + r - 22) * 24
-                    love.graphics.setColor(clr[1], clr[2], clr[3], ghost_alpha_setting * 0.3)
-                    love.graphics.rectangle("fill", gx + 2, g_y + 2, 20, 20, 2)
-                    love.graphics.setLineWidth(1.8)
-                    love.graphics.setColor(clr[1], clr[2], clr[3], ghost_pulse)
-                    love.graphics.rectangle("line", gx + 2, g_y + 2, 20, 20, 2)
-                end 
-            end 
-        end
+        ThemeManager.drawGhostPiece(self, bx, by, shape, gy, ghost_alpha_setting)
     end
 
+    -- Pieza Activa
     for r = 1, #shape do 
         for c = 1, #shape[r] do 
             if shape[r][c] ~= 0 then

@@ -4,7 +4,7 @@
 ---@diagnostic disable: undefined-global
 -- ============================================================================
 -- MUTRIS ENGINE: THE MATRIX GRID BOARD (10x40)
--- Zero-GC Architecture / Death Timer Countdown Fix / Shatter Visuals
+-- Zero-GC Architecture / Theme-Driven Battle Frames / Combat Stances
 -- ============================================================================
 local Board = {}
 Board.__index = Board
@@ -21,6 +21,7 @@ local BloomShader    = require "tetris.bloom_shader"
 local BeatLock       = require "tetris.beat_lock"
 local CombatStances  = require "combat.combat_stances"
 local KineticParry   = require "combat.kinetic_parry"
+local ThemeManager   = require "tetris.theme_manager"
 local Blackbox       = require "core.blackbox"
 
 Board.colors = {
@@ -440,21 +441,12 @@ function Board:draw()
     love.graphics.push("all")
     Shaker.apply(self)
 
-    local pulse = _G.AudioBeatPulse or 0
-    love.graphics.setColor(0.01, 0.02, 0.04, 0.92)
-    love.graphics.rectangle("fill", self.x, self.y, 240, 480, 4)
+    -- Marco temático dedicado de combate
+    ThemeManager.drawMatrixFrame(self)
 
-    if self.is_dying then
-        local flash = math.sin(love.timer.getTime() * 24) * 0.5 + 0.5
-        love.graphics.setLineWidth(2.5)
-        love.graphics.setColor(1.0, 0.1, 0.2, 0.8 * flash)
-    else
-        love.graphics.setLineWidth(1.5)
-        love.graphics.setColor(0, 0.7, 1.0, 0.3 + pulse * 0.2)
-    end
-    love.graphics.rectangle("line", self.x, self.y, 240, 480, 4)
-
-    love.graphics.setColor(0, 0.8, 1, 0.04)
+    -- Líneas de rejilla interna
+    local t = ThemeManager.getCurrent()
+    love.graphics.setColor(t.primary[1], t.primary[2], t.primary[3], 0.04)
     for r = 1, 20 do
         love.graphics.line(self.x, self.y + r * 24, self.x + 240, self.y + r * 24)
     end
@@ -462,6 +454,7 @@ function Board:draw()
         love.graphics.line(self.x + c * 24, self.y, self.x + c * 24, self.y + 480)
     end
 
+    -- Bloques Fijos
     local block_alpha = self.is_dying and math.max(0.2, self.death_timer / 1.5) or 1.0
     for r = 21, 40 do
         for c = 1, 10 do
@@ -472,19 +465,20 @@ function Board:draw()
         end
     end
 
+    -- Estelas de Hard Drop
     love.graphics.setBlendMode("add")
     for i = 1, #self.trail_pool do
-        local t = self.trail_pool[i]
-        if t.active and t.shape then
-            local a = (t.timer / 0.25) * 0.35
-            local clr = self.colors[t.id] or {1, 1, 1}
+        local tr = self.trail_pool[i]
+        if tr.active and tr.shape then
+            local a = (tr.timer / 0.25) * 0.35
+            local clr = self.colors[tr.id] or {1, 1, 1}
             love.graphics.setColor(clr[1], clr[2], clr[3], a)
-            for r = 1, #t.shape do
-                for c = 1, #t.shape[r] do
-                    if t.shape[r][c] ~= 0 then
-                        local rx = self.x + (t.x + c - 2) * 24
-                        local ry1 = self.y + (t.startY + r - 22) * 24
-                        local ry2 = self.y + (t.endY + r - 22) * 24
+            for r = 1, #tr.shape do
+                for c = 1, #tr.shape[r] do
+                    if tr.shape[r][c] ~= 0 then
+                        local rx = self.x + (tr.x + c - 2) * 24
+                        local ry1 = self.y + (tr.startY + r - 22) * 24
+                        local ry2 = self.y + (tr.endY + r - 22) * 24
                         love.graphics.rectangle("fill", rx + 4, ry1, 16, math.max(4, ry2 - ry1 + 24))
                     end
                 end
@@ -492,22 +486,7 @@ function Board:draw()
         end
     end
 
-    for i = 1, #self.phantom_pool do
-        local p = self.phantom_pool[i]
-        if p.active and p.shape then
-            local a = (p.timer / 0.50) * 0.4
-            love.graphics.setColor(1, 0.1, 0.4, a)
-            for r = 1, #p.shape do
-                for c = 1, #p.shape[r] do
-                    if p.shape[r][c] ~= 0 then
-                        love.graphics.rectangle("fill", self.x + (p.x + c - 2) * 24, self.y + (p.y + r - 22) * 24, 24, 24, 2)
-                    end
-                end
-            end
-        end
-    end
-    love.graphics.setBlendMode("alpha")
-
+    -- Pieza Activa y Ghost Piece
     if self.active_piece and not self.is_dying then
         self.active_piece:draw(self.x, self.y)
     end
@@ -525,6 +504,7 @@ function Board:draw()
         love.graphics.pop()
     end
 
+    -- Popups de Acción
     if self.popup_timer > 0 then
         local progress = self.popup_timer / self.popup_max_time
         local alpha = math.min(1.0, progress * 1.8)
