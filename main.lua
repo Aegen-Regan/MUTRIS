@@ -4,20 +4,21 @@
 ---@diagnostic disable: undefined-global
 -- ============================================================================
 -- MUTRIS ENGINE: SYNTHETIC TRANSCENDENCE [KERNEL CENTRAL 1280x720 WIDESCREEN]
--- Master Calibration Suite / Cyberpunk UI Overhaul / State-Locked Pause Flow
+-- Master Calibration Suite / Multi-Theme Engine [F5] / Zero-GC Core
 -- ============================================================================
 
-_G.ENGINE_VERSION       = "MUTRIS v1.0.0"
-_G.RealMatchTimer       = 0.0
-_G.HitStopTimer         = 0.0
-_G.AudioBeatPulse       = 0.0
-_G.TrackEnergyPunch     = 0.0
-_G.CURRENT_GAME_MODE    = "versus"
-_G.IS_DEMO_MODE         = false
-_G.IsBlackoutActive     = false
+_G.ENGINE_VERSION           = "MUTRIS v1.0.0"
+_G.RealMatchTimer           = 0.0
+_G.HitStopTimer             = 0.0
+_G.AudioBeatPulse           = 0.0
+_G.TrackEnergyPunch         = 0.0
+_G.CURRENT_GAME_MODE        = "versus"
+_G.IS_DEMO_MODE             = false
+_G.IsBlackoutActive         = false
 _G.BlackoutStrobeVisibility = 1.0
 
 local SettingsManager    = require "settings_manager"
+local ThemeManager       = require "tetris.theme_manager"
 local AudioManager       = require "audio_manager"
 local MusicManager       = require "music_manager"
 local TrackManager       = require "track_manager"
@@ -40,11 +41,10 @@ local ReplayManager      = require "core.replay_manager"
 local ClipRecorder       = require "core.clip_recorder"
 
 local gameState = "menu"
-local settingsReturnState = "menu" -- Variable blindada para retorno de Settings
+local settingsReturnState = "menu"
 local menuSelection = 1
 local pauseSelection = 1
 
--- Estado de Navegación en Master Calibration Suite
 local active_tab_index = 1
 local active_item_index = 1
 
@@ -100,7 +100,7 @@ end
 
 function _G.TakeScreenshot()
     AudioManager.playSliderTick()
-    screenshot_flash_timer = 1.5
+    screenshot_flash_timer = 1.8
     ScreenshotHelper.capture(function(copied, filename)
         if PlayerBoard and PlayerBoard.setPopup then
             PlayerBoard:setPopup("COPIED TO CLIPBOARD! (CTRL+V)", {0.1, 1.0, 0.5}, true, "SCREENSHOT READY")
@@ -129,7 +129,6 @@ function _G.GlobalRestart(skip_track_advance)
     _G.AudioBeatPulse = 0.0
     _G.TrackEnergyPunch = 0.0
 
-    -- Rotación obligatoria de canción en reinicio
     if not skip_track_advance then
         TrackManager.nextTrack()
     end
@@ -169,6 +168,7 @@ function love.load()
     ClipRecorder.init()
     
     if SettingsManager.init then SettingsManager.init() end
+    if ThemeManager.init    then ThemeManager.init() end
     if MetaBalancer.init    then MetaBalancer.init() end
     if AudioManager.init    then AudioManager.init() end
     if TrackManager.init    then TrackManager.init() end
@@ -199,9 +199,9 @@ function love.update(dt)
     end
 
     AudioManager.update(dt)
+    ThemeManager.update(dt)
     if MusicManager.update then MusicManager.update(dt) end
     BloomShader.update(dt)
-    FogLayer.update(dt)
     ClipRecorder.update(dt)
     ReplayManager.update(dt)
 
@@ -215,6 +215,7 @@ function love.update(dt)
     end
 
     if gameState == "versus" or gameState == "gauntlet" then
+        FogLayer.update(dt)
         _G.RealMatchTimer = _G.RealMatchTimer + dt
 
         Input.update(dt)
@@ -248,109 +249,11 @@ function love.update(dt)
     end
 end
 
-local function drawCyberMenu()
-    local pulse = _G.AudioBeatPulse or 0
-    local time = love.timer.getTime()
-
-    love.graphics.setLineWidth(1)
-    love.graphics.setColor(0, 0.7, 1.0, 0.04 + pulse * 0.04)
-    for x = 0, 1280, 40 do love.graphics.line(x, 0, x, 720) end
-    for y = 0, 720, 40 do love.graphics.line(0, y, 1280, y) end
-
-    love.graphics.setFont(FontCache.get(42))
-    love.graphics.setColor(0, 0.8, 1, 0.25 + pulse * 0.35)
-    love.graphics.printf("MUTRIS", 0, 80, 1280, "center")
-    love.graphics.setColor(1, 1, 1, 0.98)
-    love.graphics.printf("MUTRIS", 0, 78, 1280, "center")
-
-    love.graphics.setFont(FontCache.get(16))
-    love.graphics.setColor(0, 0.85, 1, 0.90)
-    love.graphics.printf("SYNTHETIC TRANSCENDENCE", 0, 135, 1280, "center")
-
-    love.graphics.setColor(0.01, 0.03, 0.08, 0.85)
-    love.graphics.rectangle("fill", 440, 168, 400, 24, 4)
-    love.graphics.setColor(0, 0.6, 0.9, 0.35 + pulse * 0.25)
-    love.graphics.rectangle("line", 440, 168, 400, 24, 4)
-
-    love.graphics.setFont(FontCache.get(10))
-    love.graphics.setColor(0.4, 0.85, 1.0, 0.85)
-    love.graphics.printf("ZERO-GC ENGINE  |  144/240Hz  |  SINESTHETIC COMBAT", 440, 173, 400, "center")
-
-    local btn_w = 480
-    local btn_h = 56
-    local start_y = 225
-    local spacing = 70
-
-    for i, item in ipairs(menuItems) do
-        local is_sel = (i == menuSelection)
-        local btn_x = 640 - (btn_w / 2)
-        local btn_y = start_y + (i - 1) * spacing
-
-        if is_sel then
-            local fill_alpha = 0.40 + pulse * 0.20
-            love.graphics.setColor(0.0, 0.25, 0.45, fill_alpha)
-            love.graphics.rectangle("fill", btn_x, btn_y, btn_w, btn_h, 6)
-
-            local glow = 0.7 + math.sin(time * 8) * 0.3
-            love.graphics.setLineWidth(2.0)
-            love.graphics.setColor(1.0, 0.85, 0.2, glow)
-            love.graphics.rectangle("line", btn_x, btn_y, btn_w, btn_h, 6)
-
-            love.graphics.setColor(1.0, 0.85, 0.2, 0.95)
-            love.graphics.rectangle("fill", btn_x + 4, btn_y + 8, 4, btn_h - 16, 2)
-            love.graphics.rectangle("fill", btn_x + btn_w - 8, btn_y + 8, 4, btn_h - 16, 2)
-
-            love.graphics.setFont(FontCache.get(16))
-            love.graphics.setColor(1.0, 0.95, 0.4, 1.0)
-            love.graphics.printf(">  " .. item .. "  <", btn_x, btn_y + 12, btn_w, "center")
-
-            love.graphics.setFont(FontCache.get(9))
-            love.graphics.setColor(0.8, 0.9, 1.0, 0.8)
-            love.graphics.printf(menuSubtitles[i] or "", btn_x, btn_y + 34, btn_w, "center")
-        else
-            love.graphics.setColor(0.01, 0.02, 0.05, 0.70)
-            love.graphics.rectangle("fill", btn_x, btn_y, btn_w, btn_h, 6)
-
-            love.graphics.setLineWidth(1.0)
-            love.graphics.setColor(0, 0.6, 0.9, 0.22)
-            love.graphics.rectangle("line", btn_x, btn_y, btn_w, btn_h, 6)
-
-            love.graphics.setFont(FontCache.get(15))
-            love.graphics.setColor(0.65, 0.75, 0.85, 0.75)
-            love.graphics.printf(item, btn_x, btn_y + 13, btn_w, "center")
-
-            love.graphics.setFont(FontCache.get(9))
-            love.graphics.setColor(0.4, 0.5, 0.6, 0.6)
-            love.graphics.printf(menuSubtitles[i] or "", btn_x, btn_y + 35, btn_w, "center")
-        end
-    end
-
-    local p_w = 540
-    local p_h = 30
-    local p_x = 640 - (p_w / 2)
-    local p_y = 535
-
-    love.graphics.setColor(0.01, 0.02, 0.04, 0.90)
-    love.graphics.rectangle("fill", p_x, p_y, p_w, p_h, 4)
-
-    love.graphics.setLineWidth(1.2)
-    love.graphics.setColor(0.1, 0.9, 0.5, 0.45 + pulse * 0.25)
-    love.graphics.rectangle("line", p_x, p_y, p_w, p_h, 4)
-
-    love.graphics.setFont(FontCache.get(10))
-    love.graphics.setColor(0.2, 0.95, 0.6, 0.95)
-    local patch_str = "[ ARCHON ] " .. (MetaBalancer.patch_notes or "BASELINE EQUILIBRIUM ACTIVE")
-    love.graphics.printf(patch_str, p_x, p_y + 8, p_w, "center")
-
-    love.graphics.setFont(FontCache.get(10))
-    love.graphics.setColor(0.45, 0.55, 0.65, 0.75)
-    love.graphics.printf("[ UP / DOWN ] NAVEGAR  |  [ ENTER ] SELECCIONAR  |  [ F9 ] GRABAR CLIP  |  [ F12 ] CAPTURA", 0, 600, 1280, "center")
-end
-
 local function drawCyberPause()
     love.graphics.setColor(0.0, 0.0, 0.0, 0.78)
     love.graphics.rectangle("fill", 0, 0, 1280, 720)
 
+    local t = ThemeManager.getCurrent()
     local pulse = _G.AudioBeatPulse or 0
     local time = love.timer.getTime()
 
@@ -359,15 +262,10 @@ local function drawCyberPause()
     local card_x = 640 - (card_w / 2)
     local card_y = 140
 
-    love.graphics.setColor(0.01, 0.02, 0.05, 0.95)
-    love.graphics.rectangle("fill", card_x, card_y, card_w, card_h, 8)
-
-    love.graphics.setLineWidth(2.0)
-    love.graphics.setColor(0.0, 0.8, 1.0, 0.45 + pulse * 0.3)
-    love.graphics.rectangle("line", card_x, card_y, card_w, card_h, 8)
+    ThemeManager.drawPanel(card_x, card_y, card_w, card_h, "", false)
 
     love.graphics.setFont(FontCache.get(28))
-    love.graphics.setColor(0.1, 0.9, 1.0, 0.95)
+    love.graphics.setColor(t.primary[1], t.primary[2], t.primary[3], 0.95)
     love.graphics.printf("MATCH PAUSED", card_x, card_y + 20, card_w, "center")
 
     local track_info = TrackManager.getCurrentTrack()
@@ -387,34 +285,21 @@ local function drawCyberPause()
         local btn_x = 640 - (btn_w / 2)
         local btn_y = start_y + (i - 1) * spacing
 
+        ThemeManager.drawPanel(btn_x, btn_y, btn_w, btn_h, "", is_sel)
+
         if is_sel then
-            local glow = 0.7 + math.sin(time * 8) * 0.3
-            love.graphics.setColor(0.0, 0.30, 0.50, 0.50)
-            love.graphics.rectangle("fill", btn_x, btn_y, btn_w, btn_h, 6)
-
-            love.graphics.setLineWidth(1.8)
-            love.graphics.setColor(1.0, 0.85, 0.2, glow)
-            love.graphics.rectangle("line", btn_x, btn_y, btn_w, btn_h, 6)
-
-            love.graphics.setColor(1.0, 0.85, 0.2, 0.95)
+            love.graphics.setColor(t.secondary[1], t.secondary[2], t.secondary[3], 0.95)
             love.graphics.rectangle("fill", btn_x + 4, btn_y + 6, 4, btn_h - 12, 2)
             love.graphics.rectangle("fill", btn_x + btn_w - 8, btn_y + 6, 4, btn_h - 12, 2)
 
             love.graphics.setFont(FontCache.get(15))
-            love.graphics.setColor(1.0, 0.95, 0.4, 1.0)
+            love.graphics.setColor(1.0, 1.0, 1.0, 1.0)
             love.graphics.printf(">  " .. item .. "  <", btn_x, btn_y + 10, btn_w, "center")
 
             love.graphics.setFont(FontCache.get(9))
-            love.graphics.setColor(0.8, 0.9, 1.0, 0.85)
+            love.graphics.setColor(t.secondary[1], t.secondary[2], t.secondary[3], 0.85)
             love.graphics.printf(pauseSubtitles[i] or "", btn_x, btn_y + 32, btn_w, "center")
         else
-            love.graphics.setColor(0.02, 0.03, 0.07, 0.75)
-            love.graphics.rectangle("fill", btn_x, btn_y, btn_w, btn_h, 6)
-
-            love.graphics.setLineWidth(1.0)
-            love.graphics.setColor(0.0, 0.6, 0.9, 0.25)
-            love.graphics.rectangle("line", btn_x, btn_y, btn_w, btn_h, 6)
-
             love.graphics.setFont(FontCache.get(14))
             love.graphics.setColor(0.7, 0.8, 0.9, 0.8)
             love.graphics.printf(item, btn_x, btn_y + 11, btn_w, "center")
@@ -430,20 +315,15 @@ local function drawCyberPause()
     love.graphics.printf("[ ESC ] REANUDAR  |  [ R ] REINICIAR Y CAMBIAR CANCION  |  [ ENTER ] SELECCIONAR", 0, card_y + card_h + 20, 1280, "center")
 end
 
--- 🎛️ MASTER CALIBRATION SUITE: PESTAÑAS WIDESCREEN 16:9 PULIDAS
 local function drawCyberSettings()
+    ThemeManager.drawBackground()
+
+    local t     = ThemeManager.getCurrent()
     local pulse = _G.AudioBeatPulse or 0
     local time  = love.timer.getTime()
 
-    -- Fondo de Rejilla Neón de Precisión
-    love.graphics.setLineWidth(1)
-    love.graphics.setColor(0, 0.7, 1.0, 0.04 + pulse * 0.03)
-    for x = 0, 1280, 40 do love.graphics.line(x, 0, x, 720) end
-    for y = 0, 720, 40 do love.graphics.line(0, y, 1280, y) end
-
-    -- Encabezado Principal
     love.graphics.setFont(FontCache.get(26))
-    love.graphics.setColor(0.1, 0.9, 1.0, 0.95)
+    love.graphics.setColor(t.primary[1], t.primary[2], t.primary[3], 0.95)
     love.graphics.printf("MASTER CALIBRATION SUITE", 0, 26, 1280, "center")
 
     local current_tab = SettingsManager.tabs[active_tab_index]
@@ -451,49 +331,33 @@ local function drawCyberSettings()
     love.graphics.setColor(0.5, 0.7, 0.9, 0.85)
     love.graphics.printf(current_tab.title or "SYSTEM TUNING", 0, 58, 1280, "center")
 
-    -- 📑 BARRA DE PESTAÑAS HORIZONTALES (x: 100..1180, y: 84..118)
     local tab_w = 172
     local tab_h = 32
     local total_tabs_w = #SettingsManager.tabs * (tab_w + 8) - 8
     local tabs_start_x = 640 - (total_tabs_w / 2)
     local tabs_y = 82
 
-    for i, t in ipairs(SettingsManager.tabs) do
+    for i, tab in ipairs(SettingsManager.tabs) do
         local tx = tabs_start_x + (i - 1) * (tab_w + 8)
         local is_active_tab = (i == active_tab_index)
 
+        ThemeManager.drawPanel(tx, tabs_y, tab_w, tab_h, "", is_active_tab)
+
+        love.graphics.setFont(FontCache.get(10))
         if is_active_tab then
-            love.graphics.setColor(0.0, 0.35, 0.55, 0.90)
-            love.graphics.rectangle("fill", tx, tabs_y, tab_w, tab_h, 4)
-            love.graphics.setLineWidth(1.8)
-            love.graphics.setColor(1.0, 0.85, 0.2, 0.95)
-            love.graphics.rectangle("line", tx, tabs_y, tab_w, tab_h, 4)
-            love.graphics.setFont(FontCache.get(10))
-            love.graphics.setColor(1.0, 0.95, 0.4, 1.0)
-            love.graphics.printf(t.name, tx, tabs_y + 9, tab_w, "center")
+            love.graphics.setColor(1.0, 1.0, 1.0, 1.0)
         else
-            love.graphics.setColor(0.02, 0.03, 0.07, 0.75)
-            love.graphics.rectangle("fill", tx, tabs_y, tab_w, tab_h, 4)
-            love.graphics.setLineWidth(1.0)
-            love.graphics.setColor(0.0, 0.6, 0.9, 0.3)
-            love.graphics.rectangle("line", tx, tabs_y, tab_w, tab_h, 4)
-            love.graphics.setFont(FontCache.get(10))
             love.graphics.setColor(0.65, 0.75, 0.85, 0.75)
-            love.graphics.printf(t.name, tx, tabs_y + 9, tab_w, "center")
         end
+        love.graphics.printf(tab.name, tx, tabs_y + 9, tab_w, "center")
     end
 
-    -- 🗃️ CONTENEDOR PRINCIPAL DE PARÁMETROS (x: 180..1100, y: 126..575)
     local card_x = 180
     local card_y = 126
     local card_w = 920
     local card_h = 450
 
-    love.graphics.setColor(0.01, 0.02, 0.05, 0.94)
-    love.graphics.rectangle("fill", card_x, card_y, card_w, card_h, 6)
-    love.graphics.setLineWidth(1.5)
-    love.graphics.setColor(0.0, 0.7, 1.0, 0.35 + pulse * 0.2)
-    love.graphics.rectangle("line", card_x, card_y, card_w, card_h, 6)
+    ThemeManager.drawPanel(card_x, card_y, card_w, card_h, "", false)
 
     local row_start_y = card_y + 16
     local row_spacing = 49
@@ -503,15 +367,15 @@ local function drawCyberSettings()
         local ry = row_start_y + (i - 1) * row_spacing
 
         if is_sel then
-            love.graphics.setColor(0.0, 0.25, 0.45, 0.35)
+            love.graphics.setColor(t.primary[1], t.primary[2], t.primary[3], 0.15)
             love.graphics.rectangle("fill", card_x + 12, ry - 4, card_w - 24, 43, 4)
             love.graphics.setLineWidth(1.2)
-            love.graphics.setColor(1.0, 0.85, 0.2, 0.85)
+            love.graphics.setColor(t.secondary[1], t.secondary[2], t.secondary[3], 0.85)
             love.graphics.rectangle("line", card_x + 12, ry - 4, card_w - 24, 43, 4)
         end
 
         love.graphics.setFont(FontCache.get(11))
-        love.graphics.setColor(is_sel and {1.0, 0.95, 0.4, 1.0} or {0.75, 0.85, 0.95, 0.85})
+        love.graphics.setColor(is_sel and {1.0, 1.0, 1.0, 1.0} or {0.75, 0.85, 0.95, 0.85})
         love.graphics.print(item.label, card_x + 28, ry + 8)
 
         local slider_x = card_x + 360
@@ -538,7 +402,7 @@ local function drawCyberSettings()
             local label_text = item.labels[opt_idx] or tostring(cur_val)
             love.graphics.setColor(0.0, 0.35, 0.55, 0.75)
             love.graphics.rectangle("fill", slider_x, slider_y - 2, 220, 22, 3)
-            love.graphics.setColor(0, 0.8, 1, 0.5)
+            love.graphics.setColor(t.border)
             love.graphics.rectangle("line", slider_x, slider_y - 2, 220, 22, 3)
             love.graphics.setFont(FontCache.get(10))
             love.graphics.setColor(1.0, 1.0, 1.0, 0.95)
@@ -547,7 +411,7 @@ local function drawCyberSettings()
         else
             love.graphics.setColor(0.02, 0.04, 0.08, 0.9)
             love.graphics.rectangle("fill", slider_x, slider_y, slider_w, slider_h, 3)
-            love.graphics.setColor(0.0, 0.6, 1.0, 0.35)
+            love.graphics.setColor(t.border)
             love.graphics.rectangle("line", slider_x, slider_y, slider_w, slider_h, 3)
 
             local num_v = tonumber(cur_val) or 0
@@ -557,12 +421,10 @@ local function drawCyberSettings()
             local pct = (num_v - item.min) / math.max(0.001, (item.max - item.min))
             pct = math.max(0, math.min(1, pct))
 
-            -- Barra con resplandor neón
-            love.graphics.setColor(0.0, 0.85, 1.0, 0.85)
+            love.graphics.setColor(t.primary[1], t.primary[2], t.primary[3], 0.85)
             love.graphics.rectangle("fill", slider_x + 2, slider_y + 2, (slider_w - 4) * pct, slider_h - 4, 2)
 
-            -- Tirador iluminado
-            love.graphics.setColor(1.0, 0.95, 0.4, 0.95)
+            love.graphics.setColor(1.0, 1.0, 1.0, 0.95)
             love.graphics.rectangle("fill", slider_x + (slider_w - 4) * pct - 2, slider_y - 2, 5, slider_h + 4, 1)
 
             love.graphics.setFont(FontCache.get(10))
@@ -574,18 +436,16 @@ local function drawCyberSettings()
             love.graphics.print(val_str, slider_x + slider_w + 14, slider_y)
         end
 
-        -- ⟲ BOTÓN DE RESET INDIVIDUAL POR FILA (TECHNO BADGE)
         local reset_btn_x = card_x + card_w - 120
         local reset_btn_y = ry + 4
         love.graphics.setColor(0.03, 0.06, 0.12, 0.85)
         love.graphics.rectangle("fill", reset_btn_x, reset_btn_y, 44, 22, 3)
-        love.graphics.setColor(0.0, 0.7, 1.0, 0.4)
+        love.graphics.setColor(t.border)
         love.graphics.rectangle("line", reset_btn_x, reset_btn_y, 44, 22, 3)
         love.graphics.setFont(FontCache.get(9))
-        love.graphics.setColor(0.2, 0.9, 1.0, 0.9)
+        love.graphics.setColor(t.primary)
         love.graphics.printf("RST", reset_btn_x, reset_btn_y + 4, 44, "center")
 
-        -- Etiqueta de valor Base
         love.graphics.setFont(FontCache.get(8))
         love.graphics.setColor(0.45, 0.55, 0.65, 0.75)
         local def_str = item.is_ms and string.format("%dms", def_val * 1000)
@@ -595,7 +455,6 @@ local function drawCyberSettings()
         love.graphics.print("BASE: " .. def_str, reset_btn_x + 52, reset_btn_y + 5)
     end
 
-    -- 🔬 BARRA DE TRADUCCIÓN MILISEGUNDOS ↔ FRAMES (Solo en Tab Handling)
     if current_tab.id == "handling" then
         local das_ms = (SettingsManager.get("das") or 0.094) * 1000
         local arr_ms = (SettingsManager.get("arr") or 0.008) * 1000
@@ -614,7 +473,6 @@ local function drawCyberSettings()
         love.graphics.printf(telemetry_line, card_x + 12, card_y + card_h - 62, card_w - 24, "center")
     end
 
-    -- BOTONES INFERIORES: RESET PESTAÑA & GUARDAR
     local btn_reset_w = 200
     local btn_reset_h = 32
     local btn_reset_x = card_x + 20
@@ -641,7 +499,6 @@ local function drawCyberSettings()
     love.graphics.setColor(1.0, 1.0, 1.0, 0.95)
     love.graphics.printf("GUARDAR Y SALIR [ESC / ENTER]", btn_save_x, btn_save_y + 7, btn_save_w, "center")
 
-    -- Leyenda de Atajos
     love.graphics.setFont(FontCache.get(9))
     love.graphics.setColor(0.45, 0.55, 0.65, 0.75)
     love.graphics.printf("[ Q / E ] CAMBIAR PESTANA  |  [ FLECHAS ] AJUSTAR  |  [ BACKSPACE / DEL ] RESET INDIVIDUAL  |  [ ESC ] REGRESAR", 0, 595, 1280, "center")
@@ -650,14 +507,15 @@ end
 function love.draw()
     love.graphics.clear(0.01, 0.01, 0.02, 1.0)
 
-    -- 1. Renderizado del Canvas nativo del juego
     BloomShader.beginDraw()
-    FogLayer.draw()
 
     if gameState == "menu" then
-        drawCyberMenu()
+        ThemeManager.drawMenu(menuItems, menuSubtitles, menuSelection, MetaBalancer)
 
     elseif gameState == "versus" or gameState == "gauntlet" or gameState == "gameover" or gameState == "pause" then
+        ThemeManager.drawBackground()
+        FogLayer.draw()
+
         if PlayerBoard then
             PlayerBoard:draw()
             HUDPanels.draw(PlayerBoard)
@@ -675,9 +533,9 @@ function love.draw()
         if gameState == "pause" then
             drawCyberPause()
         elseif gameState == "gameover" then
-            love.graphics.setColor(0, 0, 0, 0.75)
-            love.graphics.rectangle("fill", 0, 0, 1280, 720)
-            love.graphics.setFont(FontCache.get(38))
+            love.graphics.setColor(0, 0, 0, 0.78)
+            love.graphics.rectangle("fill", 440, 230, 400, 180, 6)
+            love.graphics.setFont(FontCache.get(34))
             if PlayerBoard and PlayerBoard.is_dying then
                 love.graphics.setColor(1.0, 0.2, 0.3, 0.95)
                 love.graphics.printf("ANNIHILATED", 0, 260, 1280, "center")
@@ -685,9 +543,12 @@ function love.draw()
                 love.graphics.setColor(0.1, 1.0, 0.5, 0.95)
                 love.graphics.printf("VICTORY ACHIEVED", 0, 260, 1280, "center")
             end
-            love.graphics.setFont(FontCache.get(15))
+            love.graphics.setFont(FontCache.get(12))
             love.graphics.setColor(1, 1, 1, 0.85)
-            love.graphics.printf("PRESS [R] OR [START] TO REMATCH WITH NEXT TRACK | [ESC] MENU", 0, 340, 1280, "center")
+            love.graphics.printf("PRESS [R] OR [START] TO REMATCH WITH NEXT TRACK", 0, 320, 1280, "center")
+            love.graphics.setFont(FontCache.get(10))
+            love.graphics.setColor(0.65, 0.75, 0.85, 0.75)
+            love.graphics.printf("[ESC] RETURN TO MAIN MENU", 0, 350, 1280, "center")
         end
 
     elseif gameState == "settings" then
@@ -697,35 +558,34 @@ function love.draw()
         TrackEditor.draw()
     end
 
-    -- ⚠️ DIRECTIVA PRIMARIA PERMANENTE (REGLA DE ORO)
     love.graphics.push("all")
     love.graphics.setFont(FontCache.get(10))
     love.graphics.setColor(0.4, 0.85, 1.0, 0.9)
     love.graphics.print(_G.ENGINE_VERSION, 16, 698)
     love.graphics.pop()
 
-    -- 2. Volcado del Canvas a la ventana (libera el canvas activo)
     BloomShader.endDraw(PlayerBoard and PlayerBoard.is_zone_active, view_ox, view_oy, view_scale)
 
-    -- 🎥 3. Captura del Canvas YA liberado (Sin errores de framebuffer y sin el badge REC)
     if ClipRecorder.is_recording and BloomShader.canvas then
         ClipRecorder.captureFrame(BloomShader.canvas)
     end
 
-    -- 4. Indicador REC y Feedback de Captura
     ClipRecorder.drawHUDIndicator()
 
-    -- Toast flotante reubicado para evitar colisiones con encabezados
+    -- Toast de Captura a Portapapeles (Esquina inferior izquierda para no solapar el Theme Toast)
     if screenshot_flash_timer > 0 then
         local a = math.min(1.0, screenshot_flash_timer * 1.5)
-        love.graphics.setColor(0.01, 0.03, 0.06, 0.92 * a)
-        love.graphics.rectangle("fill", (1280 - 360) / 2, 10, 360, 30, 4)
+        love.graphics.setColor(0.01, 0.03, 0.06, 0.94 * a)
+        love.graphics.rectangle("fill", 440, 655, 380, 36, 4)
         love.graphics.setLineWidth(1.2)
         love.graphics.setColor(0.1, 1.0, 0.5, 0.90 * a)
-        love.graphics.rectangle("line", (1280 - 360) / 2, 10, 360, 30, 4)
+        love.graphics.rectangle("line", 440, 655, 380, 36, 4)
         love.graphics.setFont(FontCache.get(10))
-        love.graphics.printf("COPIED TO CLIPBOARD! (CTRL+V)", (1280 - 360) / 2, 17, 360, "center")
+        love.graphics.setColor(1, 1, 1, 0.98 * a)
+        love.graphics.printf("COPIED TO CLIPBOARD! (CTRL+V)", 440, 666, 380, "center")
     end
+
+    ThemeManager.drawToast()
 end
 
 local function adjustActiveSetting(delta)
@@ -753,6 +613,9 @@ local function adjustActiveSetting(delta)
         end
         opt_idx = ((opt_idx + delta - 1) % #item.options) + 1
         s[item.id] = item.options[opt_idx]
+        if item.id == "theme_skin" then
+            ThemeManager.setTheme(item.options[opt_idx])
+        end
         AudioManager.playSliderTick()
 
     else
@@ -772,19 +635,26 @@ local function adjustActiveSetting(delta)
 end
 
 function love.keypressed(key)
-    -- 🎥 GRABAR CLIP (F9 Toggle MP4 o GIF según Ajustes)
     if key == "f9" then
         _G.ToggleRecording()
         return
     end
 
-    -- 📸 CAPTURA DE PANTALLA (F12, F2 o PrintScreen)
     if key == "f12" or key == "f2" or key == "printscreen" or key == "sysrq" then
         _G.TakeScreenshot()
         return
     end
 
-    -- 🖥️ PANTALLA COMPLETA
+    if key == "f5" then
+        ThemeManager.cycleNext()
+        AudioManager.playSliderTick()
+        return
+    elseif key == "f6" then
+        ThemeManager.cyclePrev()
+        AudioManager.playSliderTick()
+        return
+    end
+
     if key == "f11" or (key == "return" and (love.keyboard.isDown("lalt") or love.keyboard.isDown("ralt"))) then
         _G.ToggleFullscreen()
         return
@@ -801,7 +671,6 @@ function love.keypressed(key)
         return
     end
 
-    -- 🛑 PAUSA CONTEXTUAL CON ESCAPE (BLINDADA)
     if key == "escape" then
         if gameState == "menu" then
             love.event.quit()
@@ -811,7 +680,6 @@ function love.keypressed(key)
             MusicManager.pause()
             AudioManager.playMenuBack()
         elseif gameState == "pause" then
-            -- Reanudación inequívoca hacia el modo activo
             gameState = _G.CURRENT_GAME_MODE or "versus"
             MusicManager.resume()
             AudioManager.playMenuClick()
@@ -835,7 +703,6 @@ function love.keypressed(key)
         return
     end
 
-    -- 🔄 REINICIO DIRECTO CON 'R' (Con rotación obligatoria de canción)
     if key == "r" then
         if gameState == "versus" or gameState == "gauntlet" or gameState == "pause" or gameState == "gameover" then
             _G.GlobalRestart(false)
@@ -903,7 +770,6 @@ function love.keypressed(key)
         return
     end
 
-    -- 🎛️ CONTROLES EN MASTER CALIBRATION SUITE
     if gameState == "settings" then
         local current_tab = SettingsManager.tabs[active_tab_index]
 
@@ -926,10 +792,12 @@ function love.keypressed(key)
         elseif key == "right" then
             adjustActiveSetting(1)
         elseif key == "backspace" or key == "delete" then
-            -- ⟲ RESET INDIVIDUAL DE LA VARIABLE SELECCIONADA
             local item = current_tab.items[active_item_index]
             if item then
                 SettingsManager.resetKey(item.id)
+                if item.id == "theme_skin" then
+                    ThemeManager.setTheme(SettingsManager.get("theme_skin"))
+                end
                 AudioManager.playImmediateSFX("rotate", false)
             end
         elseif key == "return" or key == "space" then
@@ -968,14 +836,13 @@ function love.mousepressed(x, y, button)
     end
 
     if gameState == "menu" then
-        local btn_w = 480
-        local btn_h = 56
-        local start_y = 225
-        local spacing = 70
+        -- Selección reactiva compatible con las 4 estructuras
+        local start_y = (ThemeManager.current_theme == 1) and 130 or ((ThemeManager.current_theme == 3) and 115 or 145)
+        local spacing = (ThemeManager.current_theme == 1) and 92 or ((ThemeManager.current_theme == 3) and 110 or 88)
+        local btn_w = 600
         for i = 1, #menuItems do
-            local bx = 640 - (btn_w / 2)
             local by = start_y + (i - 1) * spacing
-            if adj_x >= bx and adj_x <= bx + btn_w and adj_y >= by and adj_y <= by + btn_h then
+            if adj_y >= by and adj_y <= by + 75 and adj_x >= 80 and adj_x <= 750 then
                 menuSelection = i
                 AudioManager.playMenuClick()
                 if i == 1 then
@@ -1032,9 +899,7 @@ function love.mousepressed(x, y, button)
         end
     end
 
-    -- 🎛️ INTERACCIONES DE RATÓN EN MASTER CALIBRATION SUITE
     if gameState == "settings" then
-        -- 1. Clic en Pestañas Horizontales
         local tab_w = 172
         local tab_h = 32
         local total_tabs_w = #SettingsManager.tabs * (tab_w + 8) - 8
@@ -1067,15 +932,16 @@ function love.mousepressed(x, y, button)
             local slider_h = 16
             local reset_btn_x = card_x + card_w - 120
 
-            -- Clic en botón RST (Reset individual)
             if adj_x >= reset_btn_x and adj_x <= reset_btn_x + 44 and adj_y >= ry + 4 and adj_y <= ry + 26 then
                 active_item_index = i
                 SettingsManager.resetKey(item.id)
+                if item.id == "theme_skin" then
+                    ThemeManager.setTheme(SettingsManager.get("theme_skin"))
+                end
                 AudioManager.playImmediateSFX("rotate", false)
                 return
             end
 
-            -- Clic / Ajuste del Slider
             if item.is_toggle then
                 if adj_x >= slider_x and adj_x <= slider_x + 80 and adj_y >= slider_y - 2 and adj_y <= slider_y + 18 then
                     active_item_index = i
@@ -1104,16 +970,17 @@ function love.mousepressed(x, y, button)
             end
         end
 
-        -- Clic en [RESTABLECER PESTANA]
         local btn_reset_x = card_x + 20
         local btn_reset_y = card_y + card_h - 38
         if adj_x >= btn_reset_x and adj_x <= btn_reset_x + 200 and adj_y >= btn_reset_y and adj_y <= btn_reset_y + 32 then
             SettingsManager.resetTab(active_tab_index)
+            if active_tab_index == 4 then
+                ThemeManager.setTheme(SettingsManager.get("theme_skin"))
+            end
             AudioManager.playImmediateSFX("rotate", false)
             return
         end
 
-        -- Clic en [GUARDAR Y SALIR]
         local btn_save_w = 260
         local btn_save_x = card_x + card_w - btn_save_w - 20
         local btn_save_y = card_y + card_h - 38

@@ -32,7 +32,8 @@ SettingsManager.defaults = {
     counter_ratio     = 0.50,    -- 50% devuelto
     zone_trigger_mode = 1,       -- 1=Flexible (25%+), 2=Hyper Only (100%)
 
-    -- VIDEO / FX
+    -- VIDEO / FX & SKINS
+    theme_skin        = 1,       -- 1=Cyber-DAW, 2=Neo-Kinetic, 3=Esports, 4=Cosmic
     bloom_intensity   = 1.0,     -- 100%
     screen_shake      = 1.0,     -- 100%
     ghost_alpha       = 0.35,    -- 35%
@@ -101,9 +102,10 @@ SettingsManager.tabs = {
     },
     {
         id = "video",
-        name = "04 // VIDEO & FX",
-        title = "NEON BLOOM, GLSL SHADERS & VISUAL JUICE",
+        name = "04 // VIDEO & SKINS",
+        title = "THEME ENGINES, NEON BLOOM & GLSL SHADERS",
         items = {
+            { id = "theme_skin",      label = "ACTIVE THEME SKIN [F5]", is_enum = true, options = {1, 2, 3, 4}, labels = {"01 // CYBER-DAW RACK", "02 // NEO-KINETIC STRIKE", "03 // ESPORTS GLASS", "04 // COSMIC SINESTESIA"} },
             { id = "bloom_intensity", label = "NEON BLOOM GLOW",    min = 0,    max = 200, step = 10,  unit = "%", is_pct = true, is_int = true },
             { id = "screen_shake",    label = "SCREEN SHAKE POWER",  min = 0,    max = 150, step = 10,  unit = "%", is_pct = true, is_int = true },
             { id = "ghost_alpha",     label = "GHOST PIECE OPACITY", min = 10,   max = 100, step = 5,   unit = "%", is_pct = true, is_int = true },

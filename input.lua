@@ -4,11 +4,12 @@
 ---@diagnostic disable: undefined-global
 -- ============================================================================
 -- MUTRIS ENGINE: INPUT & DAS/ARR COMPETITIVE ENGINE
--- Mapeo Universal, Stance Switching [F8] & Timebase Híbrido Zero-GC
+-- Mapeo Universal, Stance Switching [F8], Theme Switcher [F5] & Timebase Zero-GC
 -- ============================================================================
 local Input = {}
 local SettingsManager = require "settings_manager"
 local CombatStances   = require "combat.combat_stances"
+local ThemeManager    = require "tetris.theme_manager"
 
 INPUT_CONFIG = {
     TIMEBASE_MODE           = "gpu",
@@ -166,6 +167,15 @@ function Input.handleAction(action)
         return
     end
 
+    -- Conmutador de Skins en vivo [F5] / [F6]
+    if action == "theme_next" then
+        ThemeManager.cycleNext()
+        return
+    elseif action == "theme_prev" then
+        ThemeManager.cyclePrev()
+        return
+    end
+
     if not Input.player then return end
 
     -- Conmutación de Postura [F8]
@@ -198,6 +208,8 @@ end
 
 function Input.keypressed(key)
     if key == "r" then Input.handleAction("restart")
+    elseif key == "f5" then Input.handleAction("theme_next")
+    elseif key == "f6" then Input.handleAction("theme_prev")
     elseif key == "tab" or key == "lshift" or key == "rshift" then Input.handleAction("stance_switch")
     elseif key == "a" or key == "z" then Input.handleAction("rot_cw")
     elseif key == "d" or key == "x" then Input.handleAction("rot_ccw")
