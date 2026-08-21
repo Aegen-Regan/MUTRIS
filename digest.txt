@@ -629,357 +629,7 @@ MUTRIS ENGINE: ESTADO DE ACTUALIZACIÓN DEL ROADMAP
 ================================================
 FILE: audio_manager.lua
 ================================================
----@diagnostic disable: undefined-global
-local AudioManager = {}
-local SettingsManager = require "settings_manager"
-
-AUDIO_CONFIG = {
-    SFX_DURATION_BASE_BOOST_MIN = 1.0,
-    SFX_DURATION_BASE_BOOST_MAX = 1.5,
-    DELAY_TAP1_MS_MIN = 0.020,
-    DELAY_TAP1_MS_MAX = 0.050,
-    DELAY_FEEDBACK_TAP1_MIN = 0.01,
-    DELAY_FEEDBACK_TAP1_MAX = 0.10,
-    DRIVE_BOOST_MIN = 0.0,
-    DRIVE_BOOST_MAX = 1.2,
-    DECAY_DIVISOR_MIN = 1.0,
-    DECAY_DIVISOR_MAX = 2.0,
-    ZONE_EXTRA_DURATION = 1.10,
-    ZONE_EXTRA_DRIVE  = 1.0,
-    ZONE_PITCH_SHIFT  = 0.95,
-    DANGER_GLITCH_CHANCE = 0.15,
-}
-
-AudioManager.beat_timer = 0
-AudioManager.base_bpm = 120
-AudioManager.current_bpm = 120
-AudioManager.step = 0
-AudioManager.zone_active = false
-AudioManager.glitch_timer = 0
-_G.AudioBeatPulse = 0
-AudioManager.melody_step = 1
-_G.TrackEnergyPunch = 0
-
--- 🎚️ ENSORDECIMIENTO TOTAL POR VACÍO (MUTE 100%)
-AudioManager.duck_intensity = 0.0
-AudioManager.duck_duration = 0.60
-
--- 🗣️ CACHÉ DE ARCHIVOS DE AUDIO DEL PRESENTADOR
-AudioManager.voice_cache = {}
-
-local function tanh(x)
-    local e2x = math.exp(2 * x)
-    return (e2x - 1) / (e2x + 1)
-end
-
-function AudioManager.init()
-    AudioManager.beat_timer = 0
-    AudioManager.step = 0
-    AudioManager.melody_step = 1
-    _G.TrackEnergyPunch = 0
-    AudioManager.glitch_timer = 0
-    AudioManager.duck_intensity = 0.0
-    AudioManager.loadVoiceFiles()
-end
-
--- 📂 Escaneo y Carga de Voces Reales (.mp3 / .ogg / .wav)
-function AudioManager.loadVoiceFiles()
-    AudioManager.voice_cache = {}
-    local files = {"tetris", "tspin", "double", "triple", "b2b", "hyper", "victory", "danger", "ready", "go"}
-    local exts = {".mp3", ".ogg", ".wav"}
-    
-    for _, name in ipairs(files) do
-        for _, ext in ipairs(exts) do
-            local path = "sfx/announcer/" .. name .. ext
-            if love.filesystem.getInfo(path) then
-                local success, src = pcall(love.audio.newSource, path, "static")
-                if success then
-                    AudioManager.voice_cache[name] = src
-                    break
-                end
-            end
-        end
-    end
-end
-
--- ⚡ Disparo de Ensordecimiento (Apaga la música al 100%)
-function AudioManager.triggerSidechain(amount, duration)
-    AudioManager.duck_intensity = math.max(AudioManager.duck_intensity, amount or 1.0)
-    AudioManager.duck_duration = duration or 0.60
-end
-
--- 🗣️ Reproducción de la Voz del Presentador
-function AudioManager.playVoiceAnnounce(voice_type)
-    local sfx_vol = SettingsManager.getSFX()
-    if sfx_vol <= 0.01 then return end
-    
-    -- Ensordecimiento absoluto de la música de fondo
-    AudioManager.triggerSidechain(1.0, 0.75)
-
-    local key = voice_type:lower()
-    local src = AudioManager.voice_cache[key]
-    if src then
-        src:setVolume(math.min(1.0, sfx_vol * 1.35))
-        src:stop()
-        src:play()
-    else
-        -- Impacto de reemplazo si no colocó archivo todavía
-        AudioManager.playSubBassThud(3)
-    end
-end
-
-function AudioManager.playMenuClick()
-    AudioManager.playTone(380, 0.04, 0.20, "sine", false, 0.0, 70, true)
-end
-
-function AudioManager.playMenuHover()
-    AudioManager.playTone(240, 0.03, 0.12, "triangle", false, 0.0, 100, true)
-end
-
-function AudioManager.playSliderTick()
-    AudioManager.playTone(320, 0.02, 0.15, "sine", false, 0.0, 140, true)
-end
-
-function AudioManager.playMenuBack()
-    local sfx_vol = SettingsManager.getSFX()
-    local sample_rate = 44100
-    local length = math.floor(sample_rate * 0.12)
-    if length <= 0 then return end
-    local data = love.sound.newSoundData(length, sample_rate, 16, 1)
-    for i = 0, length - 1 do
-        local t = i / sample_rate
-        local f = 280 - (120 * (t / 0.12))
-        local val = math.sin(2 * math.pi * f * t) * math.exp(-25 * t)
-        data:setSample(i, val * 0.25 * sfx_vol)
-    end
-    love.audio.play(love.audio.newSource(data, "static"))
-end
-
-function AudioManager.playMuteToggle(is_muted)
-    if is_muted then
-        AudioManager.playTone(180, 0.10, 0.22, "triangle", false, 0.2, 45, true)
-    else
-        local sfx_vol = SettingsManager.getSFX()
-        local sample_rate = 44100
-        local length = math.floor(sample_rate * 0.10)
-        if length <= 0 then return end
-        local data = love.sound.newSoundData(length, sample_rate, 16, 1)
-        for i = 0, length - 1 do
-            local t = i / sample_rate
-            local f = 200 + (180 * (t / 0.10))
-            local val = math.sin(2 * math.pi * f * t) * math.exp(-20 * t)
-            data:setSample(i, val * 0.25 * sfx_vol)
-        end
-        love.audio.play(love.audio.newSource(data, "static"))
-    end
-end
-
--- 💥 IMPACTO DE SUBGRAVES ATERRADOR (30 Hz Cinematic Drop)
-function AudioManager.playSubBassThud(power)
-    local sfx_vol = SettingsManager.getSFX()
-    if sfx_vol <= 0.01 then return end
-
-    AudioManager.triggerSidechain(1.0, 0.65)
-    local sample_rate = 44100
-    local dur = 0.55
-    local length = math.floor(sample_rate * dur)
-    if length <= 0 then return end
-
-    local data = love.sound.newSoundData(length, sample_rate, 16, 1)
-    local start_f = 60 + (power or 1) * 6
-    local end_f = 24
-
-    for i = 0, length - 1 do
-        local t = i / sample_rate
-        local prog = t / dur
-        local f = start_f + (end_f - start_f) * (prog * prog)
-        local sub = math.sin(2 * math.pi * f * t)
-        local rumble = math.sin(2 * math.pi * (f * 0.5) * t) * 0.6
-        local thud = (t < 0.008) and (math.random() * 2 - 1) * (1.0 - t / 0.008) * 0.4 or 0
-
-        local val = tanh((sub + rumble + thud) * 3.0) * math.exp(-5.0 * t)
-        data:setSample(i, val * 0.98 * sfx_vol)
-    end
-
-    local src = love.audio.newSource(data, "static")
-    src:setVolume(1.0)
-    love.audio.play(src)
-end
-
--- 💎 IMPACTO MECÁNICO TÁCTIL (Limpieza de líneas sin bloops)
-function AudioManager.playMechanicalClear(lines_count)
-    local sfx_vol = SettingsManager.getSFX()
-    if sfx_vol <= 0.01 then return end
-
-    -- Ensordecimiento breve
-    AudioManager.triggerSidechain(0.75 + lines_count * 0.08, 0.40)
-
-    local sample_rate = 44100
-    local dur = 0.28
-    local length = math.floor(sample_rate * dur)
-    if length <= 0 then return end
-
-    local data = love.sound.newSoundData(length, sample_rate, 16, 1)
-    local base_f = 110 + (lines_count * 20)
-
-    for i = 0, length - 1 do
-        local t = i / sample_rate
-        local snap = (t < 0.006) and (math.random() * 2 - 1) * (1.0 - t / 0.006) * 0.5 or 0
-        local body = math.sin(2 * math.pi * (base_f * math.exp(-15 * t)) * t) * 0.7
-        local deep = math.sin(2 * math.pi * 48 * t) * 0.45 * math.exp(-8 * t)
-
-        local val = tanh((snap + body + deep) * 2.0) * math.exp(-8.0 * t)
-        data:setSample(i, val * 0.85 * sfx_vol)
-    end
-
-    local src = love.audio.newSource(data, "static")
-    src:setVolume(1.0)
-    love.audio.play(src)
-end
-
-function AudioManager.playTone(freq, duration, volume, wave_type, is_kick, drive, decay, no_lfo)
-    if freq > 400 and not is_kick then freq = 280 end
-
-    local sample_rate = 44100
-    local length = math.floor(sample_rate * duration)
-    if length <= 0 then return end
-    decay = decay or 26
-
-    local data = love.sound.newSoundData(length, sample_rate, 16, 1)
-    for i = 0, length - 1 do
-        local t = i / sample_rate
-        local f = is_kick and (freq * math.exp(-24 * t)) or freq
-        local val = math.sin(2 * math.pi * f * t)
-        if wave_type == "triangle" then
-            val = (2 / math.pi) * math.asin(math.max(-1, math.min(1, val)))
-        end
-        if drive and drive > 0 then val = tanh(val * drive) end
-        data:setSample(i, val * math.exp(-decay * t) * volume)
-    end
-
-    local sfx_norm = SettingsManager.getSFX()
-    local src = love.audio.newSource(data, "static")
-    src:setVolume(src:getVolume() * sfx_norm)
-    love.audio.play(src)
-end
-
-function AudioManager.playHatClosed(volume)
-    AudioManager.playTone(180, 0.025, volume or 0.08, "triangle", true, 0, 90, true)
-end
-
-function AudioManager.triggerGlitch(duration)
-    AudioManager.glitch_timer = duration or 0
-end
-
-function AudioManager.playImmediateSFX(type, is_bot, row_y)
-    local vol = is_bot and 0.35 or 0.30
-
-    if type == "move" then
-        -- Chasquido táctil grave de baja frecuencia
-        AudioManager.playTone(140, 0.035, vol * 0.30, "sine", false, 0, 95, true)
-
-    elseif type == "rotate" then
-        AudioManager.playTone(180, 0.045, vol * 0.35, "sine", false, 0, 80, true)
-
-    elseif type == "hold" then
-        AudioManager.playTone(120, 0.05, vol * 0.38, "sine", false, 0, 60, true)
-        AudioManager.playTone(160, 0.06, vol * 0.32, "sine", false, 0, 50, true)
-
-    elseif type == "drop" then
-        local target_row = tonumber(row_y) or 40
-        local height_factor = (41 - target_row) / 20
-        local f = 90 + height_factor * 15
-        AudioManager.playTone(f, 0.22, vol * 0.32, "sine", true, 0.4, 24, true)
-
-    elseif type == "line_clear" then
-        AudioManager.playMechanicalClear(1)
-
-    elseif type == "t_spin" then
-        AudioManager.playSubBassThud(3)
-        AudioManager.playVoiceAnnounce("tspin")
-
-    elseif type == "phantom_attack" then
-        AudioManager.playTone(65, 0.35, 0.65, "sine", true, 1.2, 14, true)
-
-    elseif type == "zone_enter" then
-        AudioManager.playTone(40, 1.4, 0.85, "sine", true, 1.0, 1.8, true)
-
-    elseif type == "zone_enter_hyper" then
-        AudioManager.playSubBassThud(4)
-        AudioManager.playVoiceAnnounce("hyper")
-
-    elseif type == "tetris" then
-        AudioManager.playSubBassThud(3)
-        AudioManager.playVoiceAnnounce("tetris")
-
-    elseif type == "ultimatris" or type == "perfect_clear" then
-        AudioManager.playSubBassThud(5)
-        AudioManager.playVoiceAnnounce("victory")
-
-    elseif type == "death" then
-        AudioManager.triggerSidechain(1.0, 1.2)
-        AudioManager.playTone(36.0, 1.6, 1.0, "sine", true, 3, 2.0, true)
-    end
-end
-
-function AudioManager.update(dt, stats)
-    if AudioManager.glitch_timer > 0 then
-        AudioManager.glitch_timer = AudioManager.glitch_timer - dt
-    end
-
-    if AudioManager.duck_intensity > 0 then
-        local decay_rate = 1.0 / math.max(0.1, AudioManager.duck_duration or 0.60)
-        AudioManager.duck_intensity = math.max(0, AudioManager.duck_intensity - dt * decay_rate)
-    end
-
-    local TrackManager = require "track_manager"
-    local MusicManager = require "music_manager"
-    local current_track = TrackManager.getCurrentTrack()
-
-    if current_track then AudioManager.base_bpm = current_track.bpm end
-
-    local song_time = MusicManager.getTime()
-    if song_time <= 0.01 then song_time = _G.RealMatchTimer or 0 end
-
-    local bpm = AudioManager.base_bpm or 120
-    local bar_duration = (60 / bpm) * 4
-
-    local drop_point = (current_track and current_track.drop_second and current_track.drop_second > 0) and current_track.drop_second or (bar_duration * 32)
-    local build_len = (current_track and current_track.build_duration and current_track.build_duration > 0) and current_track.build_duration or (bar_duration * 16)
-    local build_start = math.max(0, drop_point - build_len)
-
-    if song_time >= drop_point then
-        _G.TrackEnergyPunch = 1.0
-    elseif song_time >= build_start then
-        local progress = (song_time - build_start) / build_len
-        _G.TrackEnergyPunch = progress * progress * progress
-    else
-        _G.TrackEnergyPunch = 0.0
-    end
-
-    local danger = (stats and stats.danger_level) or 0
-    local drop_rate_intensity = (stats and stats.drop_intensity) or 0
-    local intensity_factor = math.max(danger, drop_rate_intensity)
-
-    AudioManager.current_bpm = AudioManager.base_bpm + (intensity_factor * 26)
-
-    if _G.AudioBeatPulse > 0 then
-        local decay_speed = 4.5 + (_G.TrackEnergyPunch * 4.5)
-        _G.AudioBeatPulse = _G.AudioBeatPulse - dt * decay_speed
-        if _G.AudioBeatPulse < 0 then _G.AudioBeatPulse = 0 end
-    end
-
-    if song_time > 0.05 then
-        local beat_duration = (60 / AudioManager.current_bpm)
-        local current_beat = song_time / beat_duration
-        local fraction = current_beat - math.floor(current_beat)
-        if fraction < 0.09 and _G.AudioBeatPulse <= 0.1 then
-            _G.AudioBeatPulse = 1.0
-        end
-    end
-end
-
-return AudioManager
+Error reading file with 'cp1252': 'charmap' codec can't decode byte 0x8f in position 1039: character maps to <undefined>
 
 
 ================================================
@@ -1010,6 +660,9 @@ end
 ================================================
 FILE: input.lua
 ================================================
+-- ================================================================
+-- FILE: input.lua
+-- ================================================================
 ---@diagnostic disable: undefined-global
 -- ============================================================================
 -- MUTRIS ENGINE: INPUT & DAS/ARR COMPETITIVE ENGINE
@@ -1084,12 +737,16 @@ local function _isGamepadAxisDown(axis_name, threshold, greater_than)
     return false
 end
 
+-- Factor de caÃ­da suave reactivo al ajuste SDF
 function Input.getSoftDropFactor()
     if Input.player and Input.player.active_piece then
         if love.keyboard.isDown("kp5") or love.keyboard.isDown("5") or
            love.keyboard.isDown("down") or love.keyboard.isDown("clear") or
            _isGamepadDown("dpdown") or _isGamepadAxisDown("lefty", INPUT_CONFIG.JOY_DEADZONE_DOWN, true) then
-            return 0.001
+            
+            local sdf_mult = SettingsManager.get("sdf") or 40.0
+            if sdf_mult >= 40.0 then return 0.001 end
+            return 0.8 / math.max(1.0, sdf_mult)
         end
     end
     return 0.8
@@ -1112,8 +769,8 @@ function Input.update(dt)
         t = dt
     end
 
-    local das = SettingsManager.settings.das or INPUT_CONFIG.FALLBACK_DAS
-    local arr = math.max(INPUT_CONFIG.ARR_ABSOLUTE_MIN, SettingsManager.settings.arr or INPUT_CONFIG.FALLBACK_ARR)
+    local das = SettingsManager.get("das") or INPUT_CONFIG.FALLBACK_DAS
+    local arr = math.max(INPUT_CONFIG.ARR_ABSOLUTE_MIN, SettingsManager.get("arr") or INPUT_CONFIG.FALLBACK_ARR)
 
     -- Modificador ARR en Stance RUSH
     if Input.player.current_stance == 1 then
@@ -1167,7 +824,7 @@ end
 
 function Input.handleAction(action)
     if action == "restart" then
-        if _G.GlobalRestart then _G.GlobalRestart() end
+        if _G.GlobalRestart then _G.GlobalRestart(false) end
         return
     end
 
@@ -1185,7 +842,11 @@ function Input.handleAction(action)
 
     if action == "rot_cw" then p:rotate(1)
     elseif action == "rot_ccw" then p:rotate(-1)
-    elseif action == "rot_180" then p:rotate(2)
+    elseif action == "rot_180" then
+        local srs_180 = SettingsManager.get("srs_180")
+        if srs_180 == 1 or srs_180 == true or (type(srs_180) == "number" and srs_180 >= 0.5) then
+            p:rotate(2)
+        end
     elseif action == "hold" then Input.player:hold()
     elseif action == "zone" then Input.player:enterZone()
     elseif action == "hard_drop" then
@@ -1226,13 +887,13 @@ return Input
 ================================================
 FILE: main.lua
 ================================================
-Error reading file with 'cp1252': 'charmap' codec can't decode byte 0x8f in position 13193: character maps to <undefined>
+Error reading file with 'cp1252': 'charmap' codec can't decode byte 0x8f in position 16377: character maps to <undefined>
 
 
 ================================================
 FILE: music_manager.lua
 ================================================
-Error reading file with 'cp1252': 'charmap' codec can't decode byte 0x8f in position 1753: character maps to <undefined>
+Error reading file with 'cp1252': 'charmap' codec can't decode byte 0x8f in position 2518: character maps to <undefined>
 
 
 ================================================
@@ -1244,25 +905,152 @@ FILE: recoding.lua
 ================================================
 FILE: settings_manager.lua
 ================================================
+-- ================================================================
+-- FILE: settings_manager.lua
+-- ================================================================
 ---@diagnostic disable: undefined-global
 local SettingsManager = {}
 
-SettingsManager.settings = {
-    das = 0.094,       -- DAS en segundos (94 ms)
-    arr = 0.008,       -- ARR en segundos (8 ms)
-    sfx_vol = 1.0,     -- Volumen SFX (0.0 a 1.0)
-    bgm_vol = 0.85,    -- Volumen BGM (0.0 a 1.0)
-    master_vol = 1.0,  -- Volumen MASTER (0.0 a 1.0)
-    mute_all = 0       -- 0 = normal, 1 = mute total
+-- ⚙️ VALORES POR DEFECTO DE FÁBRICA (BASELINE PERMANENTE)
+SettingsManager.defaults = {
+    -- HANDLING
+    das               = 0.094,   -- 94 ms
+    arr               = 0.008,   -- 8 ms
+    sdf               = 40.0,    -- 40x Caída suave
+    dcd               = 0.0,     -- 0 ms DAS Cut Delay
+    lock_delay        = 0.50,    -- 0.50 s
+    max_resets        = 15,      -- 15 movimientos
+    srs_180           = 1,       -- 1 = Activo, 0 = Inactivo
+
+    -- AUDIO / DAW
+    master_vol        = 1.0,     -- 100%
+    bgm_vol           = 0.85,    -- 85%
+    sfx_vol           = 1.0,     -- 100%
+    sidechain_duck    = 1.0,     -- 100% (Vacío total en impactos)
+    subbass_power     = 3,       -- 1=Soft, 2=Mid, 3=Heavy, 4=Seismic
+    announcer_mode    = 1,       -- 1=All Voices, 2=Critical Only, 0=Off
+    beat_click        = 0,       -- 0=Off, 1=Danger Only, 2=Always On
+    mute_all          = 0,       -- 0=Normal, 1=Muted
+
+    -- COMBATE
+    parry_window      = 3,       -- 3 frames (~50ms)
+    beat_window       = 0.035,   -- ±35 ms Groove
+    groove_bonus      = 1,       -- +1 línea
+    counter_ratio     = 0.50,    -- 50% devuelto
+    zone_trigger_mode = 1,       -- 1=Flexible (25%+), 2=Hyper Only (100%)
+
+    -- VIDEO / FX
+    bloom_intensity   = 1.0,     -- 100%
+    screen_shake      = 1.0,     -- 100%
+    ghost_alpha       = 0.35,    -- 35%
+    glitch_mode       = 1,       -- 1=Dinámico por Energía, 0=Off
+    fog_mode          = 1,       -- 1=Reactivo Camelot, 0=Off
+    shockwaves        = 1,       -- 1=Activo, 0=Inactivo
+
+    -- ARCHON IA
+    archon_mode       = 1,       -- 1=Adaptive DDA, 2=Locked, 3=Apex Hardcore
+    bot_target_pps    = 1.45,    -- 1.45 PPS base
+    anomaly_freq      = 25,      -- 25s
+
+    -- PIPELINE
+    capture_mode      = "mp4",   -- "mp4" o "gif"
+    gif_resolution    = 1,       -- 1=480x270 (Ligero), 2=640x360 (HQ)
+    auto_save_replay  = 1        -- 1=On, 0=Off
 }
 
--- Helpers numÃ©ricos (Zero-GC, solo matemÃ¡tica pura)
+-- Tabla de configuración viva del usuario
+SettingsManager.settings = {}
+for k, v in pairs(SettingsManager.defaults) do
+    SettingsManager.settings[k] = v
+end
+
+-- 📑 ESQUEMA DE PESTAÑAS Y PARÁMETROS PARA LA INTERFAZ
+SettingsManager.tabs = {
+    {
+        id = "handling",
+        name = "01 // HANDLING",
+        title = "COMPETITIVE DAS / ARR & FRAME-DATA TIMINGS",
+        items = {
+            { id = "das",        label = "DAS (DELAYED AUTO-SHIFT)", min = 50,  max = 200, step = 1,   unit = "ms", is_ms = true, is_int = true },
+            { id = "arr",        label = "ARR (AUTO-REPEAT RATE)",  min = 0,   max = 25,  step = 0.5, unit = "ms", is_ms = true },
+            { id = "sdf",        label = "SDF (SOFT DROP MULT)",    min = 5,   max = 40,  step = 5,   unit = "x",  is_int = true },
+            { id = "dcd",        label = "DCD (DAS CUT DELAY)",     min = 0,   max = 40,  step = 2,   unit = "ms", is_ms = true, is_int = true },
+            { id = "lock_delay", label = "LOCK DELAY BASE",         min = 0.1, max = 1.0, step = 0.05,unit = "s" },
+            { id = "max_resets", label = "LOCK MOVE RESETS",        min = 4,   max = 30,  step = 1,   unit = "moves", is_int = true },
+            { id = "srs_180",    label = "SRS 180 DEGREE KICKS",    is_toggle = true }
+        }
+    },
+    {
+        id = "audio",
+        name = "02 // AUDIO & DAW",
+        title = "PROCEDURAL SYNTHESIZER, MIXER & HARMONICS",
+        items = {
+            { id = "master_vol",     label = "MASTER VOLUME",          min = 0, max = 100, step = 5, unit = "%", is_pct = true, is_int = true },
+            { id = "bgm_vol",        label = "MUSIC VOLUME (BGM)",     min = 0, max = 100, step = 5, unit = "%", is_pct = true, is_int = true },
+            { id = "sfx_vol",        label = "SOUND FX VOLUME (SFX)",  min = 0, max = 100, step = 5, unit = "%", is_pct = true, is_int = true },
+            { id = "sidechain_duck", label = "SIDECHAIN DUCKING (MUTE)",min = 0, max = 100, step = 10,unit = "%", is_pct = true, is_int = true },
+            { id = "subbass_power",  label = "SUB-BASS 30Hz POWER",    is_enum = true, options = {1, 2, 3, 4}, labels = {"TIER 1 (LIGHT)", "TIER 2 (MID)", "TIER 3 (HEAVY)", "TIER 4 (SEISMIC)"} },
+            { id = "beat_click",     label = "METRONOME BEAT CLICK",   is_enum = true, options = {0, 1, 2}, labels = {"DISABLED", "DANGER ONLY", "ALWAYS ON"} },
+            { id = "mute_all",       label = "MUTE ALL AUDIO",         is_toggle = true }
+        }
+    },
+    {
+        id = "combat",
+        name = "03 // COMBAT",
+        title = "STANCES, KINETIC PARRY & ATTACK GAUGES",
+        items = {
+            { id = "parry_window",      label = "KINETIC PARRY WINDOW", min = 1,     max = 6,     step = 1,     unit = "frames", is_int = true },
+            { id = "beat_window",       label = "BEAT-LOCK GROOVE WINDOW",min = 0.020, max = 0.060, step = 0.005, unit = "ms", is_ms = true, is_int = true },
+            { id = "groove_bonus",      label = "GROOVE STRIKE BONUS",  min = 1,     max = 3,     step = 1,     unit = "lines",  is_int = true },
+            { id = "counter_ratio",     label = "COUNTER-SPIKE RATIO",  min = 0.25,  max = 0.75,  step = 0.05,  unit = "%", is_pct = true, is_int = true },
+            { id = "zone_trigger_mode", label = "ZONE TRIGGER MODE",    is_enum = true, options = {1, 2}, labels = {"FLEXIBLE (25%+)", "HYPER ONLY (100%)"} }
+        }
+    },
+    {
+        id = "video",
+        name = "04 // VIDEO & FX",
+        title = "NEON BLOOM, GLSL SHADERS & VISUAL JUICE",
+        items = {
+            { id = "bloom_intensity", label = "NEON BLOOM GLOW",    min = 0,    max = 200, step = 10,  unit = "%", is_pct = true, is_int = true },
+            { id = "screen_shake",    label = "SCREEN SHAKE POWER",  min = 0,    max = 150, step = 10,  unit = "%", is_pct = true, is_int = true },
+            { id = "ghost_alpha",     label = "GHOST PIECE OPACITY", min = 10,   max = 100, step = 5,   unit = "%", is_pct = true, is_int = true },
+            { id = "glitch_mode",     label = "CHROMATIC ABERRATION",is_toggle = true },
+            { id = "fog_mode",        label = "CAMELOT MODAL FOG",   is_toggle = true },
+            { id = "shockwaves",      label = "GLSL SHOCKWAVES",     is_toggle = true }
+        }
+    },
+    {
+        id = "archon",
+        name = "05 // ARCHON IA",
+        title = "AUTO-BALANCING & DDA ADAPTIVE ENGINE",
+        items = {
+            { id = "archon_mode",    label = "ARCHON DDA ENGINE",    is_enum = true, options = {1, 2, 3}, labels = {"ADAPTIVE DDA", "LOCKED BASELINE", "APEX HARDCORE"} },
+            { id = "bot_target_pps", label = "BOT TARGET BASE PPS",  min = 0.8, max = 4.0, step = 0.05,unit = "pps" },
+            { id = "anomaly_freq",   label = "ANOMALY COOLDOWN TIME",min = 8,   max = 45,  step = 1,   unit = "s", is_int = true }
+        }
+    },
+    {
+        id = "pipeline",
+        name = "06 // PIPELINE",
+        title = "ESPORTS CAPTURE & AUTONOMOUS REPLAYS",
+        items = {
+            { id = "capture_mode",     label = "F9 RECORDING FORMAT",  is_enum = true, options = {"mp4", "gif"}, labels = {"MP4 VIDEO 60FPS", "ANIMATED GIF (LIGHT)"} },
+            { id = "gif_resolution",   label = "GIF RESOLUTION PRESET",is_enum = true, options = {1, 2}, labels = {"480x270 @ 20FPS", "640x360 @ 30FPS"} },
+            { id = "auto_save_replay", label = "AUTO-SAVE .MUTRISREC", is_toggle = true }
+        }
+    }
+}
+
 local function clamp01(v) return math.max(0, math.min(1, v)) end
 
 local function serializeJSON(t)
     local s = "{\n"
     for k, v in pairs(t) do
-        s = s .. '  "' .. tostring(k) .. '": ' .. tostring(v) .. ",\n"
+        if type(v) == "number" then
+            s = s .. string.format('  "%s": %.4f,\n', k, v)
+        elseif type(v) == "string" then
+            s = s .. string.format('  "%s": "%s",\n', k, v)
+        end
     end
     s = s:sub(1, -3) .. "\n}"
     return s
@@ -1270,8 +1058,11 @@ end
 
 local function parseSimpleJSON(str)
     local t = {}
-    for k, v in str:gmatch('"([%w_]+)":%s*([%d%.]+)') do
+    for k, v in str:gmatch('"([%w_]+)":%s*([%-%d%.]+)') do
         t[k] = tonumber(v)
+    end
+    for k, v in str:gmatch('"([%w_]+)":%s*"([^"]+)"') do
+        t[k] = v
     end
     return t
 end
@@ -1281,13 +1072,14 @@ function SettingsManager.init()
         local contents = love.filesystem.read("settings.json")
         if contents then
             local data = parseSimpleJSON(contents)
-            if data.das        then SettingsManager.settings.das        = data.das end
-            if data.arr        then SettingsManager.settings.arr        = data.arr end
-            if data.sfx_vol    then SettingsManager.settings.sfx_vol    = data.sfx_vol end
-            if data.bgm_vol    then SettingsManager.settings.bgm_vol    = data.bgm_vol end
-            if data.master_vol then SettingsManager.settings.master_vol = data.master_vol end
-            if data.mute_all   then SettingsManager.settings.mute_all   = data.mute_all end
+            for k, v in pairs(data) do
+                if SettingsManager.defaults[k] ~= nil then
+                    SettingsManager.settings[k] = v
+                end
+            end
         end
+    else
+        SettingsManager.save()
     end
 end
 
@@ -1295,26 +1087,53 @@ function SettingsManager.save()
     love.filesystem.write("settings.json", serializeJSON(SettingsManager.settings))
 end
 
--- Helpers para volumen normalizado (aplica master + mute en 1 solo lugar)
+-- ⟲ RESET INDIVIDUAL DE 1 VARIABLE
+function SettingsManager.resetKey(key)
+    if SettingsManager.defaults[key] ~= nil then
+        SettingsManager.settings[key] = SettingsManager.defaults[key]
+        SettingsManager.save()
+    end
+end
+
+-- ⟲ RESET COMPLETO DE UNA PESTAÑA
+function SettingsManager.resetTab(tab_index)
+    local tab = SettingsManager.tabs[tab_index]
+    if tab and tab.items then
+        for _, item in ipairs(tab.items) do
+            if SettingsManager.defaults[item.id] ~= nil then
+                SettingsManager.settings[item.id] = SettingsManager.defaults[item.id]
+            end
+        end
+        SettingsManager.save()
+    end
+end
+
+function SettingsManager.get(key)
+    return SettingsManager.settings[key] or SettingsManager.defaults[key]
+end
+
 function SettingsManager.getSFX()
     local s = SettingsManager.settings
     if s.mute_all and s.mute_all >= 0.5 then return 0 end
-    return clamp01(s.sfx_vol) * clamp01(s.master_vol)
+    return clamp01(s.sfx_vol or 1.0) * clamp01(s.master_vol or 1.0)
 end
 
 function SettingsManager.getBGM()
     local s = SettingsManager.settings
     if s.mute_all and s.mute_all >= 0.5 then return 0 end
-    return clamp01(s.bgm_vol) * clamp01(s.master_vol)
+    return clamp01(s.bgm_vol or 1.0) * clamp01(s.master_vol or 1.0)
+end
+
+function SettingsManager.getMaster()
+    local s = SettingsManager.settings
+    if s.mute_all and s.mute_all >= 0.5 then return 0 end
+    return clamp01(s.master_vol or 1.0)
 end
 
 function SettingsManager.toggleMute()
     local s = SettingsManager.settings
-    if s.mute_all and s.mute_all >= 0.5 then
-        s.mute_all = 0
-    else
-        s.mute_all = 1
-    end
+    s.mute_all = (s.mute_all and s.mute_all >= 0.5) and 0 or 1
+    SettingsManager.save()
 end
 
 return SettingsManager
@@ -2066,7 +1885,7 @@ Error reading file with 'cp1252': 'charmap' codec can't decode byte 0x8f in posi
 ================================================
 FILE: core/clip_recorder.lua
 ================================================
-Error reading file with 'cp1252': 'charmap' codec can't decode byte 0x8f in position 5014: character maps to <undefined>
+Error reading file with 'cp1252': 'charmap' codec can't decode byte 0x8d in position 5559: character maps to <undefined>
 
 
 ================================================
@@ -3232,19 +3051,593 @@ return BloomShader
 ================================================
 FILE: tetris/board.lua
 ================================================
-Error reading file with 'cp1252': 'charmap' codec can't decode byte 0x8f in position 12287: character maps to <undefined>
+-- ================================================================
+-- FILE: tetris/board.lua
+-- ================================================================
+---@diagnostic disable: undefined-global
+-- ============================================================================
+-- MUTRIS ENGINE: THE MATRIX GRID BOARD (10x40)
+-- Zero-GC Architecture / Death Timer Countdown Fix / Shatter Visuals
+-- ============================================================================
+local Board = {}
+Board.__index = Board
+
+local Piece          = require "tetris.piece"
+local Bag            = require "tetris.randomizers.7bag"
+local GarbageManager = require "tetris.garbage_manager"
+local ParticleSystem = require "tetris.particle_system"
+local Shaker         = require "tetris.shaker"
+local PPSCounter     = require "tetris.pps_counter"
+local FontCache      = require "tetris.font_cache"
+local AudioManager   = require "audio_manager"
+local BloomShader    = require "tetris.bloom_shader"
+local BeatLock       = require "tetris.beat_lock"
+local CombatStances  = require "combat.combat_stances"
+local KineticParry   = require "combat.kinetic_parry"
+local Blackbox       = require "core.blackbox"
+
+Board.colors = {
+    [1] = {0.0, 0.9, 1.0},   -- I (Cian)
+    [2] = {0.1, 0.3, 1.0},   -- J (Azul)
+    [3] = {1.0, 0.5, 0.0},   -- L (Naranja)
+    [4] = {1.0, 0.9, 0.0},   -- O (Amarillo)
+    [5] = {0.1, 1.0, 0.2},   -- S (Verde)
+    [6] = {0.8, 0.1, 1.0},   -- T (PÃºrpura)
+    [7] = {1.0, 0.1, 0.2},   -- Z (Rojo)
+    [8] = {0.5, 0.5, 0.55}   -- Garbage (Gris Acero)
+}
+
+function Board.new(x, y, player_type)
+    local self = setmetatable({}, Board)
+    self.x, self.y = x, y
+    self.player_type = player_type or "human"
+    self.opponent = nil
+
+    self.grid = {}
+    for r = 1, 40 do
+        self.grid[r] = {}
+        for c = 1, 10 do self.grid[r][c] = 0 end
+    end
+
+    self.bag = Bag.new()
+    self.active_piece = nil
+    self.hold_piece = nil
+    self.can_hold = true
+    self.garbage_queue = {}
+    self.combo_count = -1
+    self.b2b_count = 0
+
+    self.zone_meter = 0.0
+    self.is_zone_active = false
+    self.zone_timer = 0.0
+    self.zone_max_time = 6.0
+    self.zone_tier = 1
+    self.zone_lines_cleared = 0
+
+    self.eq_charge = 0.0
+    self.eq_power = 0.0
+    self.eq_flash = 0.0
+    self.tspin_flash = 0.0
+
+    self.shake_mag = 0
+    self.shake_time = 0
+    self.lock_impact = 0.0
+
+    self.popup_text = ""
+    self.popup_sub = ""
+    self.popup_color = {1, 1, 1}
+    self.popup_timer = 0.0
+    self.popup_max_time = 1.2
+    self.popup_scale = 1.0
+    self.popup_is_high_tier = false
+
+    self.is_dying = false
+    self.death_timer = 0.0
+    self.pending_groove_bonus = 0
+
+    self.trail_pool = {}
+    for i = 1, 16 do
+        self.trail_pool[i] = { active = false, x = 0, startY = 0, endY = 0, id = 1, timer = 0, shape = nil }
+    end
+
+    self.phantom_pool = {}
+    for i = 1, 8 do
+        self.phantom_pool[i] = { active = false, x = 0, y = 0, id = 1, timer = 0, shape = nil }
+    end
+
+    ParticleSystem.init(self)
+    PPSCounter.init(self)
+    BeatLock.initBoardState(self)
+    CombatStances.initBoardState(self)
+    KineticParry.initBoardState(self)
+
+    self:spawnPiece()
+    return self
+end
+
+function Board:spawnPiece()
+    if self.is_dying then return end
+    local next_id = self.bag:next()
+    self.active_piece = Piece.new(next_id, self)
+
+    if not self:canMove(self.active_piece.x, self.active_piece.y, self.active_piece.rotation) then
+        Blackbox.log(
+            (self.player_type == "human") and "P1_BLOCK_OUT" or "BOT_BLOCK_OUT",
+            "SPAWN OVERLAP (4, 21)",
+            next_id, 0
+        )
+        self:triggerDeath()
+    end
+end
+
+function Board:hold()
+    if not self.can_hold or self.is_dying or not self.active_piece then return end
+    local cur_id = self.active_piece.id
+    if not self.hold_piece then
+        self.hold_piece = { id = cur_id }
+        self:spawnPiece()
+    else
+        local swap_id = self.hold_piece.id
+        self.hold_piece.id = cur_id
+        self.active_piece = Piece.new(swap_id, self)
+    end
+    self.can_hold = false
+    AudioManager.playImmediateSFX("hold", self.player_type == "bot")
+end
+
+function Board:enterZone()
+    if self.is_zone_active or self.zone_meter < 0.25 or self.is_dying then return end
+    self.is_zone_active = true
+    self.zone_tier = (self.zone_meter >= 0.999) and 2 or 1
+    self.zone_timer = self.zone_max_time * self.zone_meter
+    self.zone_lines_cleared = 0
+
+    if self.zone_tier == 2 then
+        AudioManager.playImmediateSFX("zone_enter_hyper", self.player_type == "bot")
+        ParticleSystem.spawnSupernova(self, {1.0, 0.85, 0.2})
+        BloomShader.triggerShockwave(self.x + 120, self.y + 240)
+    else
+        AudioManager.playImmediateSFX("zone_enter", self.player_type == "bot")
+        ParticleSystem.spawnSupernova(self, {0.0, 0.9, 1.0})
+    end
+end
+
+function Board:exitZone()
+    if not self.is_zone_active then return end
+    self.is_zone_active = false
+    local is_pc = self:isGridEmpty()
+    local is_hyper = (self.zone_tier == 2)
+    local attack, msg, clr = GarbageManager.calculateZoneBurst(self.zone_lines_cleared, is_pc, is_hyper)
+
+    self.zone_meter = 0.0
+    self:setPopup(msg, clr, true, "BURST DETONATION")
+
+    if self.opponent and attack > 0 then
+        GarbageManager.sendGarbage(self, self.opponent, attack)
+    end
+
+    self:clearCompletedLinesInZone()
+    AudioManager.playImmediateSFX("ultimatris", self.player_type == "bot")
+end
+
+function Board:isGridEmpty()
+    for r = 21, 40 do
+        for c = 1, 10 do
+            if self.grid[r][c] ~= 0 then return false end
+        end
+    end
+    return true
+end
+
+function Board:clearCompletedLinesInZone()
+    local r = 40
+    while r >= 21 do
+        local full = true
+        for c = 1, 10 do
+            if self.grid[r][c] == 0 then full = false break end
+        end
+        if full then
+            local row = table.remove(self.grid, r)
+            for c = 1, 10 do row[c] = 0 end
+            table.insert(self.grid, 1, row)
+        else
+            r = r - 1
+        end
+    end
+end
+
+function Board:canMove(px, py, pr)
+    local SRS = require "tetris.rotation_systems.srs"
+    local shape = SRS.shapes[self.active_piece.id][pr]
+    for r = 1, #shape do
+        for c = 1, #shape[r] do
+            if shape[r][c] ~= 0 then
+                local tx, ty = px + c - 1, py + r - 1
+                if tx < 1 or tx > 10 or ty < 1 or ty > 40 then 
+                    return false 
+                end
+                if self.grid[ty][tx] ~= 0 then 
+                    return false 
+                end
+            end
+        end
+    end
+    return true
+end
+
+function Board:checkLines(is_tspin)
+    local cleared = 0
+    local r = 40
+
+    while r >= 1 do
+        local full = true
+        for c = 1, 10 do
+            if self.grid[r][c] == 0 then full = false break end
+        end
+
+        if full then
+            cleared = cleared + 1
+            ParticleSystem.spawnLineBlast(self, r, (is_tspin and 6) or (cleared == 4 and 1) or 4)
+
+            if not self.is_zone_active then
+                local removed_row = table.remove(self.grid, r)
+                for c = 1, 10 do removed_row[c] = 0 end
+                table.insert(self.grid, 1, removed_row)
+            else
+                r = r - 1
+            end
+        else
+            r = r - 1
+        end
+    end
+
+    if cleared > 0 then
+        self.combo_count = self.combo_count + 1
+        if cleared == 4 or is_tspin then 
+            self.b2b_count = self.b2b_count + 1
+        else 
+            self.b2b_count = 0 
+        end
+
+        if self.is_zone_active then
+            self.zone_lines_cleared = self.zone_lines_cleared + cleared
+        else
+            local attack = GarbageManager.calculateAttack(cleared, is_tspin, false, self.combo_count, self.b2b_count, self)
+            if self.opponent and attack > 0 then
+                GarbageManager.sendGarbage(self, self.opponent, attack)
+            end
+            AudioManager.playImmediateSFX((cleared == 4) and "tetris" or "line_clear", self.player_type == "bot")
+        end
+    else
+        self.combo_count = -1
+        if not self.is_zone_active then
+            GarbageManager.pushToGrid(self)
+        end
+    end
+
+    if not self.is_zone_active then
+        local ceiling_breach = false
+        for row_idx = 1, 20 do
+            for c = 1, 10 do
+                if self.grid[row_idx][c] ~= 0 then
+                    ceiling_breach = true
+                    break
+                end
+            end
+            if ceiling_breach then break end
+        end
+
+        if ceiling_breach then
+            Blackbox.log(
+                (self.player_type == "human") and "P1_DEATH" or "BOT_DEATH",
+                "CEILING OVERFLOW (MINOS IN R<=20)",
+                0, 0
+            )
+            self:triggerDeath()
+            return
+        end
+    end
+
+    self:spawnPiece()
+end
+
+function Board:spawnTrail(x, startY, endY, id, shape)
+    for i = 1, #self.trail_pool do
+        local t = self.trail_pool[i]
+        if not t.active then
+            t.active = true
+            t.x, t.startY, t.endY, t.id, t.shape = x, startY, endY, id, shape
+            t.timer = 0.25
+            break
+        end
+    end
+end
+
+function Board:spawnPhantom(x, y, id, shape)
+    for i = 1, #self.phantom_pool do
+        local p = self.phantom_pool[i]
+        if not p.active then
+            p.active = true
+            p.x, p.y, p.id, p.shape = x, y, id, shape
+            p.timer = 0.50
+            break
+        end
+    end
+end
+
+function Board:swapGrids(other)
+    local temp = self.grid
+    self.grid = other.grid
+    other.grid = temp
+    self:triggerShake(12, 0.4)
+    other:triggerShake(12, 0.4)
+end
+
+function Board:shiftColumnsLocal(dir)
+    for r = 1, 40 do
+        if dir > 0 then
+            local last = self.grid[r][10]
+            for c = 10, 2, -1 do self.grid[r][c] = self.grid[r][c - 1] end
+            self.grid[r][1] = last
+        else
+            local first = self.grid[r][1]
+            for c = 1, 9 do self.grid[r][c] = self.grid[r][c + 1] end
+            self.grid[r][10] = first
+        end
+    end
+    self:triggerShake(4, 0.15)
+end
+
+function Board:shiftColumnsGlobal(other, dir)
+    for r = 21, 40 do
+        local p_edge = self.grid[r][10]
+        local o_edge = other.grid[r][1]
+        for c = 10, 2, -1 do self.grid[r][c] = self.grid[r][c - 1] end
+        self.grid[r][1] = o_edge
+        for c = 1, 9 do other.grid[r][c] = other.grid[r][c + 1] end
+        other.grid[r][10] = p_edge
+    end
+    self:triggerShake(6, 0.2)
+    other:triggerShake(6, 0.2)
+end
+
+function Board:setPopup(text, color, is_high_tier, subtext)
+    self.popup_text = text
+    self.popup_sub = subtext or ""
+    self.popup_color = color or {1, 1, 1}
+    self.popup_timer = 1.2
+    self.popup_max_time = 1.2
+    self.popup_scale = is_high_tier and 1.85 or 1.45
+    self.popup_is_high_tier = is_high_tier or false
+end
+
+function Board:triggerShake(mag, dur)
+    self.shake_mag = mag
+    self.shake_time = dur
+end
+
+function Board:triggerDeath()
+    if self.is_dying then return end
+    self.is_dying = true
+    self.death_timer = 1.5
+    _G.HitStopTimer = 0.25
+    AudioManager.playImmediateSFX("death", self.player_type == "bot")
+    BloomShader.triggerShockwave(self.x + 120, self.y + 240)
+    self:triggerShake(16, 0.6)
+end
+
+function Board:drawBlock(x, y, id, alpha)
+    local clr = self.colors[id] or {0.6, 0.6, 0.6}
+    local a = alpha or 1.0
+    love.graphics.setColor(clr[1], clr[2], clr[3], a * 0.92)
+    love.graphics.rectangle("fill", x + 1, y + 1, 22, 22, 2)
+    love.graphics.setColor(1, 1, 1, a * 0.40)
+    love.graphics.rectangle("fill", x + 2, y + 2, 20, 3)
+    love.graphics.setColor(0, 0, 0, a * 0.45)
+    love.graphics.rectangle("fill", x + 2, y + 19, 20, 3)
+end
+
+function Board:update(dt)
+    Shaker.update(self, dt)
+    ParticleSystem.update(self, dt)
+    PPSCounter.update(self)
+    BeatLock.update(self, dt)
+    CombatStances.update(self, dt)
+    KineticParry.update(self, dt)
+
+    if self.is_dying then
+        self.death_timer = math.max(0, self.death_timer - dt)
+    end
+
+    if self.popup_timer > 0 then
+        self.popup_timer = self.popup_timer - dt
+        self.popup_scale = self.popup_scale + (1.0 - self.popup_scale) * 12.0 * dt
+    end
+
+    if self.tspin_flash > 0 then
+        self.tspin_flash = math.max(0, self.tspin_flash - dt * 3.5)
+    end
+
+    if self.lock_impact > 0 then self.lock_impact = math.max(0, self.lock_impact - dt * 4.0) end
+    if self.eq_flash > 0 then self.eq_flash = math.max(0, self.eq_flash - dt * 3.0) end
+
+    if self.is_zone_active then
+        self.zone_timer = self.zone_timer - dt
+        if self.zone_timer <= 0 then self:exitZone() end
+    end
+
+    for i = 1, #self.trail_pool do
+        local t = self.trail_pool[i]
+        if t.active then
+            t.timer = t.timer - dt
+            if t.timer <= 0 then t.active = false end
+        end
+    end
+
+    for i = 1, #self.phantom_pool do
+        local p = self.phantom_pool[i]
+        if p.active then
+            p.timer = p.timer - dt
+            if p.timer <= 0 then p.active = false end
+        end
+    end
+
+    if not self.is_dying and self.active_piece then
+        local Input = require "input"
+        local gravity = (self.player_type == "human") and Input.getSoftDropFactor() or 0.8
+        self.active_piece:update(dt, gravity)
+    end
+end
+
+function Board:draw()
+    love.graphics.push("all")
+    Shaker.apply(self)
+
+    local pulse = _G.AudioBeatPulse or 0
+    love.graphics.setColor(0.01, 0.02, 0.04, 0.92)
+    love.graphics.rectangle("fill", self.x, self.y, 240, 480, 4)
+
+    if self.is_dying then
+        local flash = math.sin(love.timer.getTime() * 24) * 0.5 + 0.5
+        love.graphics.setLineWidth(2.5)
+        love.graphics.setColor(1.0, 0.1, 0.2, 0.8 * flash)
+    else
+        love.graphics.setLineWidth(1.5)
+        love.graphics.setColor(0, 0.7, 1.0, 0.3 + pulse * 0.2)
+    end
+    love.graphics.rectangle("line", self.x, self.y, 240, 480, 4)
+
+    love.graphics.setColor(0, 0.8, 1, 0.04)
+    for r = 1, 20 do
+        love.graphics.line(self.x, self.y + r * 24, self.x + 240, self.y + r * 24)
+    end
+    for c = 1, 10 do
+        love.graphics.line(self.x + c * 24, self.y, self.x + c * 24, self.y + 480)
+    end
+
+    local block_alpha = self.is_dying and math.max(0.2, self.death_timer / 1.5) or 1.0
+    for r = 21, 40 do
+        for c = 1, 10 do
+            local id = self.grid[r][c]
+            if id ~= 0 then
+                self:drawBlock(self.x + (c - 1) * 24, self.y + (r - 21) * 24, id, block_alpha)
+            end
+        end
+    end
+
+    love.graphics.setBlendMode("add")
+    for i = 1, #self.trail_pool do
+        local t = self.trail_pool[i]
+        if t.active and t.shape then
+            local a = (t.timer / 0.25) * 0.35
+            local clr = self.colors[t.id] or {1, 1, 1}
+            love.graphics.setColor(clr[1], clr[2], clr[3], a)
+            for r = 1, #t.shape do
+                for c = 1, #t.shape[r] do
+                    if t.shape[r][c] ~= 0 then
+                        local rx = self.x + (t.x + c - 2) * 24
+                        local ry1 = self.y + (t.startY + r - 22) * 24
+                        local ry2 = self.y + (t.endY + r - 22) * 24
+                        love.graphics.rectangle("fill", rx + 4, ry1, 16, math.max(4, ry2 - ry1 + 24))
+                    end
+                end
+            end
+        end
+    end
+
+    for i = 1, #self.phantom_pool do
+        local p = self.phantom_pool[i]
+        if p.active and p.shape then
+            local a = (p.timer / 0.50) * 0.4
+            love.graphics.setColor(1, 0.1, 0.4, a)
+            for r = 1, #p.shape do
+                for c = 1, #p.shape[r] do
+                    if p.shape[r][c] ~= 0 then
+                        love.graphics.rectangle("fill", self.x + (p.x + c - 2) * 24, self.y + (p.y + r - 22) * 24, 24, 24, 2)
+                    end
+                end
+            end
+        end
+    end
+    love.graphics.setBlendMode("alpha")
+
+    if self.active_piece and not self.is_dying then
+        self.active_piece:draw(self.x, self.y)
+    end
+
+    ParticleSystem.draw(self)
+    BeatLock.drawFeedback(self)
+    CombatStances.drawAura(self)
+    KineticParry.draw(self)
+
+    if self.tspin_flash > 0 then
+        love.graphics.push("all")
+        love.graphics.setBlendMode("add")
+        love.graphics.setColor(0.85, 0.15, 1.0, self.tspin_flash * 0.35)
+        love.graphics.rectangle("fill", self.x, self.y, 240, 480, 4)
+        love.graphics.pop()
+    end
+
+    if self.popup_timer > 0 then
+        local progress = self.popup_timer / self.popup_max_time
+        local alpha = math.min(1.0, progress * 1.8)
+        local float_y = (1.0 - progress) * 38.0
+        local cx = self.x + 120
+        local cy = self.y + 190 - float_y
+        local sc = self.popup_scale
+        local clr = self.popup_color
+
+        love.graphics.push()
+        love.graphics.translate(cx, cy)
+        love.graphics.scale(sc, sc)
+
+        love.graphics.setBlendMode("add")
+        if self.popup_is_high_tier then
+            love.graphics.setFont(FontCache.get(18))
+            love.graphics.setColor(0.1, 0.9, 1.0, alpha * 0.55)
+            love.graphics.printf(self.popup_text, -142, -10, 280, "center")
+            love.graphics.setColor(1.0, 0.1, 0.5, alpha * 0.55)
+            love.graphics.printf(self.popup_text, -138, -10, 280, "center")
+        else
+            love.graphics.setFont(FontCache.get(16))
+            love.graphics.setColor(clr[1], clr[2], clr[3], alpha * 0.45)
+            love.graphics.printf(self.popup_text, -140, -10, 280, "center")
+        end
+
+        love.graphics.setBlendMode("alpha")
+        love.graphics.setFont(FontCache.get(self.popup_is_high_tier and 18 or 16))
+        love.graphics.setColor(1.0, 1.0, 1.0, alpha * 0.98)
+        love.graphics.printf(self.popup_text, -140, -10, 280, "center")
+
+        if self.popup_sub ~= "" then
+            love.graphics.setFont(FontCache.get(10))
+            love.graphics.setColor(clr[1], clr[2], clr[3], alpha * 0.90)
+            love.graphics.printf(self.popup_sub, -140, 14, 280, "center")
+        end
+
+        love.graphics.pop()
+    end
+
+    love.graphics.pop()
+end
+
+return Board
 
 
 ================================================
 FILE: tetris/fog_layer.lua
 ================================================
+-- ================================================================
+-- FILE: tetris/fog_layer.lua
+-- ================================================================
 ---@diagnostic disable: undefined-global
 -- ============================================================================
 -- MUTRIS ENGINE: VOLUMETRIC FOG LAYER (1280x720 WIDESCREEN)
 -- Arquitectura: Zero-GC / Niebla Reactiva a Camelot & Beat
 -- ============================================================================
 local FogLayer = {}
-local TrackManager = require "track_manager"
+local TrackManager    = require "track_manager"
+local SettingsManager = require "settings_manager"
 
 local NUM_FOG_NODES = 16
 local nodes = {}
@@ -3271,6 +3664,9 @@ function FogLayer.update(dt)
 end
 
 function FogLayer.draw()
+    local fog_setting = SettingsManager.get("fog_mode")
+    if fog_setting == 0 or fog_setting == false then return end
+
     local track = TrackManager.getCurrentTrack()
     local base_color = {0.1, 0.4, 0.9}
     if track and TrackManager.NOTE_COLORS and track.root_note then
@@ -3663,7 +4059,260 @@ return ParticleSystem
 ================================================
 FILE: tetris/piece.lua
 ================================================
-Error reading file with 'cp1252': 'charmap' codec can't decode byte 0x8f in position 5889: character maps to <undefined>
+-- ================================================================
+-- FILE: tetris/piece.lua
+-- ================================================================
+---@diagnostic disable: undefined-global
+-- ============================================================================
+-- MUTRIS ENGINE: TETROMINO PIECE PHYSICS & RHYTHM LOCK
+-- SRS 180Â°, 3-Corners T-Spin Juice, Lock Out Rules & Blackbox Telemetry
+-- ============================================================================
+local Piece = {}
+Piece.__index = Piece
+
+local AudioManager    = require "audio_manager"
+local SettingsManager = require "settings_manager"
+local PPSCounter      = require "tetris.pps_counter"
+local BeatLock        = require "tetris.beat_lock"
+local CombatStances   = require "combat.combat_stances"
+local KineticParry    = require "combat.kinetic_parry"
+local BloomShader     = require "tetris.bloom_shader"
+local Blackbox        = require "core.blackbox"
+
+function Piece.new(id, board)
+    local self = setmetatable({}, Piece)
+    self.id, self.board = id, board
+    local SRS = require "tetris.rotation_systems.srs"
+    self.shape = (SRS and SRS.shapes) and SRS.shapes[id] or { {{1,1,1,1}} }
+    self.rotation, self.x, self.y = 1, 4, 21
+    self.locked, self.gravity_timer, self.lock_timer = false, 0, 0
+
+    -- ConexiÃ³n dinÃ¡mica con los ajustes del usuario
+    self.lock_delay = SettingsManager.get("lock_delay") or 0.50
+    self.move_count = 0
+    self.max_resets = math.floor(SettingsManager.get("max_resets") or 15)
+
+    self.spawn_timer = 0.2
+    self.last_move_was_rotate = false 
+
+    if self.board then
+        CombatStances.applyPieceModifiers(self.board, self)
+    end
+
+    return self
+end
+
+function Piece:resetLock()
+    if self.move_count < self.max_resets then 
+        self.lock_timer, self.move_count = 0, self.move_count + 1 
+    end
+end
+
+function Piece:move(dx, dy, is_gravity)
+    if self.board:canMove(self.x + dx, self.y + dy, self.rotation) then
+        self.x, self.y = self.x + dx, self.y + dy
+        if not is_gravity then 
+            AudioManager.playImmediateSFX("move", self.board.player_type == "bot") 
+            self:resetLock() 
+            self.last_move_was_rotate = false
+        end
+        return true
+    end
+    return false
+end
+
+function Piece:rotate(dir)
+    local SRS = require "tetris.rotation_systems.srs"
+    local max_rot = #self.shape
+    local old_rot = self.rotation
+    local next_rot = ((self.rotation + dir - 1) % max_rot) + 1
+    local kicks = SRS.getKicks(self.id, old_rot, next_rot)
+    if kicks then
+        for _, kick in ipairs(kicks) do
+            if self.board:canMove(self.x + kick[1], self.y - kick[2], next_rot) then
+                self.x, self.y, self.rotation = self.x + kick[1], self.y - kick[2], next_rot
+                AudioManager.playImmediateSFX("rotate", self.board.player_type == "bot")
+                self:resetLock()
+                self.last_move_was_rotate = true
+                return true
+            end
+        end
+    end
+    return false
+end
+
+function Piece:checkTSpin()
+    if self.id ~= 6 or not self.last_move_was_rotate then return false end
+    local occupied = 0
+    local corners = {{x=0,y=0}, {x=2,y=0}, {x=0,y=2}, {x=2,y=2}}
+    for _, c in ipairs(corners) do
+        local tx, ty = self.x + c.x, self.y + c.y
+        if tx < 1 or tx > 10 or ty > 40 or (ty >= 1 and self.board.grid[ty][tx] ~= 0) then
+            occupied = occupied + 1
+        end
+    end
+    return occupied >= 3
+end
+
+function Piece:canMove(px, py, pr)
+    return self.board:canMove(px, py, pr)
+end
+
+function Piece:update(dt, gravity_speed)
+    if self.locked then return end
+    if self.spawn_timer > 0 then self.spawn_timer = self.spawn_timer - dt end
+
+    CombatStances.applyPieceModifiers(self.board, self)
+    local effective_gravity = CombatStances.getGravitySpeed(self.board, gravity_speed)
+
+    self.gravity_timer = self.gravity_timer + dt
+    local limit = self.board.is_zone_active and 999.0 or effective_gravity
+
+    local loop_count = 0
+    while self.gravity_timer >= limit do
+        loop_count = loop_count + 1
+        if not Blackbox.guardLoop("GRAVITY_DROP", 40, loop_count) then break end
+
+        if self:move(0, 1, true) then 
+            self.gravity_timer = self.gravity_timer - limit
+        else 
+            self.gravity_timer = 0
+            break 
+        end
+    end
+
+    if not self.board:canMove(self.x, self.y + 1, self.rotation) then
+        self.lock_timer = self.lock_timer + dt
+        if self.lock_timer >= self.lock_delay then self:lock() end
+    else 
+        self.lock_timer = 0 
+    end
+end
+
+function Piece:lock()
+    if self.locked then return end
+    self.board.can_hold, self.board.lock_impact = true, 1.0
+
+    KineticParry.openWindow(self.board)
+
+    local is_resonance = (self.board.current_stance == 3)
+    local groove_hit, bonus_lines = BeatLock.evaluate(self.board, is_resonance)
+    self.board.pending_groove_bonus = bonus_lines
+
+    local is_tspin = self:checkTSpin()
+    local shape = self.shape[self.rotation]
+    local has_mino_in_buffer = false
+
+    for r = 1, #shape do
+        for c = 1, #shape[r] do
+            if shape[r][c] ~= 0 then
+                local tx, ty = self.x + c - 1, self.y + r - 1
+                if ty >= 1 and ty <= 40 then 
+                    self.board.grid[ty][tx] = self.id
+                    if ty <= 20 then
+                        has_mino_in_buffer = true
+                    end
+                end
+            end
+        end
+    end
+
+    self.locked = true
+    PPSCounter.register(self.board)
+    AudioManager.playImmediateSFX("drop", self.board.player_type == "bot", self.y)
+
+    Blackbox.log(
+        (self.board.player_type == "human") and "P1_LOCK" or "BOT_LOCK",
+        (is_tspin and "TSPIN LOCK" or "STD LOCK"),
+        self.id,
+        self.y
+    )
+
+    if is_tspin then
+        self.board.tspin_flash = 1.0
+        self.board:triggerShake(10, 0.35)
+        BloomShader.triggerShockwave(self.board.x + 120, self.board.y + 240)
+        AudioManager.playSubBassThud(3)
+        AudioManager.playVoiceAnnounce("tspin")
+    end
+
+    if has_mino_in_buffer and not self.board.is_zone_active then
+        Blackbox.log(
+            (self.board.player_type == "human") and "P1_DEATH" or "BOT_DEATH",
+            "LOCK OUT (MINO IN BUFFER Y<=20)",
+            self.id, self.y
+        )
+        self.board:triggerDeath()
+        return
+    end
+
+    self.board:checkLines(is_tspin)
+end
+
+function Piece:draw(bx, by)
+    local shape = self.shape[self.rotation]
+    local energy, pulse = _G.TrackEnergyPunch or 0, _G.AudioBeatPulse or 0
+    love.graphics.push("all")
+
+    if self.spawn_timer > 0 then
+        local p = self.spawn_timer / 0.2
+        local clr = self.board.colors[self.id] or {1, 1, 1}
+        love.graphics.setBlendMode("add")
+        for r = 1, #shape do 
+            for c = 1, #shape[r] do 
+                if shape[r][c] ~= 0 then
+                    local x, y = bx + (self.x + c - 2) * 24, by + (self.y + r - 22) * 24
+                    love.graphics.setColor(clr[1], clr[2], clr[3], p * 0.4)
+                    love.graphics.rectangle("fill", x - 6 * p, y - 6 * p, 24 + 12 * p, 24 + 12 * p, 4)
+                    love.graphics.setColor(1, 1, 1, p * 0.6)
+                    love.graphics.rectangle("fill", x, y, 24, 24, 2)
+                end 
+            end 
+        end
+        love.graphics.setBlendMode("alpha")
+    end
+
+    if self.board and bx == self.board.x and by == self.board.y then
+        local gy = self.y
+        local loop_g = 0
+        while self.board:canMove(self.x, gy + 1, self.rotation) do 
+            gy = gy + 1 
+            loop_g = loop_g + 1
+            if not Blackbox.guardLoop("GHOST_CALC", 40, loop_g) then break end
+        end
+
+        local clr = self.board.colors[self.id] or {1, 1, 1}
+        
+        -- Opacidad del Ghost Piece reactiva al ajuste del usuario
+        local ghost_alpha_setting = SettingsManager.get("ghost_alpha") or 0.35
+        if ghost_alpha_setting > 1.0 then ghost_alpha_setting = ghost_alpha_setting / 100.0 end
+        local ghost_pulse = ghost_alpha_setting * (0.8 + pulse * 0.4 + energy * 0.2)
+        
+        for r = 1, #shape do 
+            for c = 1, #shape[r] do 
+                if shape[r][c] ~= 0 then
+                    local gx, g_y = bx + (self.x + c - 2) * 24, by + (gy + r - 22) * 24
+                    love.graphics.setColor(clr[1], clr[2], clr[3], ghost_alpha_setting * 0.3)
+                    love.graphics.rectangle("fill", gx + 2, g_y + 2, 20, 20, 2)
+                    love.graphics.setLineWidth(1.8)
+                    love.graphics.setColor(clr[1], clr[2], clr[3], ghost_pulse)
+                    love.graphics.rectangle("line", gx + 2, g_y + 2, 20, 20, 2)
+                end 
+            end 
+        end
+    end
+
+    for r = 1, #shape do 
+        for c = 1, #shape[r] do 
+            if shape[r][c] ~= 0 then
+                self.board:drawBlock(bx + (self.x + c - 2) * 24, by + (self.y + r - 22) * 24, self.id)
+            end 
+        end 
+    end
+    love.graphics.pop()
+end
+
+return Piece
 
 
 ================================================
@@ -3709,6 +4358,9 @@ return PPSCounter
 ================================================
 FILE: tetris/shaker.lua
 ================================================
+-- ================================================================
+-- FILE: tetris/shaker.lua
+-- ================================================================
 local Shaker = {}
 
 function Shaker.update(board, dt)
@@ -3718,6 +4370,11 @@ function Shaker.update(board, dt)
 end
 
 function Shaker.apply(board)
+    local SettingsManager = require "settings_manager"
+    local shake_mult = SettingsManager.get("screen_shake") or 1.0
+    if shake_mult > 1.0 then shake_mult = shake_mult / 100.0 end
+    if shake_mult <= 0.01 then return end
+
     local energy = _G.TrackEnergyPunch or 0
     local pulse = _G.AudioBeatPulse or 0
     
@@ -3736,7 +4393,7 @@ function Shaker.apply(board)
         sy = sy + math.random(-vibe, vibe)
     end
     
-    love.graphics.translate(sx, sy)
+    love.graphics.translate(sx * shake_mult, sy * shake_mult)
 end
 
 return Shaker
