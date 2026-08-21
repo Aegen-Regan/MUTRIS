@@ -102,19 +102,14 @@ function _G.TakeScreenshot()
     AudioManager.playSliderTick()
     screenshot_flash_timer = 1.8
     ScreenshotHelper.capture(function(copied, filename)
-        if PlayerBoard and PlayerBoard.setPopup then
-            PlayerBoard:setPopup("COPIED TO CLIPBOARD! (CTRL+V)", {0.1, 1.0, 0.5}, true, "SCREENSHOT READY")
-        end
+        -- Toast inferior dedicado, sin sobrecargar la matriz de combate
     end)
 end
 
 function _G.ToggleRecording()
     AudioManager.playSliderTick()
     ClipRecorder.toggle(function(frames, base_path, mode)
-        if PlayerBoard and PlayerBoard.setPopup then
-            local tag = (mode == "gif") and "GIF CLIP SAVED!" or "MP4 CLIP SAVED!"
-            PlayerBoard:setPopup(string.format("%s (%d FRAMES)", tag, frames), {0.2, 0.95, 1.0}, true, "SAVED TO recordings/")
-        end
+        -- Toast inferior dedicado
     end)
 end
 
@@ -250,12 +245,11 @@ function love.update(dt)
 end
 
 local function drawCyberPause()
-    love.graphics.setColor(0.0, 0.0, 0.0, 0.78)
+    love.graphics.setColor(0.0, 0.0, 0.0, 0.82)
     love.graphics.rectangle("fill", 0, 0, 1280, 720)
 
     local t = ThemeManager.getCurrent()
     local pulse = _G.AudioBeatPulse or 0
-    local time = love.timer.getTime()
 
     local card_w = 500
     local card_h = 440
@@ -320,7 +314,6 @@ local function drawCyberSettings()
 
     local t     = ThemeManager.getCurrent()
     local pulse = _G.AudioBeatPulse or 0
-    local time  = love.timer.getTime()
 
     love.graphics.setFont(FontCache.get(26))
     love.graphics.setColor(t.primary[1], t.primary[2], t.primary[3], 0.95)
@@ -533,22 +526,49 @@ function love.draw()
         if gameState == "pause" then
             drawCyberPause()
         elseif gameState == "gameover" then
-            love.graphics.setColor(0, 0, 0, 0.78)
-            love.graphics.rectangle("fill", 440, 230, 400, 180, 6)
-            love.graphics.setFont(FontCache.get(34))
-            if PlayerBoard and PlayerBoard.is_dying then
-                love.graphics.setColor(1.0, 0.2, 0.3, 0.95)
-                love.graphics.printf("ANNIHILATED", 0, 260, 1280, "center")
+            -- 🏆 Modal de Fin de Partida: 100% Sólido, Sin Bleed-Through y Cristalino
+            local t = ThemeManager.getCurrent()
+            local is_victory = (BotBoard and BotBoard.is_dying)
+            local modal_w, modal_h = 460, 220
+            local modal_x = 640 - (modal_w / 2)
+            local modal_y = 235
+
+            love.graphics.setColor(0.0, 0.0, 0.0, 0.90)
+            love.graphics.rectangle("fill", modal_x - 6, modal_y - 6, modal_w + 12, modal_h + 12, 10)
+
+            love.graphics.setColor(0.01, 0.015, 0.03, 1.0)
+            love.graphics.rectangle("fill", modal_x, modal_y, modal_w, modal_h, 8)
+
+            local border_color = is_victory and (t.secondary or {0.1, 1.0, 0.5}) or {1.0, 0.2, 0.3}
+            love.graphics.setLineWidth(2.5)
+            love.graphics.setColor(border_color[1], border_color[2], border_color[3], 0.98)
+            love.graphics.rectangle("line", modal_x, modal_y, modal_w, modal_h, 8)
+
+            love.graphics.setFont(FontCache.get(30))
+            if is_victory then
+                love.graphics.setColor(0.1, 1.0, 0.5, 0.98)
+                love.graphics.printf("VICTORY ACHIEVED", 0, modal_y + 22, 1280, "center")
             else
-                love.graphics.setColor(0.1, 1.0, 0.5, 0.95)
-                love.graphics.printf("VICTORY ACHIEVED", 0, 260, 1280, "center")
+                love.graphics.setColor(1.0, 0.2, 0.3, 0.98)
+                love.graphics.printf("ANNIHILATED", 0, modal_y + 22, 1280, "center")
             end
-            love.graphics.setFont(FontCache.get(12))
-            love.graphics.setColor(1, 1, 1, 0.85)
-            love.graphics.printf("PRESS [R] OR [START] TO REMATCH WITH NEXT TRACK", 0, 320, 1280, "center")
+
             love.graphics.setFont(FontCache.get(10))
-            love.graphics.setColor(0.65, 0.75, 0.85, 0.75)
-            love.graphics.printf("[ESC] RETURN TO MAIN MENU", 0, 350, 1280, "center")
+            love.graphics.setColor(0.7, 0.85, 0.95, 0.85)
+            local match_stat = string.format("MATCH TIME: %.1fs  |  P1 PPS: %.2f  |  BOT PPS: %.2f", 
+                _G.RealMatchTimer or 0, 
+                (PlayerBoard and PlayerBoard.current_pps_display) or 0,
+                (BotBoard and BotBoard.current_pps_display) or 0
+            )
+            love.graphics.printf(match_stat, 0, modal_y + 75, 1280, "center")
+
+            love.graphics.setFont(FontCache.get(12))
+            love.graphics.setColor(1.0, 0.95, 0.4, 0.95)
+            love.graphics.printf("PRESS [R] OR [START] TO REMATCH WITH NEXT TRACK", 0, modal_y + 115, 1280, "center")
+
+            love.graphics.setFont(FontCache.get(10))
+            love.graphics.setColor(0.55, 0.65, 0.75, 0.8)
+            love.graphics.printf("[ESC] RETURN TO MAIN MENU", 0, modal_y + 155, 1280, "center")
         end
 
     elseif gameState == "settings" then
@@ -558,10 +578,13 @@ function love.draw()
         TrackEditor.draw()
     end
 
+    -- ⚠️ DIRECTIVA PRIMARIA PERMANENTE + MARCADOR DE SKIN ACTIVA
     love.graphics.push("all")
+    local t = ThemeManager.getCurrent()
     love.graphics.setFont(FontCache.get(10))
-    love.graphics.setColor(0.4, 0.85, 1.0, 0.9)
-    love.graphics.print(_G.ENGINE_VERSION, 16, 698)
+    love.graphics.setColor(t.primary[1], t.primary[2], t.primary[3], 0.90)
+    local watermark = string.format("%s  |  SKIN: %s", _G.ENGINE_VERSION, t.name)
+    love.graphics.print(watermark, 16, 698)
     love.graphics.pop()
 
     BloomShader.endDraw(PlayerBoard and PlayerBoard.is_zone_active, view_ox, view_oy, view_scale)
@@ -572,13 +595,14 @@ function love.draw()
 
     ClipRecorder.drawHUDIndicator()
 
-    -- Toast de Captura a Portapapeles (Esquina inferior izquierda para no solapar el Theme Toast)
+    -- Toast de Captura a Portapapeles
     if screenshot_flash_timer > 0 then
         local a = math.min(1.0, screenshot_flash_timer * 1.5)
-        love.graphics.setColor(0.01, 0.03, 0.06, 0.94 * a)
+        local t_cur = ThemeManager.getCurrent()
+        love.graphics.setColor(0.02, 0.03, 0.06, 0.95 * a)
         love.graphics.rectangle("fill", 440, 655, 380, 36, 4)
         love.graphics.setLineWidth(1.2)
-        love.graphics.setColor(0.1, 1.0, 0.5, 0.90 * a)
+        love.graphics.setColor(t_cur.secondary[1], t_cur.secondary[2], t_cur.secondary[3], 0.90 * a)
         love.graphics.rectangle("line", 440, 655, 380, 36, 4)
         love.graphics.setFont(FontCache.get(10))
         love.graphics.setColor(1, 1, 1, 0.98 * a)
@@ -836,10 +860,8 @@ function love.mousepressed(x, y, button)
     end
 
     if gameState == "menu" then
-        -- Selección reactiva compatible con las 4 estructuras
         local start_y = (ThemeManager.current_theme == 1) and 130 or ((ThemeManager.current_theme == 3) and 115 or 145)
         local spacing = (ThemeManager.current_theme == 1) and 92 or ((ThemeManager.current_theme == 3) and 110 or 88)
-        local btn_w = 600
         for i = 1, #menuItems do
             local by = start_y + (i - 1) * spacing
             if adj_y >= by and adj_y <= by + 75 and adj_x >= 80 and adj_x <= 750 then

@@ -1,12 +1,12 @@
 -- ============================================================================
 -- MUTRIS ENGINE: DYNAMIC THEME & SKIN SWITCHER ENGINE (1280x720 WIDESCREEN)
--- Arquitectura: Zero-GC / 4 Universos Visuales / Combate & Menús Dedicados
+-- Arquitectura: Zero-GC / 4 Universos Visuales / Lazy-Resolve Blackbox
 -- ============================================================================
 local ThemeManager = {}
 
 local FontCache       = require "tetris.font_cache"
 local SettingsManager = require "settings_manager"
-local Blackbox        = require "core.blackbox"
+local Blackbox        = nil -- Lazy load para erradicar ciclos
 
 ThemeManager.SKINS = {
     CYBER_DAW     = 1, -- 01 // CYBER-DAW HARDWARE RACK
@@ -121,6 +121,9 @@ function ThemeManager.setTheme(idx)
     SettingsManager.settings.theme_skin = idx
     SettingsManager.save()
 
+    if not Blackbox then
+        Blackbox = require "core.blackbox"
+    end
     Blackbox.log("THEME", "SWITCHED TO: " .. t.id, idx, 0)
 end
 
@@ -161,9 +164,6 @@ function ThemeManager.update(dt)
     end
 end
 
--- ============================================================================
--- 🖌️ FONDOS AMBIENTALES POR TEMA
--- ============================================================================
 function ThemeManager.drawBackground()
     local t = ThemeManager.getCurrent()
     local energy = _G.TrackEnergyPunch or 0
@@ -217,9 +217,6 @@ function ThemeManager.drawBackground()
     love.graphics.pop()
 end
 
--- ============================================================================
--- 📦 RENDERIZADO GENÉRICO DE PANELES
--- ============================================================================
 function ThemeManager.drawPanel(x, y, w, h, title, is_active, custom_accent)
     local t = ThemeManager.getCurrent()
     local pulse = _G.AudioBeatPulse or 0
@@ -285,20 +282,15 @@ function ThemeManager.drawPanel(x, y, w, h, title, is_active, custom_accent)
     love.graphics.pop()
 end
 
--- ============================================================================
--- 🥊 MARCO DE COMBATE DE LA MATRIZ SEGÚN LA SKIN ACTIVA
--- ============================================================================
 function ThemeManager.drawMatrixFrame(board)
     local t = ThemeManager.getCurrent()
     local pulse = _G.AudioBeatPulse or 0
     local energy = _G.TrackEnergyPunch or 0
-    local time = love.timer.getTime()
 
     local bx, by, bw, bh = board.x, board.y, 240, 480
 
     love.graphics.push("all")
 
-    -- 1. CYBER-DAW: Chasis de Rack de Audio con Esquinas Biseladas
     if ThemeManager.current_theme == 1 then
         love.graphics.setColor(0.015, 0.025, 0.04, 0.95)
         love.graphics.rectangle("fill", bx, by, bw, bh, 2)
@@ -307,7 +299,6 @@ function ThemeManager.drawMatrixFrame(board)
         love.graphics.setColor(0, 0.9, 0.45, 0.40 + pulse * 0.30)
         love.graphics.rectangle("line", bx, by, bw, bh, 2)
 
-        -- Escuadras metálicas de montaje
         love.graphics.setColor(0, 1.0, 0.55, 0.9)
         love.graphics.rectangle("fill", bx - 3, by - 3, 10, 3)
         love.graphics.rectangle("fill", bx - 3, by - 3, 3, 10)
@@ -318,7 +309,6 @@ function ThemeManager.drawMatrixFrame(board)
         love.graphics.rectangle("fill", bx + bw - 7, by + bh, 10, 3)
         love.graphics.rectangle("fill", bx + bw, by + bh - 7, 3, 10)
 
-    -- 2. NEO-KINETIC: Marco Agresivo Slanted con Franjas de Alerta
     elseif ThemeManager.current_theme == 2 then
         love.graphics.setColor(0.03, 0.03, 0.05, 0.96)
         love.graphics.rectangle("fill", bx, by, bw, bh)
@@ -327,12 +317,10 @@ function ThemeManager.drawMatrixFrame(board)
         love.graphics.setColor(1.0, 0.08, 0.25, 0.85 + pulse * 0.15)
         love.graphics.rectangle("line", bx - 2, by - 2, bw + 4, bh + 4)
 
-        -- Esquinas estilo cómic slash
         love.graphics.setColor(1.0, 0.85, 0.0, 1.0)
         love.graphics.polygon("fill", bx - 2, by - 2, bx + 18, by - 2, bx - 2, by + 18)
         love.graphics.polygon("fill", bx + bw + 2, by + bh + 2, bx + bw - 18, by + bh + 2, bx + bw + 2, by + bh - 18)
 
-    -- 3. ESPORTS GLASS: Vidrio Esmerilado Láser 1px
     elseif ThemeManager.current_theme == 3 then
         love.graphics.setColor(0.01, 0.02, 0.04, 0.90)
         love.graphics.rectangle("fill", bx, by, bw, bh, 6)
@@ -346,7 +334,6 @@ function ThemeManager.drawMatrixFrame(board)
         local tag = (board.player_type == "human") and "[P1 // MATRIX 10x20]" or "[AI // MATRIX 10x20]"
         love.graphics.print(tag, bx + 6, by - 12)
 
-    -- 4. SINESTESIA CÓSMICA: Grieta Dimensional & Pilares de Cristal
     elseif ThemeManager.current_theme == 4 then
         love.graphics.setColor(0.01, 0.01, 0.03, 0.92)
         love.graphics.rectangle("fill", bx, by, bw, bh, 4)
@@ -364,9 +351,6 @@ function ThemeManager.drawMatrixFrame(board)
     love.graphics.pop()
 end
 
--- ============================================================================
--- 👻 RENDERIZADO DEL GHOST PIECE SEGÚN LA SKIN ACTIVA
--- ============================================================================
 function ThemeManager.drawGhostPiece(piece, bx, by, shape, gy, ghost_alpha)
     local t = ThemeManager.getCurrent()
     local pulse = _G.AudioBeatPulse or 0
@@ -374,7 +358,6 @@ function ThemeManager.drawGhostPiece(piece, bx, by, shape, gy, ghost_alpha)
 
     love.graphics.push("all")
 
-    -- 1. CYBER-DAW: Barrido de Fósforo CRT con Líneas Horizontales
     if ThemeManager.current_theme == 1 then
         for r = 1, #shape do
             for c = 1, #shape[r] do
@@ -385,13 +368,11 @@ function ThemeManager.drawGhostPiece(piece, bx, by, shape, gy, ghost_alpha)
                     love.graphics.setColor(0, 1.0, 0.55, ghost_alpha * (0.8 + pulse * 0.2))
                     love.graphics.setLineWidth(1.5)
                     love.graphics.rectangle("line", gx + 2, g_y + 2, 20, 20, 1)
-                    -- Línea de fósforo scanline
                     love.graphics.line(gx + 4, g_y + 12, gx + 20, g_y + 12)
                 end
             end
         end
 
-    -- 2. NEO-KINETIC: Sombra Slashed Carmesí/Oro
     elseif ThemeManager.current_theme == 2 then
         for r = 1, #shape do
             for c = 1, #shape[r] do
@@ -406,7 +387,6 @@ function ThemeManager.drawGhostPiece(piece, bx, by, shape, gy, ghost_alpha)
             end
         end
 
-    -- 3. ESPORTS GLASS: Línea Láser Limpia de 1px
     elseif ThemeManager.current_theme == 3 then
         for r = 1, #shape do
             for c = 1, #shape[r] do
@@ -421,7 +401,6 @@ function ThemeManager.drawGhostPiece(piece, bx, by, shape, gy, ghost_alpha)
             end
         end
 
-    -- 4. SINESTESIA CÓSMICA: Proyección Astral con Resplandor Especular
     elseif ThemeManager.current_theme == 4 then
         love.graphics.setBlendMode("add")
         for r = 1, #shape do
@@ -442,9 +421,6 @@ function ThemeManager.drawGhostPiece(piece, bx, by, shape, gy, ghost_alpha)
     love.graphics.pop()
 end
 
--- ============================================================================
--- 🏛️ RENDERIZADOR DE MENÚ PRINCIPAL DIVERGENTE (Fix Glifos Unicode)
--- ============================================================================
 function ThemeManager.drawMenu(menuItems, menuSubtitles, menuSelection, MetaBalancer)
     local t = ThemeManager.getCurrent()
     local pulse = _G.AudioBeatPulse or 0
@@ -453,7 +429,6 @@ function ThemeManager.drawMenu(menuItems, menuSubtitles, menuSelection, MetaBala
 
     love.graphics.push("all")
 
-    -- 1. CYBER-DAW HARDWARE RACK
     if ThemeManager.current_theme == 1 then
         love.graphics.setFont(FontCache.get(28))
         love.graphics.setColor(1, 1, 1, 0.98)
@@ -545,7 +520,6 @@ function ThemeManager.drawMenu(menuItems, menuSubtitles, menuSelection, MetaBala
         love.graphics.print(MetaBalancer.patch_notes or "SYSTEM EQUILIBRIUM OPTIMAL", osc_x + 16, arc_y + 36)
         love.graphics.print("HARDWARE TIMEBASE: 0.0ms DRIFT | SAMPLING: 144/240Hz", osc_x + 16, arc_y + 56)
 
-    -- 2. NEO-KINETIC STRIKE
     elseif ThemeManager.current_theme == 2 then
         love.graphics.setFont(FontCache.get(44))
         love.graphics.setColor(1, 0.08, 0.25, 0.98)
@@ -622,7 +596,6 @@ function ThemeManager.drawMenu(menuItems, menuSubtitles, menuSelection, MetaBala
         love.graphics.setColor(1, 1, 1, 0.85)
         love.graphics.print(MetaBalancer.patch_notes or "APEX AGGRESSION BALANCED", ac_x + 35, ac_y + 205)
 
-    -- 3. ESPORTS GLASS
     elseif ThemeManager.current_theme == 3 then
         love.graphics.setFont(FontCache.get(20))
         love.graphics.setColor(0.0, 0.9, 1.0, 0.98)
@@ -688,7 +661,6 @@ function ThemeManager.drawMenu(menuItems, menuSubtitles, menuSelection, MetaBala
         love.graphics.print(MetaBalancer.patch_notes or "SYSTEM EQUILIBRIUM CALIBRATED", p_x + 20, 395)
         love.graphics.print("ADAPTIVE DIFFICULTY ADJUSTMENT: ON", p_x + 20, 425)
 
-    -- 4. SINESTESIA CÓSMICA (Fix Diamantes Procedurales)
     elseif ThemeManager.current_theme == 4 then
         love.graphics.setFont(FontCache.get(34))
         love.graphics.setColor(1, 1, 1, 0.98)
@@ -721,7 +693,6 @@ function ThemeManager.drawMenu(menuItems, menuSubtitles, menuSelection, MetaBala
                 love.graphics.setLineWidth(2.0)
                 love.graphics.rectangle("line", node_x, cy, node_w, node_h, 8)
 
-                -- Diamante procedural izquierdo y derecho
                 love.graphics.setColor(1.0, 0.85, 0.25, 0.95)
                 love.graphics.polygon("fill", node_x + 35, cy + 22, node_x + 41, cy + 32, node_x + 35, cy + 42, node_x + 29, cy + 32)
                 love.graphics.polygon("fill", node_x + node_w - 35, cy + 22, node_x + node_w - 29, cy + 32, node_x + node_w - 35, cy + 42, node_x + node_w - 41, cy + 32)
@@ -762,9 +733,6 @@ function ThemeManager.drawMenu(menuItems, menuSubtitles, menuSelection, MetaBala
     love.graphics.pop()
 end
 
--- ============================================================================
--- 🏷️ NOTIFICACIÓN TOAST DE CAMBIO DE SKIN
--- ============================================================================
 function ThemeManager.drawToast()
     if ThemeManager.toast_timer <= 0 then return end
 
