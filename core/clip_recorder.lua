@@ -1,13 +1,17 @@
+-- ================================================================
+-- FILE: core/clip_recorder.lua
+-- ================================================================
 ---@diagnostic disable: undefined-global, inject-field, undefined-field
 -- ============================================================================
--- MUTRIS ENGINE: NATIVE WIN32 SILENT MP4 RECORDER (ZERO-CMD / 60FPS)
--- Arquitectura: Win32 CreateProcessA + Salida Heredada / Zero-Crash 60FPS
+-- MUTRIS ENGINE: DUAL RECORDER (WIN32 MP4 60FPS & LUAJIT GIF ENCODER)
 -- ============================================================================
 local ClipRecorder = {}
 
-local ffi = require("ffi")
-local FontCache = require "tetris.font_cache"
-local Blackbox  = require "core.blackbox"
+local ffi             = require("ffi")
+local FontCache       = require "tetris.font_cache"
+local Blackbox        = require "core.blackbox"
+local SettingsManager = require "settings_manager"
+local GIFEncoder      = require "core.gif_encoder"
 
 local is_windows = (love.system.getOS() == "Windows")
 if is_windows then
@@ -64,12 +68,17 @@ if is_windows then
 end
 
 ClipRecorder.is_recording = false
+ClipRecorder.mode = "mp4" -- "mp4" o "gif"
 ClipRecorder.record_time = 0.0
 ClipRecorder.frame_count = 0
 ClipRecorder.h_write_pipe = nil
 ClipRecorder.h_process = nil
 ClipRecorder.h_thread = nil
-ClipRecorder.current_mp4_path = nil
+ClipRecorder.current_output_path = nil
+
+-- Buffer en memoria para fotogramas GIF
+ClipRecorder.gif_frames = {}
+ClipRecorder.gif_frame_timer = 0.0
 
 local function getFFmpegPath()
     local custom = "C:\\Users\\Mati\\Documents\\YT DLP\\ffmpeg.exe"
@@ -88,7 +97,9 @@ function ClipRecorder.init()
     ClipRecorder.h_write_pipe = nil
     ClipRecorder.h_process = nil
     ClipRecorder.h_thread = nil
-    ClipRecorder.current_mp4_path = nil
+    ClipRecorder.current_output_path = nil
+    ClipRecorder.gif_frames = {}
+    ClipRecorder.gif_frame_timer = 0.0
 end
 
 function ClipRecorder.toggle(callback_feedback)
@@ -99,56 +110,68 @@ function ClipRecorder.toggle(callback_feedback)
     end
 end
 
--- 🔴 INICIO SILENCIOSO CON MANEJADORES HEREDADOS
 function ClipRecorder.start()
-    if ClipRecorder.is_recording or not is_windows then return end
+    if ClipRecorder.is_recording then return end
 
     local project_dir = (love.filesystem.getSource() .. "/recordings"):gsub("/", "\\")
     local appdata_dir = (love.filesystem.getSaveDirectory() .. "/recordings"):gsub("/", "\\")
 
-    ffi.C.CreateDirectoryA(project_dir, nil)
-    ffi.C.CreateDirectoryA(appdata_dir, nil)
+    if is_windows then
+        ffi.C.CreateDirectoryA(project_dir, nil)
+        ffi.C.CreateDirectoryA(appdata_dir, nil)
+    else
+        love.filesystem.createDirectory("recordings")
+    end
+
+    local mode = SettingsManager.get("capture_mode") or "mp4"
+    ClipRecorder.mode = mode
+    ClipRecorder.record_time = 0.0
+    ClipRecorder.frame_count = 0
+    ClipRecorder.gif_frames = {}
+    ClipRecorder.gif_frame_timer = 0.0
 
     local timestamp = os.date("%Y%m%d_%H%M%S")
+
+    -- 🔴 MODO 1: GRABACIÓN GIF ANIMADO
+    if mode == "gif" then
+        ClipRecorder.current_output_path = project_dir .. "\\MUTRIS_CLIP_" .. timestamp .. ".gif"
+        ClipRecorder.is_recording = true
+        Blackbox.log("RECORDER", "GIF CAPTURE ARMED", 0, 0)
+        print("🎬 Grabación GIF iniciada: " .. ClipRecorder.current_output_path)
+        return
+    end
+
+    -- 🔴 MODO 2: GRABACIÓN MP4 60FPS POR TUBERÍA WIN32
+    if not is_windows then return end
+
     local final_mp4 = project_dir .. "\\MUTRIS_CLIP_" .. timestamp .. ".mp4"
     local log_path  = project_dir .. "\\ffmpeg_log.txt"
-    ClipRecorder.current_mp4_path = final_mp4
+    ClipRecorder.current_output_path = final_mp4
 
-    -- 1. Atributos de Seguridad Heredables
     local sa = ffi.new("SECURITY_ATTRIBUTES", {
         nLength = ffi.sizeof("SECURITY_ATTRIBUTES"),
         bInheritHandle = 1,
         lpSecurityDescriptor = nil
     })
 
-    -- 2. Tubería Anónima para Video Crudo (STDIN)
     local h_read = ffi.new("HANDLE[1]")
     local h_write = ffi.new("HANDLE[1]")
 
-    if ffi.C.CreatePipe(h_read, h_write, sa, 0) == 0 then
-        print("⚠️ Error creando tubería Win32 para FFmpeg")
-        return
-    end
-
+    if ffi.C.CreatePipe(h_read, h_write, sa, 0) == 0 then return end
     ffi.C.SetHandleInformation(h_write[0], 1, 0)
 
-    -- 3. Archivo de Registro para STDOUT / STDERR (Evita el crasheo de canal nulo)
-    -- GENERIC_WRITE = 0x40000000, FILE_SHARE_READ|WRITE = 3, CREATE_ALWAYS = 2, NORMAL = 0x80
     local h_log = ffi.C.CreateFileA(log_path, 0x40000000, 3, sa, 2, 0x80, nil)
 
-    -- 4. STARTUPINFOA con Canales Heredados y Ventana Oculta
     local si = ffi.new("STARTUPINFOA", {
         cb = ffi.sizeof("STARTUPINFOA"),
-        dwFlags = 0x00000100 + 0x00000001, -- STARTF_USESTDHANDLES | STARTF_USESHOWWINDOW
-        wShowWindow = 0, -- SW_HIDE
+        dwFlags = 0x00000100 + 0x00000001,
+        wShowWindow = 0,
         hStdInput = h_read[0],
         hStdOutput = h_log,
         hStdError = h_log
     })
 
     local pi = ffi.new("PROCESS_INFORMATION")
-
-    -- 5. Comando de Grabación FFmpeg HD 60 FPS
     local ffmpeg_bin = getFFmpegPath()
     local cmd_str = string.format(
         '"%s" -y -f rawvideo -vcodec rawvideo -s 1280x720 -pix_fmt rgba -r 60 -i - -c:v libx264 -preset ultrafast -crf 26 -pix_fmt yuv420p "%s"',
@@ -159,11 +182,8 @@ function ClipRecorder.start()
     local cmd_buf = ffi.new("char[?]", #cmd_str + 1)
     ffi.copy(cmd_buf, cmd_str)
 
-    -- 6. CREATE_NO_WINDOW = 0x08000000 (Cero CMD)
-    local create_flags = 0x08000000
-    local success = ffi.C.CreateProcessA(nil, cmd_buf, nil, nil, 1, create_flags, nil, nil, si, pi)
+    local success = ffi.C.CreateProcessA(nil, cmd_buf, nil, nil, 1, 0x08000000, nil, nil, si, pi)
 
-    -- El proceso padre cierra sus copias de los manejadores heredados
     ffi.C.CloseHandle(h_read[0])
     if h_log ~= nil then ffi.C.CloseHandle(h_log) end
 
@@ -172,32 +192,41 @@ function ClipRecorder.start()
         ClipRecorder.h_process = pi.hProcess
         ClipRecorder.h_thread = pi.hThread
         ClipRecorder.is_recording = true
-        ClipRecorder.record_time = 0.0
-        ClipRecorder.frame_count = 0
         Blackbox.log("RECORDER", "SILENT FFMPEG 60FPS RUNNING", 0, 0)
         print("🎬 FFmpeg iniciado en silencio: " .. final_mp4)
     else
         ffi.C.CloseHandle(h_write[0])
-        print("⚠️ No se pudo iniciar FFmpeg en segundo plano.")
     end
 end
 
--- 🎥 TRANSMISIÓN NATIVA C A LA TUBERÍA
 function ClipRecorder.captureFrame(canvas)
-    if not ClipRecorder.is_recording or not ClipRecorder.h_write_pipe or not canvas then return end
+    if not ClipRecorder.is_recording or not canvas then return end
 
-    local ok, img_data = pcall(function()
-        if canvas.newImageData then
-            return canvas:newImageData()
+    if ClipRecorder.mode == "mp4" then
+        if not ClipRecorder.h_write_pipe then return end
+        local ok, img_data = pcall(function() return canvas:newImageData() end)
+        if ok and img_data then
+            ClipRecorder.frame_count = ClipRecorder.frame_count + 1
+            local raw_ptr = img_data.getFFIPointer and img_data:getFFIPointer() or img_data:getPointer()
+            local written = ffi.new("DWORD[1]")
+            ffi.C.WriteFile(ClipRecorder.h_write_pipe, raw_ptr, 1280 * 720 * 4, written, nil)
         end
-        return nil
-    end)
 
-    if ok and img_data then
-        ClipRecorder.frame_count = ClipRecorder.frame_count + 1
-        local raw_ptr = img_data.getFFIPointer and img_data:getFFIPointer() or img_data:getPointer()
-        local written = ffi.new("DWORD[1]")
-        ffi.C.WriteFile(ClipRecorder.h_write_pipe, raw_ptr, 1280 * 720 * 4, written, nil)
+    elseif ClipRecorder.mode == "gif" then
+        -- Muestreo a ~20 FPS para mantener el GIF ultra liviano
+        ClipRecorder.gif_frame_timer = ClipRecorder.gif_frame_timer + (1.0 / 60.0)
+        if ClipRecorder.gif_frame_timer >= 0.050 then
+            ClipRecorder.gif_frame_timer = 0.0
+            local ok, img_data = pcall(function() return canvas:newImageData() end)
+            if ok and img_data then
+                ClipRecorder.frame_count = ClipRecorder.frame_count + 1
+                table.insert(ClipRecorder.gif_frames, img_data)
+                -- Límite de seguridad de 300 fotogramas (~15s)
+                if #ClipRecorder.gif_frames > 300 then
+                    table.remove(ClipRecorder.gif_frames, 1)
+                end
+            end
+        end
     end
 end
 
@@ -207,35 +236,51 @@ function ClipRecorder.update(dt)
     end
 end
 
--- 🛑 CIERRE INSTANTÁNEO Y SELLADO DEL MP4
 function ClipRecorder.stopAndSave(callback_feedback)
     if not ClipRecorder.is_recording then return end
     ClipRecorder.is_recording = false
 
     local total_frames = ClipRecorder.frame_count
-    local total_time = ClipRecorder.record_time
-    local path = ClipRecorder.current_mp4_path or "recordings/clip.mp4"
+    local total_time   = ClipRecorder.record_time
+    local path         = ClipRecorder.current_output_path or "recordings/clip"
 
-    -- Cerrar la tubería (envía EOF para finalizar el MP4)
-    if ClipRecorder.h_write_pipe then
-        ffi.C.CloseHandle(ClipRecorder.h_write_pipe)
-        ClipRecorder.h_write_pipe = nil
+    if ClipRecorder.mode == "mp4" then
+        if ClipRecorder.h_write_pipe then
+            ffi.C.CloseHandle(ClipRecorder.h_write_pipe)
+            ClipRecorder.h_write_pipe = nil
+        end
+        if ClipRecorder.h_process then
+            ffi.C.WaitForSingleObject(ClipRecorder.h_process, 4000)
+            ffi.C.CloseHandle(ClipRecorder.h_process)
+            ffi.C.CloseHandle(ClipRecorder.h_thread)
+            ClipRecorder.h_process = nil
+            ClipRecorder.h_thread = nil
+        end
+        Blackbox.log("RECORDER", "SAVED MP4: " .. path, total_frames, math.floor(total_time))
+        print(string.format("✅ Video MP4 guardado: %s (%d frames @ 60 FPS)", path, total_frames))
+
+    elseif ClipRecorder.mode == "gif" then
+        local preset = SettingsManager.get("gif_resolution") or 1
+        local out_w = (preset == 2) and 640 or 480
+        local out_h = (preset == 2) and 360 or 270
+        local delay_cs = 5 -- 5 centésimas = 20 FPS
+
+        local encoded_gif = GIFEncoder.encode(ClipRecorder.gif_frames, out_w, out_h, delay_cs)
+        if encoded_gif then
+            local file = io.open(path, "wb")
+            if file then
+                file:write(encoded_gif)
+                file:close()
+            end
+            love.filesystem.write("recordings/" .. path:match("([^/\\]+)$"), encoded_gif)
+            Blackbox.log("RECORDER", "SAVED GIF: " .. path, total_frames, math.floor(total_time))
+            print(string.format("✅ GIF animado guardado: %s (%d frames, %dx%d)", path, total_frames, out_w, out_h))
+        end
+        ClipRecorder.gif_frames = {}
     end
-
-    -- Esperar a que FFmpeg selle el archivo (<0.05s)
-    if ClipRecorder.h_process then
-        ffi.C.WaitForSingleObject(ClipRecorder.h_process, 4000)
-        ffi.C.CloseHandle(ClipRecorder.h_process)
-        ffi.C.CloseHandle(ClipRecorder.h_thread)
-        ClipRecorder.h_process = nil
-        ClipRecorder.h_thread = nil
-    end
-
-    Blackbox.log("RECORDER", "SAVED MP4: " .. path, total_frames, math.floor(total_time))
-    print(string.format("✅ Video MP4 guardado con éxito: %s (%d frames @ 60 FPS)", path, total_frames))
 
     if callback_feedback then
-        callback_feedback(total_frames, path)
+        callback_feedback(total_frames, path, ClipRecorder.mode)
     end
 end
 
@@ -246,23 +291,27 @@ function ClipRecorder.drawHUDIndicator()
     local pulse = math.sin(time * 6) * 0.5 + 0.5
 
     love.graphics.push("all")
-    local bx, by, bw, bh = 1100, 48, 160, 32
+    local bx, by, bw, bh = 1080, 48, 180, 32
     love.graphics.setColor(0.02, 0.01, 0.04, 0.90)
     love.graphics.rectangle("fill", bx, by, bw, bh, 6)
 
+    local is_gif = (ClipRecorder.mode == "gif")
+    local border_color = is_gif and {1.0, 0.85, 0.2} or {1.0, 0.1, 0.2}
+
     love.graphics.setLineWidth(1.5)
-    love.graphics.setColor(1.0, 0.1, 0.2, 0.85)
+    love.graphics.setColor(border_color[1], border_color[2], border_color[3], 0.85)
     love.graphics.rectangle("line", bx, by, bw, bh, 6)
 
-    love.graphics.setColor(1.0, 0.1, 0.2, 0.3 + pulse * 0.7)
-    love.graphics.circle("fill", bx + 18, by + 16, 6)
+    love.graphics.setColor(border_color[1], border_color[2], border_color[3], 0.3 + pulse * 0.7)
+    love.graphics.circle("fill", bx + 16, by + 16, 6)
 
     love.graphics.setFont(FontCache.get(10))
     love.graphics.setColor(1.0, 1.0, 1.0, 0.95)
     local mins = math.floor(ClipRecorder.record_time / 60)
     local secs = ClipRecorder.record_time % 60
-    local rec_str = string.format("REC 60FPS %02d:%04.1f", mins, secs)
-    love.graphics.print(rec_str, bx + 32, by + 9)
+    local label = is_gif and "GIF REC" or "REC 60FPS"
+    local rec_str = string.format("%s %02d:%04.1f", label, mins, secs)
+    love.graphics.print(rec_str, bx + 28, by + 9)
 
     love.graphics.pop()
 end
