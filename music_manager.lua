@@ -1,3 +1,6 @@
+-- ================================================================
+-- FILE: music_manager.lua
+-- ================================================================
 ---@diagnostic disable: undefined-global
 local MusicManager = {}
 local love = love
@@ -17,19 +20,41 @@ function MusicManager.stop()
     end
 end
 
+function MusicManager.pause()
+    if MusicManager.custom_source and MusicManager.custom_source:isPlaying() then
+        MusicManager.custom_source:pause()
+    end
+end
+
+function MusicManager.resume()
+    if MusicManager.custom_source and not MusicManager.custom_source:isPlaying() then
+        MusicManager.custom_source:play()
+    end
+end
+
+function MusicManager.isPlaying()
+    if MusicManager.custom_source then
+        return MusicManager.custom_source:isPlaying()
+    end
+    return false
+end
+
 function MusicManager.start()
     local TrackManager = require "track_manager"
     local SettingsManager = require "settings_manager"
     local current_track = TrackManager.getCurrentTrack()
 
     if current_track and not current_track.is_embedded and current_track.file_path ~= "" then
-        if MusicManager.custom_source then MusicManager.custom_source:stop() end
+        if MusicManager.custom_source then 
+            MusicManager.custom_source:stop() 
+        end
         local success, src = pcall(love.audio.newSource, current_track.file_path, "stream")
         if success then
             MusicManager.custom_source = src
             MusicManager.custom_source:setLooping(true)
             local bgm_norm = SettingsManager.getBGM()
             MusicManager.custom_source:setVolume(bgm_norm * 0.85)
+            MusicManager.custom_source:seek(0, "seconds")
             MusicManager.custom_source:play()
         end
     end
