@@ -1,3 +1,6 @@
+-- ================================================================
+-- FILE: input.lua
+-- ================================================================
 ---@diagnostic disable: undefined-global
 -- ============================================================================
 -- MUTRIS ENGINE: INPUT & DAS/ARR COMPETITIVE ENGINE
@@ -72,12 +75,16 @@ local function _isGamepadAxisDown(axis_name, threshold, greater_than)
     return false
 end
 
+-- Factor de caída suave reactivo al ajuste SDF
 function Input.getSoftDropFactor()
     if Input.player and Input.player.active_piece then
         if love.keyboard.isDown("kp5") or love.keyboard.isDown("5") or
            love.keyboard.isDown("down") or love.keyboard.isDown("clear") or
            _isGamepadDown("dpdown") or _isGamepadAxisDown("lefty", INPUT_CONFIG.JOY_DEADZONE_DOWN, true) then
-            return 0.001
+            
+            local sdf_mult = SettingsManager.get("sdf") or 40.0
+            if sdf_mult >= 40.0 then return 0.001 end
+            return 0.8 / math.max(1.0, sdf_mult)
         end
     end
     return 0.8
@@ -100,8 +107,8 @@ function Input.update(dt)
         t = dt
     end
 
-    local das = SettingsManager.settings.das or INPUT_CONFIG.FALLBACK_DAS
-    local arr = math.max(INPUT_CONFIG.ARR_ABSOLUTE_MIN, SettingsManager.settings.arr or INPUT_CONFIG.FALLBACK_ARR)
+    local das = SettingsManager.get("das") or INPUT_CONFIG.FALLBACK_DAS
+    local arr = math.max(INPUT_CONFIG.ARR_ABSOLUTE_MIN, SettingsManager.get("arr") or INPUT_CONFIG.FALLBACK_ARR)
 
     -- Modificador ARR en Stance RUSH
     if Input.player.current_stance == 1 then
@@ -155,7 +162,7 @@ end
 
 function Input.handleAction(action)
     if action == "restart" then
-        if _G.GlobalRestart then _G.GlobalRestart() end
+        if _G.GlobalRestart then _G.GlobalRestart(false) end
         return
     end
 
@@ -173,7 +180,11 @@ function Input.handleAction(action)
 
     if action == "rot_cw" then p:rotate(1)
     elseif action == "rot_ccw" then p:rotate(-1)
-    elseif action == "rot_180" then p:rotate(2)
+    elseif action == "rot_180" then
+        local srs_180 = SettingsManager.get("srs_180")
+        if srs_180 == 1 or srs_180 == true or (type(srs_180) == "number" and srs_180 >= 0.5) then
+            p:rotate(2)
+        end
     elseif action == "hold" then Input.player:hold()
     elseif action == "zone" then Input.player:enterZone()
     elseif action == "hard_drop" then

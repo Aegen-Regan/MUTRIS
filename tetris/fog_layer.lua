@@ -1,10 +1,14 @@
+-- ================================================================
+-- FILE: tetris/fog_layer.lua
+-- ================================================================
 ---@diagnostic disable: undefined-global
 -- ============================================================================
 -- MUTRIS ENGINE: VOLUMETRIC FOG LAYER (1280x720 WIDESCREEN)
 -- Arquitectura: Zero-GC / Niebla Reactiva a Camelot & Beat
 -- ============================================================================
 local FogLayer = {}
-local TrackManager = require "track_manager"
+local TrackManager    = require "track_manager"
+local SettingsManager = require "settings_manager"
 
 local NUM_FOG_NODES = 16
 local nodes = {}
@@ -31,6 +35,9 @@ function FogLayer.update(dt)
 end
 
 function FogLayer.draw()
+    local fog_setting = SettingsManager.get("fog_mode")
+    if fog_setting == 0 or fog_setting == false then return end
+
     local track = TrackManager.getCurrentTrack()
     local base_color = {0.1, 0.4, 0.9}
     if track and TrackManager.NOTE_COLORS and track.root_note then

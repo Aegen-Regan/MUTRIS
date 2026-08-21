@@ -1,3 +1,6 @@
+-- ================================================================
+-- FILE: audio_manager.lua
+-- ================================================================
 ---@diagnostic disable: undefined-global
 local AudioManager = {}
 local SettingsManager = require "settings_manager"
@@ -29,7 +32,7 @@ _G.AudioBeatPulse = 0
 AudioManager.melody_step = 1
 _G.TrackEnergyPunch = 0
 
--- 🎚️ ENSORDECIMIENTO TOTAL POR VACÍO (MUTE 100%)
+-- 🎚️ ENSORDECIMIENTO TOTAL POR VACÍO (MUTE CONTROLADO POR AJUSTES)
 AudioManager.duck_intensity = 0.0
 AudioManager.duck_duration = 0.60
 
@@ -71,9 +74,18 @@ function AudioManager.loadVoiceFiles()
     end
 end
 
--- ⚡ Disparo de Ensordecimiento (Apaga la música al 100%)
+-- ⚡ Disparo de Ensordecimiento (Ajustado por el porcentaje configurado por el usuario)
 function AudioManager.triggerSidechain(amount, duration)
-    AudioManager.duck_intensity = math.max(AudioManager.duck_intensity, amount or 1.0)
+    local sidechain_setting = SettingsManager.get("sidechain_duck") or 1.0
+    if sidechain_setting > 1.0 then sidechain_setting = sidechain_setting / 100.0 end
+    
+    if sidechain_setting <= 0.01 then
+        AudioManager.duck_intensity = 0.0
+        return
+    end
+
+    local effective_amount = (amount or 1.0) * sidechain_setting
+    AudioManager.duck_intensity = math.max(AudioManager.duck_intensity, effective_amount)
     AudioManager.duck_duration = duration or 0.60
 end
 
@@ -81,8 +93,17 @@ end
 function AudioManager.playVoiceAnnounce(voice_type)
     local sfx_vol = SettingsManager.getSFX()
     if sfx_vol <= 0.01 then return end
+
+    local announcer_mode = SettingsManager.get("announcer_mode") or 1
+    if announcer_mode == 0 then return end -- Apagado
+
+    -- Si está en modo "Critical Only", solo reproduce eventos de alto impacto
+    if announcer_mode == 2 then
+        local is_critical = (voice_type == "victory" or voice_type == "danger" or voice_type == "hyper" or voice_type == "ultimatris" or voice_type == "perfect_clear")
+        if not is_critical then return end
+    end
     
-    -- Ensordecimiento absoluto de la música de fondo
+    -- Ensordecimiento proporcional configurado
     AudioManager.triggerSidechain(1.0, 0.75)
 
     local key = voice_type:lower()
@@ -92,7 +113,6 @@ function AudioManager.playVoiceAnnounce(voice_type)
         src:stop()
         src:play()
     else
-        -- Impacto de reemplazo si no colocó archivo todavía
         AudioManager.playSubBassThud(3)
     end
 end
@@ -148,25 +168,27 @@ function AudioManager.playSubBassThud(power)
     local sfx_vol = SettingsManager.getSFX()
     if sfx_vol <= 0.01 then return end
 
-    AudioManager.triggerSidechain(1.0, 0.65)
+    local tier = SettingsManager.get("subbass_power") or 3
+    AudioManager.triggerSidechain(0.85, 0.60)
+
     local sample_rate = 44100
-    local dur = 0.55
+    local dur = 0.40 + tier * 0.05
     local length = math.floor(sample_rate * dur)
     if length <= 0 then return end
 
     local data = love.sound.newSoundData(length, sample_rate, 16, 1)
-    local start_f = 60 + (power or 1) * 6
-    local end_f = 24
+    local start_f = 45 + tier * 8 + (power or 1) * 4
+    local end_f = 22
 
     for i = 0, length - 1 do
         local t = i / sample_rate
         local prog = t / dur
         local f = start_f + (end_f - start_f) * (prog * prog)
         local sub = math.sin(2 * math.pi * f * t)
-        local rumble = math.sin(2 * math.pi * (f * 0.5) * t) * 0.6
+        local rumble = math.sin(2 * math.pi * (f * 0.5) * t) * (0.3 + tier * 0.1)
         local thud = (t < 0.008) and (math.random() * 2 - 1) * (1.0 - t / 0.008) * 0.4 or 0
 
-        local val = tanh((sub + rumble + thud) * 3.0) * math.exp(-5.0 * t)
+        local val = tanh((sub + rumble + thud) * (1.8 + tier * 0.4)) * math.exp(-5.0 * t)
         data:setSample(i, val * 0.98 * sfx_vol)
     end
 
@@ -176,12 +198,13 @@ function AudioManager.playSubBassThud(power)
 end
 
 -- 💎 IMPACTO MECÁNICO TÁCTIL (Limpieza de líneas sin bloops)
-function AudioManager.playMechanicalClear(lines_count)
+function AudioManager.playMechanicalClear(lines_count, is_bot)
     local sfx_vol = SettingsManager.getSFX()
     if sfx_vol <= 0.01 then return end
 
-    -- Ensordecimiento breve
-    AudioManager.triggerSidechain(0.75 + lines_count * 0.08, 0.40)
+    -- Para el bot, la atenuación es mucho más suave para no silenciar la partida del usuario
+    local duck_amount = is_bot and (0.30 + lines_count * 0.05) or (0.60 + lines_count * 0.08)
+    AudioManager.triggerSidechain(duck_amount, 0.35)
 
     local sample_rate = 44100
     local dur = 0.28
@@ -202,7 +225,7 @@ function AudioManager.playMechanicalClear(lines_count)
     end
 
     local src = love.audio.newSource(data, "static")
-    src:setVolume(1.0)
+    src:setVolume(is_bot and 0.55 or 1.0)
     love.audio.play(src)
 end
 
@@ -244,7 +267,6 @@ function AudioManager.playImmediateSFX(type, is_bot, row_y)
     local vol = is_bot and 0.35 or 0.30
 
     if type == "move" then
-        -- Chasquido táctil grave de baja frecuencia
         AudioManager.playTone(140, 0.035, vol * 0.30, "sine", false, 0, 95, true)
 
     elseif type == "rotate" then
@@ -261,7 +283,7 @@ function AudioManager.playImmediateSFX(type, is_bot, row_y)
         AudioManager.playTone(f, 0.22, vol * 0.32, "sine", true, 0.4, 24, true)
 
     elseif type == "line_clear" then
-        AudioManager.playMechanicalClear(1)
+        AudioManager.playMechanicalClear(1, is_bot)
 
     elseif type == "t_spin" then
         AudioManager.playSubBassThud(3)
@@ -344,6 +366,12 @@ function AudioManager.update(dt, stats)
         local fraction = current_beat - math.floor(current_beat)
         if fraction < 0.09 and _G.AudioBeatPulse <= 0.1 then
             _G.AudioBeatPulse = 1.0
+
+            -- 🔊 METRÓNOMO AUDIBLE SI ESTÁ ACTIVADO EN AJUSTES
+            local beat_click = SettingsManager.get("beat_click") or 0
+            if beat_click == 2 or (beat_click == 1 and danger > 0.45) then
+                AudioManager.playHatClosed(0.12)
+            end
         end
     end
 end

@@ -1,3 +1,6 @@
+-- ================================================================
+-- FILE: tetris/piece.lua
+-- ================================================================
 ---@diagnostic disable: undefined-global
 -- ============================================================================
 -- MUTRIS ENGINE: TETROMINO PIECE PHYSICS & RHYTHM LOCK
@@ -6,13 +9,14 @@
 local Piece = {}
 Piece.__index = Piece
 
-local AudioManager  = require "audio_manager"
-local PPSCounter    = require "tetris.pps_counter"
-local BeatLock      = require "tetris.beat_lock"
-local CombatStances = require "combat.combat_stances"
-local KineticParry  = require "combat.kinetic_parry"
-local BloomShader   = require "tetris.bloom_shader"
-local Blackbox      = require "core.blackbox"
+local AudioManager    = require "audio_manager"
+local SettingsManager = require "settings_manager"
+local PPSCounter      = require "tetris.pps_counter"
+local BeatLock        = require "tetris.beat_lock"
+local CombatStances   = require "combat.combat_stances"
+local KineticParry    = require "combat.kinetic_parry"
+local BloomShader     = require "tetris.bloom_shader"
+local Blackbox        = require "core.blackbox"
 
 function Piece.new(id, board)
     local self = setmetatable({}, Piece)
@@ -21,7 +25,12 @@ function Piece.new(id, board)
     self.shape = (SRS and SRS.shapes) and SRS.shapes[id] or { {{1,1,1,1}} }
     self.rotation, self.x, self.y = 1, 4, 21
     self.locked, self.gravity_timer, self.lock_timer = false, 0, 0
-    self.lock_delay, self.move_count, self.max_resets = 0.5, 0, 15
+
+    -- Conexión dinámica con los ajustes del usuario
+    self.lock_delay = SettingsManager.get("lock_delay") or 0.50
+    self.move_count = 0
+    self.max_resets = math.floor(SettingsManager.get("max_resets") or 15)
+
     self.spawn_timer = 0.2
     self.last_move_was_rotate = false 
 
@@ -166,7 +175,6 @@ function Piece:lock()
         AudioManager.playVoiceAnnounce("tspin")
     end
 
-    -- ☠️ LOCK OUT: Si algún mino sobresale en filas 1 a 20
     if has_mino_in_buffer and not self.board.is_zone_active then
         Blackbox.log(
             (self.board.player_type == "human") and "P1_DEATH" or "BOT_DEATH",
@@ -213,13 +221,17 @@ function Piece:draw(bx, by)
         end
 
         local clr = self.board.colors[self.id] or {1, 1, 1}
-        local ghost_pulse = 0.25 + pulse * 0.3 + energy * 0.15
+        
+        -- Opacidad del Ghost Piece reactiva al ajuste del usuario
+        local ghost_alpha_setting = SettingsManager.get("ghost_alpha") or 0.35
+        if ghost_alpha_setting > 1.0 then ghost_alpha_setting = ghost_alpha_setting / 100.0 end
+        local ghost_pulse = ghost_alpha_setting * (0.8 + pulse * 0.4 + energy * 0.2)
         
         for r = 1, #shape do 
             for c = 1, #shape[r] do 
                 if shape[r][c] ~= 0 then
                     local gx, g_y = bx + (self.x + c - 2) * 24, by + (gy + r - 22) * 24
-                    love.graphics.setColor(clr[1], clr[2], clr[3], 0.12)
+                    love.graphics.setColor(clr[1], clr[2], clr[3], ghost_alpha_setting * 0.3)
                     love.graphics.rectangle("fill", gx + 2, g_y + 2, 20, 20, 2)
                     love.graphics.setLineWidth(1.8)
                     love.graphics.setColor(clr[1], clr[2], clr[3], ghost_pulse)

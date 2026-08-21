@@ -1,3 +1,6 @@
+-- ================================================================
+-- FILE: tetris/board.lua
+-- ================================================================
 ---@diagnostic disable: undefined-global
 -- ============================================================================
 -- MUTRIS ENGINE: THE MATRIX GRID BOARD (10x40)
@@ -363,7 +366,7 @@ end
 function Board:triggerDeath()
     if self.is_dying then return end
     self.is_dying = true
-    self.death_timer = 1.5 -- 1.5s de animación dramática antes del Game Over
+    self.death_timer = 1.5
     _G.HitStopTimer = 0.25
     AudioManager.playImmediateSFX("death", self.player_type == "bot")
     BloomShader.triggerShockwave(self.x + 120, self.y + 240)
@@ -389,7 +392,6 @@ function Board:update(dt)
     CombatStances.update(self, dt)
     KineticParry.update(self, dt)
 
-    -- ⏱️ CONTEO REGRESIVO DE MUERTE (CORREGIDO)
     if self.is_dying then
         self.death_timer = math.max(0, self.death_timer - dt)
     end
@@ -442,7 +444,6 @@ function Board:draw()
     love.graphics.setColor(0.01, 0.02, 0.04, 0.92)
     love.graphics.rectangle("fill", self.x, self.y, 240, 480, 4)
 
-    -- Si está muriendo, borde rojo parpadeante
     if self.is_dying then
         local flash = math.sin(love.timer.getTime() * 24) * 0.5 + 0.5
         love.graphics.setLineWidth(2.5)
@@ -453,7 +454,6 @@ function Board:draw()
     end
     love.graphics.rectangle("line", self.x, self.y, 240, 480, 4)
 
-    -- Rejilla interna
     love.graphics.setColor(0, 0.8, 1, 0.04)
     for r = 1, 20 do
         love.graphics.line(self.x, self.y + r * 24, self.x + 240, self.y + r * 24)
@@ -462,7 +462,6 @@ function Board:draw()
         love.graphics.line(self.x + c * 24, self.y, self.x + c * 24, self.y + 480)
     end
 
-    -- Celdas fijas (filas 21 a 40)
     local block_alpha = self.is_dying and math.max(0.2, self.death_timer / 1.5) or 1.0
     for r = 21, 40 do
         for c = 1, 10 do

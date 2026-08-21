@@ -4,7 +4,7 @@
 ---@diagnostic disable: undefined-global
 -- ============================================================================
 -- MUTRIS ENGINE: SYNTHETIC TRANSCENDENCE [KERNEL CENTRAL 1280x720 WIDESCREEN]
--- Master Calibration Suite / Granular Resets / Dual MP4-GIF Pipeline / Zero-GC
+-- Master Calibration Suite / Cyberpunk UI Overhaul / State-Locked Pause Flow
 -- ============================================================================
 
 _G.ENGINE_VERSION       = "MUTRIS v1.0.0"
@@ -40,7 +40,7 @@ local ReplayManager      = require "core.replay_manager"
 local ClipRecorder       = require "core.clip_recorder"
 
 local gameState = "menu"
-local previousState = "menu"
+local settingsReturnState = "menu" -- Variable blindada para retorno de Settings
 local menuSelection = 1
 local pauseSelection = 1
 
@@ -119,7 +119,6 @@ function _G.ToggleRecording()
 end
 
 function _G.SetGameState(state)
-    previousState = gameState
     gameState = state
     Blackbox.log("STATE", "STATE: " .. state, 0, 0)
 end
@@ -431,63 +430,64 @@ local function drawCyberPause()
     love.graphics.printf("[ ESC ] REANUDAR  |  [ R ] REINICIAR Y CAMBIAR CANCION  |  [ ENTER ] SELECCIONAR", 0, card_y + card_h + 20, 1280, "center")
 end
 
--- 🎛️ MASTER CALIBRATION SUITE: PESTAÑAS WIDESCREEN 16:9
+-- 🎛️ MASTER CALIBRATION SUITE: PESTAÑAS WIDESCREEN 16:9 PULIDAS
 local function drawCyberSettings()
     local pulse = _G.AudioBeatPulse or 0
     local time  = love.timer.getTime()
 
+    -- Fondo de Rejilla Neón de Precisión
     love.graphics.setLineWidth(1)
-    love.graphics.setColor(0, 0.7, 1.0, 0.04 + pulse * 0.04)
+    love.graphics.setColor(0, 0.7, 1.0, 0.04 + pulse * 0.03)
     for x = 0, 1280, 40 do love.graphics.line(x, 0, x, 720) end
     for y = 0, 720, 40 do love.graphics.line(0, y, 1280, y) end
 
     -- Encabezado Principal
     love.graphics.setFont(FontCache.get(26))
     love.graphics.setColor(0.1, 0.9, 1.0, 0.95)
-    love.graphics.printf("MASTER CALIBRATION SUITE", 0, 28, 1280, "center")
+    love.graphics.printf("MASTER CALIBRATION SUITE", 0, 26, 1280, "center")
 
     local current_tab = SettingsManager.tabs[active_tab_index]
     love.graphics.setFont(FontCache.get(11))
     love.graphics.setColor(0.5, 0.7, 0.9, 0.85)
-    love.graphics.printf(current_tab.title or "SYSTEM TUNING", 0, 60, 1280, "center")
+    love.graphics.printf(current_tab.title or "SYSTEM TUNING", 0, 58, 1280, "center")
 
-    -- 📑 BARRA DE PESTAÑAS HORIZONTALES (x: 100..1180, y: 88..124)
-    local tab_w = 170
+    -- 📑 BARRA DE PESTAÑAS HORIZONTALES (x: 100..1180, y: 84..118)
+    local tab_w = 172
     local tab_h = 32
-    local total_tabs_w = #SettingsManager.tabs * (tab_w + 10) - 10
+    local total_tabs_w = #SettingsManager.tabs * (tab_w + 8) - 8
     local tabs_start_x = 640 - (total_tabs_w / 2)
-    local tabs_y = 85
+    local tabs_y = 82
 
     for i, t in ipairs(SettingsManager.tabs) do
-        local tx = tabs_start_x + (i - 1) * (tab_w + 10)
+        local tx = tabs_start_x + (i - 1) * (tab_w + 8)
         local is_active_tab = (i == active_tab_index)
 
         if is_active_tab then
-            love.graphics.setColor(0.0, 0.35, 0.55, 0.85)
+            love.graphics.setColor(0.0, 0.35, 0.55, 0.90)
             love.graphics.rectangle("fill", tx, tabs_y, tab_w, tab_h, 4)
             love.graphics.setLineWidth(1.8)
             love.graphics.setColor(1.0, 0.85, 0.2, 0.95)
             love.graphics.rectangle("line", tx, tabs_y, tab_w, tab_h, 4)
-            love.graphics.setFont(FontCache.get(11))
+            love.graphics.setFont(FontCache.get(10))
             love.graphics.setColor(1.0, 0.95, 0.4, 1.0)
-            love.graphics.printf(t.name, tx, tabs_y + 8, tab_w, "center")
+            love.graphics.printf(t.name, tx, tabs_y + 9, tab_w, "center")
         else
             love.graphics.setColor(0.02, 0.03, 0.07, 0.75)
             love.graphics.rectangle("fill", tx, tabs_y, tab_w, tab_h, 4)
             love.graphics.setLineWidth(1.0)
             love.graphics.setColor(0.0, 0.6, 0.9, 0.3)
             love.graphics.rectangle("line", tx, tabs_y, tab_w, tab_h, 4)
-            love.graphics.setFont(FontCache.get(11))
+            love.graphics.setFont(FontCache.get(10))
             love.graphics.setColor(0.65, 0.75, 0.85, 0.75)
-            love.graphics.printf(t.name, tx, tabs_y + 8, tab_w, "center")
+            love.graphics.printf(t.name, tx, tabs_y + 9, tab_w, "center")
         end
     end
 
-    -- 🗃️ CONTENEDOR PRINCIPAL DE PARÁMETROS (x: 180..1100, y: 130..580)
+    -- 🗃️ CONTENEDOR PRINCIPAL DE PARÁMETROS (x: 180..1100, y: 126..575)
     local card_x = 180
-    local card_y = 130
+    local card_y = 126
     local card_w = 920
-    local card_h = 445
+    local card_h = 450
 
     love.graphics.setColor(0.01, 0.02, 0.05, 0.94)
     love.graphics.rectangle("fill", card_x, card_y, card_w, card_h, 6)
@@ -496,7 +496,7 @@ local function drawCyberSettings()
     love.graphics.rectangle("line", card_x, card_y, card_w, card_h, 6)
 
     local row_start_y = card_y + 16
-    local row_spacing = 50
+    local row_spacing = 49
 
     for i, item in ipairs(current_tab.items) do
         local is_sel = (i == active_item_index)
@@ -504,10 +504,10 @@ local function drawCyberSettings()
 
         if is_sel then
             love.graphics.setColor(0.0, 0.25, 0.45, 0.35)
-            love.graphics.rectangle("fill", card_x + 12, ry - 4, card_w - 24, 44, 4)
+            love.graphics.rectangle("fill", card_x + 12, ry - 4, card_w - 24, 43, 4)
             love.graphics.setLineWidth(1.2)
             love.graphics.setColor(1.0, 0.85, 0.2, 0.85)
-            love.graphics.rectangle("line", card_x + 12, ry - 4, card_w - 24, 44, 4)
+            love.graphics.rectangle("line", card_x + 12, ry - 4, card_w - 24, 43, 4)
         end
 
         love.graphics.setFont(FontCache.get(11))
@@ -536,13 +536,13 @@ local function drawCyberSettings()
                 if opt == cur_val then opt_idx = idx break end
             end
             local label_text = item.labels[opt_idx] or tostring(cur_val)
-            love.graphics.setColor(0.0, 0.4, 0.6, 0.7)
+            love.graphics.setColor(0.0, 0.35, 0.55, 0.75)
             love.graphics.rectangle("fill", slider_x, slider_y - 2, 220, 22, 3)
             love.graphics.setColor(0, 0.8, 1, 0.5)
             love.graphics.rectangle("line", slider_x, slider_y - 2, 220, 22, 3)
             love.graphics.setFont(FontCache.get(10))
             love.graphics.setColor(1.0, 1.0, 1.0, 0.95)
-            love.graphics.printf("< " .. label_text .. " >", slider_x, slider_y + 2, 220, "center")
+            love.graphics.printf("< " .. label_text .. " >", slider_x, slider_y + 3, 220, "center")
 
         else
             love.graphics.setColor(0.02, 0.04, 0.08, 0.9)
@@ -557,34 +557,41 @@ local function drawCyberSettings()
             local pct = (num_v - item.min) / math.max(0.001, (item.max - item.min))
             pct = math.max(0, math.min(1, pct))
 
-            love.graphics.setColor(0.0, 0.85, 1.0, 0.8)
+            -- Barra con resplandor neón
+            love.graphics.setColor(0.0, 0.85, 1.0, 0.85)
             love.graphics.rectangle("fill", slider_x + 2, slider_y + 2, (slider_w - 4) * pct, slider_h - 4, 2)
+
+            -- Tirador iluminado
+            love.graphics.setColor(1.0, 0.95, 0.4, 0.95)
+            love.graphics.rectangle("fill", slider_x + (slider_w - 4) * pct - 2, slider_y - 2, 5, slider_h + 4, 1)
 
             love.graphics.setFont(FontCache.get(10))
             love.graphics.setColor(1.0, 1.0, 1.0, 0.95)
             local val_str = item.is_pct and string.format("%d%%", math.floor(num_v + 0.5))
                          or (item.is_ms and string.format("%d ms", math.floor(num_v + 0.5))
-                         or string.format("%.2f %s", num_v, item.unit or ""))
+                         or (item.is_int and string.format("%d %s", math.floor(num_v + 0.5), item.unit or "")
+                         or string.format("%.2f %s", num_v, item.unit or "")))
             love.graphics.print(val_str, slider_x + slider_w + 14, slider_y)
         end
 
-        -- ⟲ BOTÓN DE RESET INDIVIDUAL POR FILA
+        -- ⟲ BOTÓN DE RESET INDIVIDUAL POR FILA (TECHNO BADGE)
         local reset_btn_x = card_x + card_w - 120
         local reset_btn_y = ry + 4
-        love.graphics.setColor(0.03, 0.06, 0.12, 0.8)
+        love.graphics.setColor(0.03, 0.06, 0.12, 0.85)
         love.graphics.rectangle("fill", reset_btn_x, reset_btn_y, 44, 22, 3)
-        love.graphics.setColor(0.0, 0.7, 1.0, 0.3)
+        love.graphics.setColor(0.0, 0.7, 1.0, 0.4)
         love.graphics.rectangle("line", reset_btn_x, reset_btn_y, 44, 22, 3)
-        love.graphics.setFont(FontCache.get(10))
+        love.graphics.setFont(FontCache.get(9))
         love.graphics.setColor(0.2, 0.9, 1.0, 0.9)
-        love.graphics.printf("⟲", reset_btn_x, reset_btn_y + 2, 44, "center")
+        love.graphics.printf("RST", reset_btn_x, reset_btn_y + 4, 44, "center")
 
         -- Etiqueta de valor Base
         love.graphics.setFont(FontCache.get(8))
         love.graphics.setColor(0.45, 0.55, 0.65, 0.75)
         local def_str = item.is_ms and string.format("%dms", def_val * 1000)
                      or (item.is_pct and string.format("%d%%", def_val * 100)
-                     or tostring(def_val))
+                     or (item.is_int and string.format("%d", def_val)
+                     or tostring(def_val)))
         love.graphics.print("BASE: " .. def_str, reset_btn_x + 52, reset_btn_y + 5)
     end
 
@@ -596,12 +603,12 @@ local function drawCyberSettings()
         local f144_das = das_ms / (1000 / 144)
         local f240_das = das_ms / (1000 / 240)
 
-        love.graphics.setColor(0.0, 0.05, 0.1, 0.85)
+        love.graphics.setColor(0.0, 0.05, 0.1, 0.88)
         love.graphics.rectangle("fill", card_x + 12, card_y + card_h - 68, card_w - 24, 24, 3)
         love.graphics.setFont(FontCache.get(9))
         love.graphics.setColor(0.2, 0.95, 0.6, 0.9)
         local telemetry_line = string.format(
-            "FRAME-DATA LIVE MONITOR: DAS %.0fms ≈ %.1ff @ 60Hz | %.1ff @ 144Hz | %.1ff @ 240Hz   •   ARR %.1fms",
+            "FRAME-DATA LIVE MONITOR: DAS %.0fms = %.1ff @ 60Hz | %.1ff @ 144Hz | %.1ff @ 240Hz   --   ARR %.1fms",
             das_ms, f60_das, f144_das, f240_das, arr_ms
         )
         love.graphics.printf(telemetry_line, card_x + 12, card_y + card_h - 62, card_w - 24, "center")
@@ -619,7 +626,7 @@ local function drawCyberSettings()
     love.graphics.rectangle("line", btn_reset_x, btn_reset_y, btn_reset_w, btn_reset_h, 4)
     love.graphics.setFont(FontCache.get(10))
     love.graphics.setColor(1.0, 0.4, 0.5, 0.95)
-    love.graphics.printf("⟲ RESTABLECER PESTAÑA", btn_reset_x, btn_reset_y + 8, btn_reset_w, "center")
+    love.graphics.printf("RESTABLECER PESTANA", btn_reset_x, btn_reset_y + 8, btn_reset_w, "center")
 
     local btn_save_w = 260
     local btn_save_h = 32
@@ -637,7 +644,7 @@ local function drawCyberSettings()
     -- Leyenda de Atajos
     love.graphics.setFont(FontCache.get(9))
     love.graphics.setColor(0.45, 0.55, 0.65, 0.75)
-    love.graphics.printf("[ Q / E ] CAMBIAR PESTAÑA  |  [ FLECHAS ] AJUSTAR  |  [ BACKSPACE / DEL ] RESET INDIVIDUAL  |  [ ESC ] REGRESAR", 0, 595, 1280, "center")
+    love.graphics.printf("[ Q / E ] CAMBIAR PESTANA  |  [ FLECHAS ] AJUSTAR  |  [ BACKSPACE / DEL ] RESET INDIVIDUAL  |  [ ESC ] REGRESAR", 0, 595, 1280, "center")
 end
 
 function love.draw()
@@ -708,15 +715,16 @@ function love.draw()
     -- 4. Indicador REC y Feedback de Captura
     ClipRecorder.drawHUDIndicator()
 
+    -- Toast flotante reubicado para evitar colisiones con encabezados
     if screenshot_flash_timer > 0 then
         local a = math.min(1.0, screenshot_flash_timer * 1.5)
-        love.graphics.setColor(0.01, 0.03, 0.06, 0.90 * a)
-        love.graphics.rectangle("fill", (1280 - 400) / 2, 30, 400, 36, 6)
-        love.graphics.setLineWidth(1.5)
+        love.graphics.setColor(0.01, 0.03, 0.06, 0.92 * a)
+        love.graphics.rectangle("fill", (1280 - 360) / 2, 10, 360, 30, 4)
+        love.graphics.setLineWidth(1.2)
         love.graphics.setColor(0.1, 1.0, 0.5, 0.90 * a)
-        love.graphics.rectangle("line", (1280 - 400) / 2, 30, 400, 36, 6)
-        love.graphics.setFont(FontCache.get(11))
-        love.graphics.printf("COPIED TO CLIPBOARD! (CTRL+V)", (1280 - 400) / 2, 40, 400, "center")
+        love.graphics.rectangle("line", (1280 - 360) / 2, 10, 360, 30, 4)
+        love.graphics.setFont(FontCache.get(10))
+        love.graphics.printf("COPIED TO CLIPBOARD! (CTRL+V)", (1280 - 360) / 2, 17, 360, "center")
     end
 end
 
@@ -793,23 +801,23 @@ function love.keypressed(key)
         return
     end
 
-    -- 🛑 PAUSA CONTEXTUAL CON ESCAPE
+    -- 🛑 PAUSA CONTEXTUAL CON ESCAPE (BLINDADA)
     if key == "escape" then
         if gameState == "menu" then
             love.event.quit()
         elseif gameState == "versus" or gameState == "gauntlet" then
-            previousState = gameState
             gameState = "pause"
             pauseSelection = 1
             MusicManager.pause()
             AudioManager.playMenuBack()
         elseif gameState == "pause" then
-            gameState = previousState or "versus"
+            -- Reanudación inequívoca hacia el modo activo
+            gameState = _G.CURRENT_GAME_MODE or "versus"
             MusicManager.resume()
             AudioManager.playMenuClick()
         elseif gameState == "settings" then
             SettingsManager.save()
-            gameState = previousState or "menu"
+            gameState = settingsReturnState or "menu"
             if gameState == "pause" then
                 MusicManager.pause()
             elseif gameState == "menu" then
@@ -857,7 +865,7 @@ function love.keypressed(key)
                 TrackEditor.active = true
                 gameState = "editor"
             elseif menuSelection == 4 then
-                previousState = "menu"
+                settingsReturnState = "menu"
                 active_tab_index = 1
                 active_item_index = 1
                 gameState = "settings"
@@ -876,13 +884,13 @@ function love.keypressed(key)
         elseif key == "return" or key == "space" then
             AudioManager.playMenuClick()
             if pauseSelection == 1 then
-                gameState = previousState or "versus"
+                gameState = _G.CURRENT_GAME_MODE or "versus"
                 MusicManager.resume()
             elseif pauseSelection == 2 then
                 _G.GlobalRestart(false)
-                gameState = previousState or "versus"
+                gameState = _G.CURRENT_GAME_MODE or "versus"
             elseif pauseSelection == 3 then
-                previousState = "pause"
+                settingsReturnState = "pause"
                 active_tab_index = 1
                 active_item_index = 1
                 gameState = "settings"
@@ -930,7 +938,7 @@ function love.keypressed(key)
                 adjustActiveSetting(1)
             else
                 SettingsManager.save()
-                gameState = previousState or "menu"
+                gameState = settingsReturnState or "menu"
                 if gameState == "pause" then MusicManager.pause() end
                 AudioManager.playMenuClick()
             end
@@ -982,7 +990,7 @@ function love.mousepressed(x, y, button)
                     TrackEditor.active = true
                     gameState = "editor"
                 elseif i == 4 then
-                    previousState = "menu"
+                    settingsReturnState = "menu"
                     active_tab_index = 1
                     active_item_index = 1
                     gameState = "settings"
@@ -1004,13 +1012,13 @@ function love.mousepressed(x, y, button)
                 pauseSelection = i
                 AudioManager.playMenuClick()
                 if i == 1 then
-                    gameState = previousState or "versus"
+                    gameState = _G.CURRENT_GAME_MODE or "versus"
                     MusicManager.resume()
                 elseif i == 2 then
                     _G.GlobalRestart(false)
-                    gameState = previousState or "versus"
+                    gameState = _G.CURRENT_GAME_MODE or "versus"
                 elseif i == 3 then
-                    previousState = "pause"
+                    settingsReturnState = "pause"
                     active_tab_index = 1
                     active_item_index = 1
                     gameState = "settings"
@@ -1027,14 +1035,14 @@ function love.mousepressed(x, y, button)
     -- 🎛️ INTERACCIONES DE RATÓN EN MASTER CALIBRATION SUITE
     if gameState == "settings" then
         -- 1. Clic en Pestañas Horizontales
-        local tab_w = 170
+        local tab_w = 172
         local tab_h = 32
-        local total_tabs_w = #SettingsManager.tabs * (tab_w + 10) - 10
+        local total_tabs_w = #SettingsManager.tabs * (tab_w + 8) - 8
         local tabs_start_x = 640 - (total_tabs_w / 2)
-        local tabs_y = 85
+        local tabs_y = 82
 
         for i = 1, #SettingsManager.tabs do
-            local tx = tabs_start_x + (i - 1) * (tab_w + 10)
+            local tx = tabs_start_x + (i - 1) * (tab_w + 8)
             if adj_x >= tx and adj_x <= tx + tab_w and adj_y >= tabs_y and adj_y <= tabs_y + tab_h then
                 active_tab_index = i
                 active_item_index = 1
@@ -1044,11 +1052,11 @@ function love.mousepressed(x, y, button)
         end
 
         local card_x = 180
-        local card_y = 130
+        local card_y = 126
         local card_w = 920
-        local card_h = 445
+        local card_h = 450
         local row_start_y = card_y + 16
-        local row_spacing = 50
+        local row_spacing = 49
         local current_tab = SettingsManager.tabs[active_tab_index]
 
         for i, item in ipairs(current_tab.items) do
@@ -1059,7 +1067,7 @@ function love.mousepressed(x, y, button)
             local slider_h = 16
             local reset_btn_x = card_x + card_w - 120
 
-            -- Clic en botón ⟲ (Reset individual)
+            -- Clic en botón RST (Reset individual)
             if adj_x >= reset_btn_x and adj_x <= reset_btn_x + 44 and adj_y >= ry + 4 and adj_y <= ry + 26 then
                 active_item_index = i
                 SettingsManager.resetKey(item.id)
@@ -1096,7 +1104,7 @@ function love.mousepressed(x, y, button)
             end
         end
 
-        -- Clic en [⟲ RESTABLECER PESTAÑA]
+        -- Clic en [RESTABLECER PESTANA]
         local btn_reset_x = card_x + 20
         local btn_reset_y = card_y + card_h - 38
         if adj_x >= btn_reset_x and adj_x <= btn_reset_x + 200 and adj_y >= btn_reset_y and adj_y <= btn_reset_y + 32 then
@@ -1111,8 +1119,14 @@ function love.mousepressed(x, y, button)
         local btn_save_y = card_y + card_h - 38
         if adj_x >= btn_save_x and adj_x <= btn_save_x + btn_save_w and adj_y >= btn_save_y and adj_y <= btn_save_y + 32 then
             SettingsManager.save()
-            gameState = previousState or "menu"
-            if gameState == "pause" then MusicManager.pause() end
+            gameState = settingsReturnState or "menu"
+            if gameState == "pause" then 
+                MusicManager.pause()
+            elseif gameState == "menu" then
+                MusicManager.start()
+            else
+                MusicManager.resume()
+            end
             AudioManager.playMenuClick()
             return
         end
@@ -1122,7 +1136,6 @@ end
 function love.gamepadpressed(joystick, button)
     if gameState == "versus" or gameState == "gauntlet" then
         if button == "start" then
-            previousState = gameState
             gameState = "pause"
             pauseSelection = 1
             MusicManager.pause()
@@ -1132,7 +1145,7 @@ function love.gamepadpressed(joystick, button)
         Input.gamepadpressed(joystick, button)
     elseif gameState == "pause" then
         if button == "start" or button == "b" then
-            gameState = previousState or "versus"
+            gameState = _G.CURRENT_GAME_MODE or "versus"
             MusicManager.resume()
             AudioManager.playMenuClick()
         elseif button == "dpup" then
@@ -1143,13 +1156,13 @@ function love.gamepadpressed(joystick, button)
             AudioManager.playMenuHover()
         elseif button == "a" then
             if pauseSelection == 1 then
-                gameState = previousState or "versus"
+                gameState = _G.CURRENT_GAME_MODE or "versus"
                 MusicManager.resume()
             elseif pauseSelection == 2 then
                 _G.GlobalRestart(false)
-                gameState = previousState or "versus"
+                gameState = _G.CURRENT_GAME_MODE or "versus"
             elseif pauseSelection == 3 then
-                previousState = "pause"
+                settingsReturnState = "pause"
                 active_tab_index = 1
                 active_item_index = 1
                 gameState = "settings"
@@ -1183,8 +1196,14 @@ function love.gamepadpressed(joystick, button)
             adjustActiveSetting(1)
         elseif button == "b" or button == "start" then
             SettingsManager.save()
-            gameState = previousState or "menu"
-            if gameState == "pause" then MusicManager.pause() end
+            gameState = settingsReturnState or "menu"
+            if gameState == "pause" then 
+                MusicManager.pause() 
+            elseif gameState == "menu" then
+                MusicManager.start()
+            else
+                MusicManager.resume()
+            end
             AudioManager.playMenuClick()
         end
     elseif gameState == "gameover" then

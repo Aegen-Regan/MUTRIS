@@ -6,7 +6,7 @@ local SettingsManager = {}
 
 -- ⚙️ VALORES POR DEFECTO DE FÁBRICA (BASELINE PERMANENTE)
 SettingsManager.defaults = {
-    -- 🕹️ HANDLING
+    -- HANDLING
     das               = 0.094,   -- 94 ms
     arr               = 0.008,   -- 8 ms
     sdf               = 40.0,    -- 40x Caída suave
@@ -15,24 +15,24 @@ SettingsManager.defaults = {
     max_resets        = 15,      -- 15 movimientos
     srs_180           = 1,       -- 1 = Activo, 0 = Inactivo
 
-    -- 🎚️ AUDIO / DAW
+    -- AUDIO / DAW
     master_vol        = 1.0,     -- 100%
     bgm_vol           = 0.85,    -- 85%
     sfx_vol           = 1.0,     -- 100%
     sidechain_duck    = 1.0,     -- 100% (Vacío total en impactos)
-    subbass_power     = 3,       -- 1=Suave, 2=Medio, 3=Pesado, 4=Sísmico
-    announcer_mode    = 1,       -- 1=Todas las voces, 2=Solo Críticos, 0=Apagado
-    beat_click        = 0,       -- 0=Off, 1=Peligro, 2=Siempre
+    subbass_power     = 3,       -- 1=Soft, 2=Mid, 3=Heavy, 4=Seismic
+    announcer_mode    = 1,       -- 1=All Voices, 2=Critical Only, 0=Off
+    beat_click        = 0,       -- 0=Off, 1=Danger Only, 2=Always On
     mute_all          = 0,       -- 0=Normal, 1=Muted
 
-    -- 🥊 COMBATE
+    -- COMBATE
     parry_window      = 3,       -- 3 frames (~50ms)
     beat_window       = 0.035,   -- ±35 ms Groove
     groove_bonus      = 1,       -- +1 línea
     counter_ratio     = 0.50,    -- 50% devuelto
-    zone_trigger_mode = 1,       -- 1=Flexible (25%), 2=Hyper Only (100%)
+    zone_trigger_mode = 1,       -- 1=Flexible (25%+), 2=Hyper Only (100%)
 
-    -- 👁️ VIDEO / FX
+    -- VIDEO / FX
     bloom_intensity   = 1.0,     -- 100%
     screen_shake      = 1.0,     -- 100%
     ghost_alpha       = 0.35,    -- 35%
@@ -40,12 +40,12 @@ SettingsManager.defaults = {
     fog_mode          = 1,       -- 1=Reactivo Camelot, 0=Off
     shockwaves        = 1,       -- 1=Activo, 0=Inactivo
 
-    -- 🧠 ARCHON / IA
-    archon_mode       = 1,       -- 1=Adaptativo DDA, 2=Fijo, 3=Hardcore
+    -- ARCHON IA
+    archon_mode       = 1,       -- 1=Adaptive DDA, 2=Locked, 3=Apex Hardcore
     bot_target_pps    = 1.45,    -- 1.45 PPS base
     anomaly_freq      = 25,      -- 25s
 
-    -- 🎥 PIPELINE
+    -- PIPELINE
     capture_mode      = "mp4",   -- "mp4" o "gif"
     gif_resolution    = 1,       -- 1=480x270 (Ligero), 2=640x360 (HQ)
     auto_save_replay  = 1        -- 1=On, 0=Off
@@ -61,71 +61,71 @@ end
 SettingsManager.tabs = {
     {
         id = "handling",
-        name = "🕹️ HANDLING",
-        title = "COMPETITIVE DAS / ARR & FRAME-DATA",
+        name = "01 // HANDLING",
+        title = "COMPETITIVE DAS / ARR & FRAME-DATA TIMINGS",
         items = {
-            { id = "das",        label = "DAS (DELAYED AUTO-SHIFT)", min = 50,  max = 200, step = 1,   unit = "ms", is_ms = true },
+            { id = "das",        label = "DAS (DELAYED AUTO-SHIFT)", min = 50,  max = 200, step = 1,   unit = "ms", is_ms = true, is_int = true },
             { id = "arr",        label = "ARR (AUTO-REPEAT RATE)",  min = 0,   max = 25,  step = 0.5, unit = "ms", is_ms = true },
-            { id = "sdf",        label = "SDF (SOFT DROP MULT)",    min = 5,   max = 40,  step = 5,   unit = "x" },
-            { id = "dcd",        label = "DCD (DAS CUT DELAY)",     min = 0,   max = 40,  step = 2,   unit = "ms", is_ms = true },
+            { id = "sdf",        label = "SDF (SOFT DROP MULT)",    min = 5,   max = 40,  step = 5,   unit = "x",  is_int = true },
+            { id = "dcd",        label = "DCD (DAS CUT DELAY)",     min = 0,   max = 40,  step = 2,   unit = "ms", is_ms = true, is_int = true },
             { id = "lock_delay", label = "LOCK DELAY BASE",         min = 0.1, max = 1.0, step = 0.05,unit = "s" },
-            { id = "max_resets", label = "LOCK MOVE RESETS",        min = 4,   max = 30,  step = 1,   unit = "moves" },
-            { id = "srs_180",    label = "SRS 180° WALL-KICKS",     is_toggle = true }
+            { id = "max_resets", label = "LOCK MOVE RESETS",        min = 4,   max = 30,  step = 1,   unit = "moves", is_int = true },
+            { id = "srs_180",    label = "SRS 180 DEGREE KICKS",    is_toggle = true }
         }
     },
     {
         id = "audio",
-        name = "🎚️ AUDIO & DAW",
-        title = "SYNTHESIZER, MIXER & HARMONICS",
+        name = "02 // AUDIO & DAW",
+        title = "PROCEDURAL SYNTHESIZER, MIXER & HARMONICS",
         items = {
-            { id = "master_vol",     label = "MASTER VOLUME",          min = 0, max = 100, step = 5, unit = "%", is_pct = true },
-            { id = "bgm_vol",        label = "MUSIC VOLUME (BGM)",     min = 0, max = 100, step = 5, unit = "%", is_pct = true },
-            { id = "sfx_vol",        label = "SOUND FX VOLUME (SFX)",  min = 0, max = 100, step = 5, unit = "%", is_pct = true },
-            { id = "sidechain_duck", label = "SIDECHAIN DUCKING (MUTE)",min = 0, max = 100, step = 10,unit = "%", is_pct = true },
-            { id = "subbass_power",  label = "SUB-BASS 30Hz POWER",    min = 1, max = 4,   step = 1, unit = "tier" },
-            { id = "beat_click",     label = "METRONOME BEAT CLICK",   min = 0, max = 2,   step = 1, unit = "mode" },
+            { id = "master_vol",     label = "MASTER VOLUME",          min = 0, max = 100, step = 5, unit = "%", is_pct = true, is_int = true },
+            { id = "bgm_vol",        label = "MUSIC VOLUME (BGM)",     min = 0, max = 100, step = 5, unit = "%", is_pct = true, is_int = true },
+            { id = "sfx_vol",        label = "SOUND FX VOLUME (SFX)",  min = 0, max = 100, step = 5, unit = "%", is_pct = true, is_int = true },
+            { id = "sidechain_duck", label = "SIDECHAIN DUCKING (MUTE)",min = 0, max = 100, step = 10,unit = "%", is_pct = true, is_int = true },
+            { id = "subbass_power",  label = "SUB-BASS 30Hz POWER",    is_enum = true, options = {1, 2, 3, 4}, labels = {"TIER 1 (LIGHT)", "TIER 2 (MID)", "TIER 3 (HEAVY)", "TIER 4 (SEISMIC)"} },
+            { id = "beat_click",     label = "METRONOME BEAT CLICK",   is_enum = true, options = {0, 1, 2}, labels = {"DISABLED", "DANGER ONLY", "ALWAYS ON"} },
             { id = "mute_all",       label = "MUTE ALL AUDIO",         is_toggle = true }
         }
     },
     {
         id = "combat",
-        name = "🥊 COMBATE",
-        title = "STANCES, PARRY & SOULSBORNE GAUGES",
+        name = "03 // COMBAT",
+        title = "STANCES, KINETIC PARRY & ATTACK GAUGES",
         items = {
-            { id = "parry_window",      label = "KINETIC PARRY WINDOW", min = 1,     max = 6,     step = 1,     unit = "frames" },
-            { id = "beat_window",       label = "BEAT-LOCK WINDOW",     min = 0.020, max = 0.060, step = 0.005, unit = "s", is_ms = true },
-            { id = "groove_bonus",      label = "GROOVE STRIKE BONUS",  min = 1,     max = 3,     step = 1,     unit = "lines" },
-            { id = "counter_ratio",     label = "COUNTER-SPIKE RATIO",  min = 0.25,  max = 0.75,  step = 0.05,  unit = "%", is_pct = true },
-            { id = "zone_trigger_mode", label = "ZONE TRIGGER MODE",    min = 1,     max = 2,     step = 1,     unit = "mode" }
+            { id = "parry_window",      label = "KINETIC PARRY WINDOW", min = 1,     max = 6,     step = 1,     unit = "frames", is_int = true },
+            { id = "beat_window",       label = "BEAT-LOCK GROOVE WINDOW",min = 0.020, max = 0.060, step = 0.005, unit = "ms", is_ms = true, is_int = true },
+            { id = "groove_bonus",      label = "GROOVE STRIKE BONUS",  min = 1,     max = 3,     step = 1,     unit = "lines",  is_int = true },
+            { id = "counter_ratio",     label = "COUNTER-SPIKE RATIO",  min = 0.25,  max = 0.75,  step = 0.05,  unit = "%", is_pct = true, is_int = true },
+            { id = "zone_trigger_mode", label = "ZONE TRIGGER MODE",    is_enum = true, options = {1, 2}, labels = {"FLEXIBLE (25%+)", "HYPER ONLY (100%)"} }
         }
     },
     {
         id = "video",
-        name = "👁️ VIDEO & FX",
-        title = "NEON BLOOM, SHADERS & JUICE",
+        name = "04 // VIDEO & FX",
+        title = "NEON BLOOM, GLSL SHADERS & VISUAL JUICE",
         items = {
-            { id = "bloom_intensity", label = "NEON BLOOM GLOW",    min = 0,    max = 200, step = 10,  unit = "%", is_pct = true },
-            { id = "screen_shake",    label = "SCREEN SHAKE POWER",  min = 0,    max = 150, step = 10,  unit = "%", is_pct = true },
-            { id = "ghost_alpha",     label = "GHOST PIECE VISIBILITY",min = 10, max = 100, step = 5,   unit = "%", is_pct = true },
+            { id = "bloom_intensity", label = "NEON BLOOM GLOW",    min = 0,    max = 200, step = 10,  unit = "%", is_pct = true, is_int = true },
+            { id = "screen_shake",    label = "SCREEN SHAKE POWER",  min = 0,    max = 150, step = 10,  unit = "%", is_pct = true, is_int = true },
+            { id = "ghost_alpha",     label = "GHOST PIECE OPACITY", min = 10,   max = 100, step = 5,   unit = "%", is_pct = true, is_int = true },
             { id = "glitch_mode",     label = "CHROMATIC ABERRATION",is_toggle = true },
-            { id = "fog_mode",        label = "VOLUMETRIC FOG LAYER",is_toggle = true },
-            { id = "shockwaves",      label = "SHOCKWAVE DISTORTION",is_toggle = true }
+            { id = "fog_mode",        label = "CAMELOT MODAL FOG",   is_toggle = true },
+            { id = "shockwaves",      label = "GLSL SHOCKWAVES",     is_toggle = true }
         }
     },
     {
         id = "archon",
-        name = "🧠 ARCHON IA",
-        title = "AUTO-BALANCING & DDA ADAPTIVITY",
+        name = "05 // ARCHON IA",
+        title = "AUTO-BALANCING & DDA ADAPTIVE ENGINE",
         items = {
-            { id = "archon_mode",    label = "ARCHON DDA MODE",      min = 1,   max = 3,   step = 1,   unit = "mode" },
+            { id = "archon_mode",    label = "ARCHON DDA ENGINE",    is_enum = true, options = {1, 2, 3}, labels = {"ADAPTIVE DDA", "LOCKED BASELINE", "APEX HARDCORE"} },
             { id = "bot_target_pps", label = "BOT TARGET BASE PPS",  min = 0.8, max = 4.0, step = 0.05,unit = "pps" },
-            { id = "anomaly_freq",   label = "ANOMALY COOLDOWN TIME",min = 8,   max = 45,  step = 1,   unit = "s" }
+            { id = "anomaly_freq",   label = "ANOMALY COOLDOWN TIME",min = 8,   max = 45,  step = 1,   unit = "s", is_int = true }
         }
     },
     {
         id = "pipeline",
-        name = "🎥 PIPELINE",
-        title = "ESPORTS CAPTURE & REPLAYS",
+        name = "06 // PIPELINE",
+        title = "ESPORTS CAPTURE & AUTONOMOUS REPLAYS",
         items = {
             { id = "capture_mode",     label = "F9 RECORDING FORMAT",  is_enum = true, options = {"mp4", "gif"}, labels = {"MP4 VIDEO 60FPS", "ANIMATED GIF (LIGHT)"} },
             { id = "gif_resolution",   label = "GIF RESOLUTION PRESET",is_enum = true, options = {1, 2}, labels = {"480x270 @ 20FPS", "640x360 @ 30FPS"} },
