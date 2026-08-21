@@ -4,7 +4,7 @@
 ---@diagnostic disable: undefined-global
 -- ============================================================================
 -- MUTRIS ENGINE: SYNTHETIC TRANSCENDENCE [KERNEL CENTRAL 1280x720 WIDESCREEN]
--- Master Calibration Suite / Multi-Theme Engine [F5] / Engage Sequence
+-- Master Calibration Suite / Multi-Theme Engine [F5] / Solid Restart Halos
 -- ============================================================================
 
 _G.ENGINE_VERSION           = "MUTRIS v1.0.0"
@@ -151,6 +151,10 @@ function _G.GlobalRestart(skip_track_advance)
         AnomalyManager.init() 
     end
 
+    -- 🌟 Disparo del Halo Sólido y Onda de Choque Refráctil GLSL
+    BloomShader.triggerShockwave(640, 360)
+    ThemeManager.triggerRestartHalo()
+
     local track_info = TrackManager.getCurrentTrack()
     local track_name = track_info and track_info.name or "MUTRIS_TRACK"
     ReplayManager.startRecording(_G.CURRENT_GAME_MODE, math.random(100000, 999999), track_name)
@@ -254,7 +258,6 @@ local function drawCyberPause()
     love.graphics.rectangle("fill", 0, 0, 1280, 720)
 
     local t = ThemeManager.getCurrent()
-    local pulse = _G.AudioBeatPulse or 0
 
     local card_w = 500
     local card_h = 440
@@ -317,8 +320,7 @@ end
 local function drawCyberSettings()
     ThemeManager.drawBackground()
 
-    local t     = ThemeManager.getCurrent()
-    local pulse = _G.AudioBeatPulse or 0
+    local t = ThemeManager.getCurrent()
 
     love.graphics.setFont(FontCache.get(26))
     love.graphics.setColor(t.primary[1], t.primary[2], t.primary[3], 0.95)
@@ -528,6 +530,9 @@ function love.draw()
         Telemetry.draw(PlayerBoard, BotBoard)
         Blackbox.drawPermanentHUD(PlayerBoard, BotBoard)
 
+        -- 🌟 Renderizado del Halo Sólido Cinemático
+        ThemeManager.drawRestartHalo()
+
         if gameState == "pause" then
             drawCyberPause()
         elseif gameState == "gameover" then
@@ -582,6 +587,7 @@ function love.draw()
         TrackEditor.draw()
     end
 
+    -- ⚠️ DIRECTIVA PRIMARIA PERMANENTE + MARCADOR DE SKIN ACTIVA
     love.graphics.push("all")
     local t = ThemeManager.getCurrent()
     love.graphics.setFont(FontCache.get(10))

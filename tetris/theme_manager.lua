@@ -1,6 +1,6 @@
 -- ============================================================================
 -- MUTRIS ENGINE: DYNAMIC THEME & SKIN SWITCHER ENGINE (1280x720 WIDESCREEN)
--- Arquitectura: Zero-GC / 4 Universos Visuales / Engage Wipes / Garbage Gauge
+-- Arquitectura: Zero-GC / 4 Universos Visuales / Solid Punchy Restart Halos
 -- ============================================================================
 local ThemeManager = {}
 
@@ -21,6 +21,10 @@ ThemeManager.toast_text = ""
 
 -- Búfer de física elástica para el menú (Zero-GC)
 ThemeManager.menu_offsets = {0, 0, 0, 0}
+
+-- Temporizador del Halo Sólido de Reinicio (0.28s ultra-punchy)
+ThemeManager.restart_halo_timer = 0.0
+ThemeManager.restart_halo_max_time = 0.28
 
 -- ============================================================================
 -- 📦 BUFFERS ESTÁTICOS ZERO-GC
@@ -106,6 +110,7 @@ function ThemeManager.init()
     local saved = SettingsManager.get("theme_skin")
     ThemeManager.current_theme = (type(saved) == "number" and saved >= 1 and saved <= 4) and saved or 1
     ThemeManager.toast_timer = 0.0
+    ThemeManager.restart_halo_timer = 0.0
     ThemeManager.menu_offsets = {0, 0, 0, 0}
 end
 
@@ -139,15 +144,23 @@ function ThemeManager.cyclePrev()
     ThemeManager.setTheme(ThemeManager.current_theme - 1)
 end
 
+function ThemeManager.triggerRestartHalo()
+    ThemeManager.restart_halo_timer = ThemeManager.restart_halo_max_time
+    _G.AudioBeatPulse = 1.0
+end
+
 function ThemeManager.update(dt)
     if ThemeManager.toast_timer > 0 then
         ThemeManager.toast_timer = math.max(0, ThemeManager.toast_timer - dt)
     end
 
+    if ThemeManager.restart_halo_timer > 0 then
+        ThemeManager.restart_halo_timer = math.max(0, ThemeManager.restart_halo_timer - dt)
+    end
+
     local energy = _G.TrackEnergyPunch or 0
     local pulse  = _G.AudioBeatPulse or 0
 
-    -- Animación de botones con física elástica
     for i = 1, 4 do
         local target = (i == _G.MenuSelectionIndex) and 18.0 or 0.0
         ThemeManager.menu_offsets[i] = ThemeManager.menu_offsets[i] + (target - ThemeManager.menu_offsets[i]) * 14.0 * dt
@@ -175,12 +188,65 @@ function ThemeManager.update(dt)
 end
 
 -- ============================================================================
--- 🎬 TRANSICIÓN CINEMÁTICA DE ENTRADA AL COMBATE (ENGAGE WIPE)
+-- 🌟 RENDERIZADO DEL HALO SÓLIDO DE REINICIO (IMPACTO VISCERAL)
 -- ============================================================================
+function ThemeManager.drawRestartHalo()
+    if ThemeManager.restart_halo_timer <= 0 then return end
+
+    local p = ThemeManager.restart_halo_timer / ThemeManager.restart_halo_max_time
+    local alpha = p * p -- Decaimiento cuadrático rápido
+    local exp = 1.0 - (p * p * p) -- Expansión explosiva no-lineal
+    local cx, cy = 640, 360
+
+    love.graphics.push("all")
+    love.graphics.setBlendMode("add")
+
+    -- 1. Núcleo Blanco Sólido de Impacto Central
+    local core_rad = (1.0 - p) * 220
+    love.graphics.setColor(1.0, 1.0, 1.0, alpha * 0.85)
+    love.graphics.circle("fill", cx, cy, core_rad)
+
+    -- 2. Disco de Onda Sólida Tematizado
+    if ThemeManager.current_theme == 1 then
+        -- Ráfaga Sólida Fósforo Esmeralda & Cian CRT
+        local rad = exp * 920
+        love.graphics.setColor(0.0, 1.0, 0.55, alpha * 0.65)
+        love.graphics.circle("fill", cx, cy, rad)
+        love.graphics.setColor(0.0, 0.85, 1.0, alpha * 0.40)
+        love.graphics.circle("fill", cx, cy, rad * 0.72)
+
+    elseif ThemeManager.current_theme == 2 then
+        -- Romboide Sólido Oro Solar & Carmesí (Fighter Strike Blast)
+        local d_size = exp * 880
+        love.graphics.setColor(1.0, 0.08, 0.25, alpha * 0.70)
+        love.graphics.polygon("fill", cx, cy - d_size, cx + d_size * 1.35, cy, cx, cy + d_size, cx - d_size * 1.35, cy)
+        love.graphics.setColor(1.0, 0.85, 0.0, alpha * 0.85)
+        love.graphics.polygon("fill", cx, cy - d_size * 0.55, cx + d_size * 0.75, cy, cx, cy + d_size * 0.55, cx - d_size * 0.75, cy)
+
+    elseif ThemeManager.current_theme == 3 then
+        -- Disco Sólido de Refracción Holográfica Cian Láser
+        local rad = exp * 900
+        love.graphics.setColor(0.0, 0.95, 1.0, alpha * 0.65)
+        love.graphics.circle("fill", cx, cy, rad)
+        love.graphics.setColor(0.0, 1.0, 0.65, alpha * 0.40)
+        love.graphics.circle("fill", cx, cy, rad * 0.68)
+
+    elseif ThemeManager.current_theme == 4 then
+        -- Onda de Singularidad Supernova Sólida Violeta / Astral
+        local rad = exp * 950
+        love.graphics.setColor(0.60, 0.35, 1.0, alpha * 0.70)
+        love.graphics.circle("fill", cx, cy, rad)
+        love.graphics.setColor(0.10, 0.90, 1.0, alpha * 0.45)
+        love.graphics.circle("fill", cx, cy, rad * 0.70)
+    end
+
+    love.graphics.setBlendMode("alpha")
+    love.graphics.pop()
+end
+
 function ThemeManager.drawEngageTransition(timer, duration)
     if timer <= 0 then return end
     local progress = timer / duration
-    local t = ThemeManager.getCurrent()
 
     love.graphics.push("all")
 
@@ -218,9 +284,6 @@ function ThemeManager.drawEngageTransition(timer, duration)
     love.graphics.pop()
 end
 
--- ============================================================================
--- ⚠️ BARRA DE BASURA ENTRANTE PELIGROSA (GARBAGE WARNING GAUGE - DEFENSIVA)
--- ============================================================================
 function ThemeManager.drawGarbageBar(board)
     if not board or not board.garbage_queue then return end
     local q_count = #board.garbage_queue
@@ -258,9 +321,6 @@ function ThemeManager.drawGarbageBar(board)
     love.graphics.pop()
 end
 
--- ============================================================================
--- 🛡️ AURAS DINÁMICAS DE POSTURAS DE COMBATE (STANCE FX)
--- ============================================================================
 function ThemeManager.drawStanceAura(board)
     local st = board.current_stance or 0
     if st == 0 then return end
