@@ -1,13 +1,16 @@
+-- ================================================================
+-- FILE: tetris/ai_bot.lua
+-- ================================================================
 ---@diagnostic disable: undefined-global
 -- ============================================================================
 -- MUTRIS ENGINE: DDA HEURISTIC BOT ENGINE 2.0 (FASE 13)
--- Arquitectura: Zero-GC / Buffer Plano / Anti-Stall / Radar Downstacking
+-- Zero-GC / Benchmark Adaptive Speed / Anti-Stall / Hole-Seeking
 -- ============================================================================
 local AIBot = {}
 
-local SRS = require "tetris.rotation_systems.srs"
+local SRS          = require "tetris.rotation_systems.srs"
 local MetaBalancer = require "core.meta_balancer"
-local Blackbox = require "core.blackbox"
+local Blackbox     = require "core.blackbox"
 
 _G.AI_ADAPTIVE_PROFILE = {
     player_avg_pps = 1.20,
@@ -54,14 +57,6 @@ end
 function AIBot.loadProfile()
     if love.filesystem.getInfo("saves/ai_profile.json") then
         local contents = love.filesystem.read("saves/ai_profile.json")
-        if contents then
-            local loaded = parseJSON(contents)
-            for k, v in pairs(loaded) do
-                _G.AI_ADAPTIVE_PROFILE[k] = v
-            end
-        end
-    elseif love.filesystem.getInfo("ai_profile.json") then
-        local contents = love.filesystem.read("ai_profile.json")
         if contents then
             local loaded = parseJSON(contents)
             for k, v in pairs(loaded) do
@@ -226,7 +221,6 @@ function AIBot.findBestMove(board)
     AIBot.has_target = true
 end
 
--- ⚡ BUCLE ANTI-BLOQUEO (Desatasca y fuerza el Hard Drop cuando el techo está saturado)
 function AIBot.update(self_or_dt, maybe_dt)
     local dt = (type(self_or_dt) == "number") and self_or_dt or maybe_dt
     local board = AIBot.board
@@ -252,21 +246,18 @@ function AIBot.update(self_or_dt, maybe_dt)
     while AIBot.step_timer >= step_interval do
         AIBot.step_timer = AIBot.step_timer - step_interval
 
-        -- 1. Orientación con Fallback Anti-Atasco
         if p.rotation ~= AIBot.target_rot then
             local dir = (AIBot.target_rot > p.rotation) and 1 or -1
             if not p:rotate(dir) then
-                -- Si no puede rotar por falta de espacio en el techo, acepta la rotación actual
                 AIBot.target_rot = p.rotation
             else
                 return
             end
         end
 
-        -- 2. Alineación Horizontal con Fallback Anti-Atasco
         if p.x < AIBot.target_x then
             if not p:move(1, 0) then
-                AIBot.target_x = p.x -- Si está bloqueado por bloques altos, se adapta a la X actual
+                AIBot.target_x = p.x
             else
                 return
             end
@@ -278,7 +269,6 @@ function AIBot.update(self_or_dt, maybe_dt)
             end
         end
 
-        -- 3. Hard Drop garantizado (Dispara la muerte por desborde si el techo fue alcanzado)
         local startY = p.y
         while p:move(0, 1, true) do end
         local endY = p.y

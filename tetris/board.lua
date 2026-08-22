@@ -4,25 +4,30 @@
 ---@diagnostic disable: undefined-global
 -- ============================================================================
 -- MUTRIS ENGINE: THE MATRIX GRID BOARD (10x40)
--- Zero-GC / Clean Popups / Ground Slam / Theme Integration
+-- Zero-GC / Status Blights Integration / Boss Dynamics / Palico Drone
 -- ============================================================================
 local Board = {}
 Board.__index = Board
 
-local Piece          = require "tetris.piece"
-local Bag            = require "tetris.randomizers.7bag"
-local GarbageManager = require "tetris.garbage_manager"
-local ParticleSystem = require "tetris.particle_system"
-local Shaker         = require "tetris.shaker"
-local PPSCounter     = require "tetris.pps_counter"
-local FontCache      = require "tetris.font_cache"
-local AudioManager   = require "audio_manager"
-local BloomShader    = require "tetris.bloom_shader"
-local BeatLock       = require "tetris.beat_lock"
-local CombatStances  = require "combat.combat_stances"
-local KineticParry   = require "combat.kinetic_parry"
-local ThemeManager   = require "tetris.theme_manager"
-local Blackbox       = require "core.blackbox"
+local Piece            = require "tetris.piece"
+local Bag              = require "tetris.randomizers.7bag"
+local GarbageManager   = require "tetris.garbage_manager"
+local ParticleSystem   = require "tetris.particle_system"
+local Shaker           = require "tetris.shaker"
+local PPSCounter       = require "tetris.pps_counter"
+local FontCache        = require "tetris.font_cache"
+local AudioManager     = require "audio_manager"
+local BloomShader      = require "tetris.bloom_shader"
+local BeatLock         = require "tetris.beat_lock"
+local CombatStances    = require "combat.combat_stances"
+local KineticParry     = require "combat.kinetic_parry"
+local ThemeManager     = require "tetris.theme_manager"
+local PoiseSystem      = require "combat.poise_system"
+local PartBreaking     = require "combat.part_breaking"
+local BenchmarkManager = require "core.benchmark_manager"
+local HuntingForge     = require "combat.hunting_forge"
+local StatusBlights    = require "combat.status_blights"
+local Blackbox         = require "core.blackbox"
 
 Board.colors = {
     [1] = {0.0, 0.9, 1.0},
@@ -98,6 +103,7 @@ function Board.new(x, y, player_type)
     BeatLock.initBoardState(self)
     CombatStances.initBoardState(self)
     KineticParry.initBoardState(self)
+    StatusBlights.initBoardState(self)
 
     self:spawnPiece()
     return self
@@ -120,6 +126,13 @@ end
 
 function Board:hold()
     if not self.can_hold or self.is_dying or not self.active_piece then return end
+
+    local BossPhases = require "combat.boss_phases"
+    if BossPhases.isHoldLocked() and self.player_type == "human" then
+        AudioManager.playImmediateSFX("death", false)
+        return
+    end
+
     local cur_id = self.active_piece.id
     if not self.hold_piece then
         self.hold_piece = { id = cur_id }
@@ -139,6 +152,9 @@ function Board:enterZone()
     self.zone_tier = (self.zone_meter >= 0.999) and 2 or 1
     self.zone_timer = self.zone_max_time * self.zone_meter
     self.zone_lines_cleared = 0
+
+    -- Entrar en Zone purga los estados alterados
+    StatusBlights.cleanse(self)
 
     if self.zone_tier == 2 then
         AudioManager.playImmediateSFX("zone_enter_hyper", self.player_type == "bot")
@@ -160,7 +176,9 @@ function Board:exitZone()
     self.zone_meter = 0.0
     self:setPopup(msg, clr, true, "BURST DETONATION")
 
-    if self.opponent and attack > 0 then
+    if _G.CURRENT_GAME_MODE == "boss_hunt" and self.player_type == "human" then
+        PoiseSystem.dealDamage(attack * 90, true)
+    elseif self.opponent and attack > 0 then
         GarbageManager.sendGarbage(self, self.opponent, attack)
     end
 
@@ -195,8 +213,9 @@ function Board:clearCompletedLinesInZone()
 end
 
 function Board:canMove(px, py, pr)
-    local SRS = require "tetris.rotation_systems.srs"
-    local shape = SRS.shapes[self.active_piece.id][pr]
+    local RulesetManager = require "core.ruleset_manager"
+    local shapes = RulesetManager.getShapes(self.active_piece.id)
+    local shape = shapes and shapes[pr] or {{{1}}}
     for r = 1, #shape do
         for c = 1, #shape[r] do
             if shape[r][c] ~= 0 then
@@ -247,13 +266,29 @@ function Board:checkLines(is_tspin)
             self.b2b_count = 0 
         end
 
+        -- Registro en Benchmark
+        if self.player_type == "human" and _G.CURRENT_GAME_MODE == "benchmark" then
+            BenchmarkManager.registerPlayerLineClear(cleared, is_tspin)
+        end
+
+        -- 🩸 CAUTERIZAR Y APLICAR STATUS BLIGHTS
+        StatusBlights.onPlayerLineClear(self, cleared, is_tspin)
+
         if self.is_zone_active then
             self.zone_lines_cleared = self.zone_lines_cleared + cleared
         else
-            local attack = GarbageManager.calculateAttack(cleared, is_tspin, false, self.combo_count, self.b2b_count, self)
-            if self.opponent and attack > 0 then
-                GarbageManager.sendGarbage(self, self.opponent, attack)
+            if _G.CURRENT_GAME_MODE == "boss_hunt" and self.player_type == "human" then
+                PartBreaking.registerLineClear(self, cleared, is_tspin)
+            elseif _G.CURRENT_GAME_MODE ~= "benchmark" or BenchmarkManager.state == BenchmarkManager.STAGE_2_PLAY then
+                local attack = GarbageManager.calculateAttack(cleared, is_tspin, false, self.combo_count, self.b2b_count, self)
+                if self.opponent and attack > 0 then
+                    if _G.CURRENT_GAME_MODE == "boss_hunt" and self.player_type == "bot" and PartBreaking.parts.tail.broken then
+                        attack = math.max(1, math.floor(attack * 0.5))
+                    end
+                    GarbageManager.sendGarbage(self, self.opponent, attack)
+                end
             end
+
             AudioManager.playImmediateSFX((cleared == 4) and "tetris" or "line_clear", self.player_type == "bot")
         end
     else
@@ -349,12 +384,9 @@ function Board:shiftColumnsGlobal(other, dir)
     other:triggerShake(6, 0.2)
 end
 
--- 🛡️ FILTRO ANTI-GLIFOS ROTOS
 function Board:setPopup(text, color, is_high_tier, subtext)
     local raw_t = tostring(text or "")
     local raw_s = tostring(subtext or "")
-    
-    -- Limpieza estricta de caracteres ASCII imprimibles (erradica '▯')
     local clean_t = raw_t:gsub("[^\32-\126]", ""):gsub("^%s*(.-)%s*$", "%1")
     local clean_s = raw_s:gsub("[^\32-\126]", ""):gsub("^%s*(.-)%s*$", "%1")
 
@@ -374,6 +406,15 @@ end
 
 function Board:triggerDeath()
     if self.is_dying then return end
+
+    if _G.CURRENT_GAME_MODE == "boss_hunt" and self.player_type == "bot" then
+        local BossPhases = require "combat.boss_phases"
+        if BossPhases.current_phase < 3 then
+            BossPhases.triggerPhaseAdvance(self.opponent, self)
+            return
+        end
+    end
+
     self.is_dying = true
     self.death_timer = 1.5
     _G.HitStopTimer = 0.25
@@ -400,6 +441,11 @@ function Board:update(dt)
     BeatLock.update(self, dt)
     CombatStances.update(self, dt)
     KineticParry.update(self, dt)
+    StatusBlights.update(self, dt)
+
+    if self.player_type == "human" then
+        HuntingForge.updatePalico(dt, self)
+    end
 
     if self.is_dying then
         self.death_timer = math.max(0, self.death_timer - dt)
@@ -439,9 +485,11 @@ function Board:update(dt)
     end
 
     if not self.is_dying and self.active_piece then
-        local Input = require "input"
-        local gravity = (self.player_type == "human") and Input.getSoftDropFactor() or 0.8
-        self.active_piece:update(dt, gravity)
+        if not (_G.CURRENT_GAME_MODE == "boss_hunt" and self.player_type == "bot" and PoiseSystem.is_stunned) then
+            local Input = require "input"
+            local gravity = (self.player_type == "human") and Input.getSoftDropFactor() or 0.8
+            self.active_piece:update(dt, gravity)
+        end
     end
 end
 
@@ -511,6 +559,19 @@ function Board:draw()
     KineticParry.draw(self)
     ThemeManager.drawGarbageBar(self)
 
+    -- Auras de Estados Alterados (Frostbite, Bleed, Corruption)
+    StatusBlights.drawAura(self)
+
+    -- Dron Palico
+    if self.player_type == "human" then
+        HuntingForge.drawPalico(self)
+    end
+
+    -- Corchetes anatómicos sobre el jefe
+    if self.player_type == "bot" and _G.CURRENT_GAME_MODE == "boss_hunt" then
+        PartBreaking.drawIndicators(self)
+    end
+
     if self.tspin_flash > 0 then
         love.graphics.push("all")
         love.graphics.setBlendMode("add")
@@ -519,7 +580,6 @@ function Board:draw()
         love.graphics.pop()
     end
 
-    -- 🎯 POPUPS DE COMBATE ELEVADOS (Zona de spawn 100% visible)
     if self.popup_timer > 0 then
         local progress = self.popup_timer / self.popup_max_time
         local alpha = math.min(1.0, progress * 1.9)

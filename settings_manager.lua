@@ -4,8 +4,10 @@
 ---@diagnostic disable: undefined-global
 local SettingsManager = {}
 
--- ⚙️ VALORES POR DEFECTO DE FÁBRICA (BASELINE PERMANENTE)
 SettingsManager.defaults = {
+    -- RULESET MAESTRO (FASE 21)
+    active_ruleset    = 1,       -- 1=Guideline Modern, 2=TGM 20G Shirase, 3=NES 1989, 4=Pentomino 18
+
     -- HANDLING
     das               = 0.094,   -- 94 ms
     arr               = 0.008,   -- 8 ms
@@ -19,7 +21,7 @@ SettingsManager.defaults = {
     master_vol        = 1.0,     -- 100%
     bgm_vol           = 0.85,    -- 85%
     sfx_vol           = 1.0,     -- 100%
-    sidechain_duck    = 1.0,     -- 100% (Vacío total en impactos)
+    sidechain_duck    = 1.0,     -- 100%
     subbass_power     = 3,       -- 1=Soft, 2=Mid, 3=Heavy, 4=Seismic
     announcer_mode    = 1,       -- 1=All Voices, 2=Critical Only, 0=Off
     beat_click        = 0,       -- 0=Off, 1=Danger Only, 2=Always On
@@ -48,35 +50,41 @@ SettingsManager.defaults = {
 
     -- PIPELINE
     capture_mode      = "mp4",   -- "mp4" o "gif"
-    gif_resolution    = 1,       -- 1=480x270 (Ligero), 2=640x360 (HQ)
+    gif_resolution    = 1,       -- 1=480x270, 2=640x360
     auto_save_replay  = 1        -- 1=On, 0=Off
 }
 
--- Tabla de configuración viva del usuario
 SettingsManager.settings = {}
 for k, v in pairs(SettingsManager.defaults) do
     SettingsManager.settings[k] = v
 end
 
--- 📑 ESQUEMA DE PESTAÑAS Y PARÁMETROS PARA LA INTERFAZ
 SettingsManager.tabs = {
     {
+        id = "rules",
+        name = "01 // RULESET & PHYSICS",
+        title = "UNIVERSAL MULTI-RULESET ENGINE & ROTATION PHYSICS",
+        items = {
+            { id = "active_ruleset", label = "ACTIVE RULESET ENGINE", is_enum = true, options = {1, 2, 3, 4}, labels = {"01 // GUIDELINE MODERN", "02 // TGM 20G SHIRASE", "03 // NES 1989 RETRO", "04 // PENTOMINO 18"} },
+            { id = "srs_180",        label = "SRS 180 DEGREE ROTATION KICKS", is_toggle = true },
+            { id = "max_resets",     label = "LOCK MOVE RESETS (MAX STALL)", min = 0, max = 30, step = 1, unit = "moves", is_int = true }
+        }
+    },
+    {
         id = "handling",
-        name = "01 // HANDLING",
+        name = "02 // HANDLING",
         title = "COMPETITIVE DAS / ARR & FRAME-DATA TIMINGS",
         items = {
             { id = "das",        label = "DAS (DELAYED AUTO-SHIFT)", min = 50,  max = 200, step = 1,   unit = "ms", is_ms = true, is_int = true },
             { id = "arr",        label = "ARR (AUTO-REPEAT RATE)",  min = 0,   max = 25,  step = 0.5, unit = "ms", is_ms = true },
             { id = "sdf",        label = "SDF (SOFT DROP MULT)",    min = 5,   max = 40,  step = 5,   unit = "x",  is_int = true },
             { id = "dcd",        label = "DCD (DAS CUT DELAY)",     min = 0,   max = 40,  step = 2,   unit = "ms", is_ms = true, is_int = true },
-            { id = "lock_delay", label = "LOCK DELAY BASE",         min = 0.1, max = 1.0, step = 0.05,unit = "s" },
-            { id = "max_resets", label = "LOCK MOVE RESETS",        min = 4,   max = 30,  step = 1,   unit = "moves", is_int = true },
-            { id = "srs_180",    label = "SRS 180 DEGREE KICKS",    is_toggle = true }
+            { id = "lock_delay", label = "LOCK DELAY BASE",         min = 0.05, max = 1.0, step = 0.05,unit = "s" }
         }
     },
     {
         id = "audio",
-        name = "02 // AUDIO & DAW",
+        name = "03 // AUDIO & DAW",
         title = "PROCEDURAL SYNTHESIZER, MIXER & HARMONICS",
         items = {
             { id = "master_vol",     label = "MASTER VOLUME",          min = 0, max = 100, step = 5, unit = "%", is_pct = true, is_int = true },
@@ -90,7 +98,7 @@ SettingsManager.tabs = {
     },
     {
         id = "combat",
-        name = "03 // COMBAT",
+        name = "04 // COMBAT",
         title = "STANCES, KINETIC PARRY & ATTACK GAUGES",
         items = {
             { id = "parry_window",      label = "KINETIC PARRY WINDOW", min = 1,     max = 6,     step = 1,     unit = "frames", is_int = true },
@@ -102,7 +110,7 @@ SettingsManager.tabs = {
     },
     {
         id = "video",
-        name = "04 // VIDEO & SKINS",
+        name = "05 // VIDEO & SKINS",
         title = "THEME ENGINES, NEON BLOOM & GLSL SHADERS",
         items = {
             { id = "theme_skin",      label = "ACTIVE THEME SKIN [F5]", is_enum = true, options = {1, 2, 3, 4}, labels = {"01 // CYBER-DAW RACK", "02 // NEO-KINETIC STRIKE", "03 // ESPORTS GLASS", "04 // COSMIC SINESTESIA"} },
@@ -116,22 +124,12 @@ SettingsManager.tabs = {
     },
     {
         id = "archon",
-        name = "05 // ARCHON IA",
+        name = "06 // ARCHON IA",
         title = "AUTO-BALANCING & DDA ADAPTIVE ENGINE",
         items = {
             { id = "archon_mode",    label = "ARCHON DDA ENGINE",    is_enum = true, options = {1, 2, 3}, labels = {"ADAPTIVE DDA", "LOCKED BASELINE", "APEX HARDCORE"} },
             { id = "bot_target_pps", label = "BOT TARGET BASE PPS",  min = 0.8, max = 4.0, step = 0.05,unit = "pps" },
             { id = "anomaly_freq",   label = "ANOMALY COOLDOWN TIME",min = 8,   max = 45,  step = 1,   unit = "s", is_int = true }
-        }
-    },
-    {
-        id = "pipeline",
-        name = "06 // PIPELINE",
-        title = "ESPORTS CAPTURE & AUTONOMOUS REPLAYS",
-        items = {
-            { id = "capture_mode",     label = "F9 RECORDING FORMAT",  is_enum = true, options = {"mp4", "gif"}, labels = {"MP4 VIDEO 60FPS", "ANIMATED GIF (LIGHT)"} },
-            { id = "gif_resolution",   label = "GIF RESOLUTION PRESET",is_enum = true, options = {1, 2}, labels = {"480x270 @ 20FPS", "640x360 @ 30FPS"} },
-            { id = "auto_save_replay", label = "AUTO-SAVE .MUTRISREC", is_toggle = true }
         }
     }
 }
@@ -182,7 +180,6 @@ function SettingsManager.save()
     love.filesystem.write("settings.json", serializeJSON(SettingsManager.settings))
 end
 
--- ⟲ RESET INDIVIDUAL DE 1 VARIABLE
 function SettingsManager.resetKey(key)
     if SettingsManager.defaults[key] ~= nil then
         SettingsManager.settings[key] = SettingsManager.defaults[key]
@@ -190,7 +187,6 @@ function SettingsManager.resetKey(key)
     end
 end
 
--- ⟲ RESET COMPLETO DE UNA PESTAÑA
 function SettingsManager.resetTab(tab_index)
     local tab = SettingsManager.tabs[tab_index]
     if tab and tab.items then

@@ -1,10 +1,10 @@
 -- ================================================================
--- FILE: main.lua
+-- FILE: main.lua (PARTE 1 DE 2)
 -- ================================================================
 ---@diagnostic disable: undefined-global
 -- ============================================================================
 -- MUTRIS ENGINE: SYNTHETIC TRANSCENDENCE [KERNEL CENTRAL 1280x720 WIDESCREEN]
--- Master Calibration Suite / Multi-Theme Engine [F5] / Solid Restart Halos
+-- Master Calibration Suite / The Hunter's Forge / Multi-Ruleset Core
 -- ============================================================================
 
 _G.ENGINE_VERSION           = "MUTRIS v1.0.0"
@@ -19,6 +19,7 @@ _G.BlackoutStrobeVisibility = 1.0
 
 local SettingsManager    = require "settings_manager"
 local ThemeManager       = require "tetris.theme_manager"
+local RulesetManager     = require "core.ruleset_manager"
 local AudioManager       = require "audio_manager"
 local MusicManager       = require "music_manager"
 local TrackManager       = require "track_manager"
@@ -39,6 +40,12 @@ local Blackbox           = require "core.blackbox"
 local ScreenshotHelper   = require "core.screenshot_helper"
 local ReplayManager      = require "core.replay_manager"
 local ClipRecorder       = require "core.clip_recorder"
+local PoiseSystem        = require "combat.poise_system"
+local PartBreaking       = require "combat.part_breaking"
+local BossPhases         = require "combat.boss_phases"
+local BenchmarkManager   = require "core.benchmark_manager"
+local HuntingForge       = require "combat.hunting_forge"
+local StatusBlights      = require "combat.status_blights"
 
 local gameState = "menu"
 local settingsReturnState = "menu"
@@ -53,12 +60,18 @@ local engage_duration = 0.35
 
 local menuItems = {
     "VS BOT DUEL",
+    "CYBER-BEAST HUNT",
+    "THE HUNTER'S FORGE",
+    "PILOT BENCHMARK",
     "GAUNTLET RUSH",
     "SOUNDTRACK & FX LAB",
     "SETTINGS & CALIBRATION"
 }
 local menuSubtitles = {
     "CLASSIC 1v1 DUEL VS ADAPTIVE DDA BOT",
+    "3-PHASE COLOSSUS ASSAULT & HUNTER'S FORGE",
+    "ARMOR JEWEL CRAFTING & CYBER-PALICO BAY",
+    "OFFICIAL 3-STAGE PILOT CALIBRATION TRIAL",
     "ENDLESS SURVIVAL AGAINST FREQUENT ANOMALIES",
     "DAW TIMELINE, CUE PLACEMENT & SFX AUDITION",
     "MASTER CALIBRATION SUITE, DAS / ARR & PIPELINE"
@@ -119,6 +132,24 @@ function _G.SetGameState(state)
     Blackbox.log("STATE", "STATE: " .. state, 0, 0)
 end
 
+function _G.BenchmarkResetBoards()
+    PlayerBoard = Board.new(220, 120, "human")
+    BotBoard    = Board.new(820, 120, "bot")
+    PlayerBoard.opponent = BotBoard
+    BotBoard.opponent    = PlayerBoard
+
+    AIBot.board    = BotBoard
+    AIBot.opponent = PlayerBoard
+    AIBot.player   = PlayerBoard
+    BotBoard.ai    = AIBot
+
+    if Input and Input.init then
+        Input.init(PlayerBoard)
+    end
+    if AIBot.init then AIBot.init(BotBoard) end
+    ThemeManager.triggerRestartHalo()
+end
+
 function _G.GlobalRestart(skip_track_advance)
     _G.RealMatchTimer = 0.0
     _G.HitStopTimer = 0.0
@@ -141,7 +172,10 @@ function _G.GlobalRestart(skip_track_advance)
     AIBot.player   = PlayerBoard
     BotBoard.ai    = AIBot
 
-    Input.init(PlayerBoard)
+    -- Inicialización segura y blindada de Input
+    if Input and Input.init then
+        Input.init(PlayerBoard)
+    end
     
     if AIBot.init then 
         AIBot.init(BotBoard)
@@ -151,7 +185,14 @@ function _G.GlobalRestart(skip_track_advance)
         AnomalyManager.init() 
     end
 
-    -- 🌟 Disparo del Halo Sólido y Onda de Choque Refráctil GLSL
+    if _G.CURRENT_GAME_MODE == "boss_hunt" then
+        PoiseSystem.init()
+        PartBreaking.init()
+        BossPhases.init()
+    elseif _G.CURRENT_GAME_MODE == "benchmark" then
+        BenchmarkManager.init()
+    end
+
     BloomShader.triggerShockwave(640, 360)
     ThemeManager.triggerRestartHalo()
 
@@ -168,12 +209,14 @@ function love.load()
     ClipRecorder.init()
     
     if SettingsManager.init then SettingsManager.init() end
+    if RulesetManager.init  then RulesetManager.init() end
     if ThemeManager.init    then ThemeManager.init() end
     if MetaBalancer.init    then MetaBalancer.init() end
     if AudioManager.init    then AudioManager.init() end
     if TrackManager.init    then TrackManager.init() end
     if BloomShader.init     then BloomShader.init() end
     if FogLayer.init        then FogLayer.init() end
+    if HuntingForge.init    then HuntingForge.init() end
     
     if MusicManager.start then 
         MusicManager.start() 
@@ -214,11 +257,15 @@ function love.update(dt)
         return
     end
 
-    if gameState == "pause" or gameState == "settings" then
+    if gameState == "pause" or gameState == "settings" or gameState == "benchmark_result" or gameState == "forge" then
         return
     end
 
-    if gameState == "versus" or gameState == "gauntlet" then
+    if gameState == "versus" or gameState == "gauntlet" or gameState == "boss_hunt" or gameState == "benchmark" then
+        if _G.CURRENT_GAME_MODE == "benchmark" and BenchmarkManager.isWaitingBriefing() then
+            return
+        end
+
         FogLayer.update(dt)
         _G.RealMatchTimer = _G.RealMatchTimer + dt
 
@@ -229,25 +276,49 @@ function love.update(dt)
             AIBot.board = BotBoard
             AIBot.opponent = PlayerBoard
             if AIBot.update and not BotBoard.is_dying then
+                if _G.CURRENT_GAME_MODE == "boss_hunt" then
+                    if BossPhases.current_phase == 2 then
+                        AIBot.pps = AIBot.base_pps + 0.45
+                    elseif BossPhases.current_phase == 3 then
+                        AIBot.pps = AIBot.base_pps + 0.85
+                    else
+                        AIBot.pps = AIBot.base_pps
+                    end
+                end
                 AIBot:update(dt)
             end
             BotBoard:update(dt)
         end
 
         AnomalyManager.update(dt, PlayerBoard, BotBoard)
+        
+        if _G.CURRENT_GAME_MODE == "boss_hunt" then
+            PoiseSystem.update(dt)
+            PartBreaking.update(dt)
+            BossPhases.update(dt, PlayerBoard, BotBoard)
+
+            if PoiseSystem.hp <= 0 and BossPhases.current_phase < 3 then
+                BossPhases.triggerPhaseAdvance(PlayerBoard, BotBoard)
+            end
+        elseif _G.CURRENT_GAME_MODE == "benchmark" then
+            BenchmarkManager.update(dt, PlayerBoard, BotBoard)
+        end
 
         local p1_pps = (PlayerBoard and PlayerBoard.current_pps_display) or 0.0
         local bot_pps = (BotBoard and BotBoard.current_pps_display) or 0.0
 
-        if PlayerBoard and PlayerBoard.is_dying and PlayerBoard.death_timer <= 0.05 then
+        local titan_defeated = (_G.CURRENT_GAME_MODE == "boss_hunt" and BossPhases.current_phase == 3 and PoiseSystem.hp <= 0)
+        local bot_knockout = (BotBoard and BotBoard.is_dying and BotBoard.death_timer <= 0.05 and _G.CURRENT_GAME_MODE ~= "boss_hunt")
+
+        if PlayerBoard and PlayerBoard.is_dying and PlayerBoard.death_timer <= 0.05 and _G.CURRENT_GAME_MODE ~= "benchmark" then
             MetaBalancer.registerMatchOutcome(false, _G.RealMatchTimer, p1_pps, bot_pps)
             ReplayManager.saveReplay()
             Blackbox.log("MATCH_END", "PLAYER DEFEATED", math.floor(p1_pps * 10), math.floor(bot_pps * 10))
             gameState = "gameover"
-        elseif BotBoard and BotBoard.is_dying and BotBoard.death_timer <= 0.05 then
+        elseif (titan_defeated or bot_knockout) and gameState ~= "gameover" and _G.CURRENT_GAME_MODE ~= "benchmark" then
             MetaBalancer.registerMatchOutcome(true, _G.RealMatchTimer, p1_pps, bot_pps)
             ReplayManager.saveReplay()
-            Blackbox.log("MATCH_END", "BOT DEFEATED", math.floor(p1_pps * 10), math.floor(bot_pps * 10))
+            Blackbox.log("MATCH_END", titan_defeated and "TITAN COLOSSUS DEFEATED" or "BOT DEFEATED", math.floor(p1_pps * 10), math.floor(bot_pps * 10))
             gameState = "gameover"
         end
     end
@@ -258,7 +329,6 @@ local function drawCyberPause()
     love.graphics.rectangle("fill", 0, 0, 1280, 720)
 
     local t = ThemeManager.getCurrent()
-
     local card_w = 500
     local card_h = 440
     local card_x = 640 - (card_w / 2)
@@ -321,7 +391,6 @@ local function drawCyberSettings()
     ThemeManager.drawBackground()
 
     local t = ThemeManager.getCurrent()
-
     love.graphics.setFont(FontCache.get(26))
     love.graphics.setColor(t.primary[1], t.primary[2], t.primary[3], 0.95)
     love.graphics.printf("MASTER CALIBRATION SUITE", 0, 26, 1280, "center")
@@ -503,7 +572,9 @@ local function drawCyberSettings()
     love.graphics.setColor(0.45, 0.55, 0.65, 0.75)
     love.graphics.printf("[ Q / E ] CAMBIAR PESTANA  |  [ FLECHAS ] AJUSTAR  |  [ BACKSPACE / DEL ] RESET INDIVIDUAL  |  [ ESC ] REGRESAR", 0, 595, 1280, "center")
 end
-
+-- ================================================================
+-- FILE: main.lua (PARTE 2 DE 2)
+-- ================================================================
 function love.draw()
     love.graphics.clear(0.01, 0.01, 0.02, 1.0)
 
@@ -512,7 +583,7 @@ function love.draw()
     if gameState == "menu" then
         ThemeManager.drawMenu(menuItems, menuSubtitles, menuSelection, MetaBalancer)
 
-    elseif gameState == "versus" or gameState == "gauntlet" or gameState == "gameover" or gameState == "pause" then
+    elseif gameState == "versus" or gameState == "gauntlet" or gameState == "boss_hunt" or gameState == "benchmark" or gameState == "gameover" or gameState == "pause" then
         ThemeManager.drawBackground()
         FogLayer.draw()
 
@@ -530,17 +601,23 @@ function love.draw()
         Telemetry.draw(PlayerBoard, BotBoard)
         Blackbox.drawPermanentHUD(PlayerBoard, BotBoard)
 
-        -- 🌟 Renderizado del Halo Sólido Cinemático
+        if _G.CURRENT_GAME_MODE == "boss_hunt" then
+            PoiseSystem.drawHUD()
+            BossPhases.drawHUD(BotBoard, PlayerBoard)
+        elseif _G.CURRENT_GAME_MODE == "benchmark" then
+            BenchmarkManager.drawHUD()
+        end
+
         ThemeManager.drawRestartHalo()
 
         if gameState == "pause" then
             drawCyberPause()
         elseif gameState == "gameover" then
             local t = ThemeManager.getCurrent()
-            local is_victory = (BotBoard and BotBoard.is_dying)
-            local modal_w, modal_h = 460, 220
+            local is_victory = (BotBoard and BotBoard.is_dying) or (_G.CURRENT_GAME_MODE == "boss_hunt" and BossPhases.current_phase == 3 and PoiseSystem.hp <= 0)
+            local modal_w, modal_h = 480, 240
             local modal_x = 640 - (modal_w / 2)
-            local modal_y = 235
+            local modal_y = 225
 
             love.graphics.setColor(0.0, 0.0, 0.0, 0.90)
             love.graphics.rectangle("fill", modal_x - 6, modal_y - 6, modal_w + 12, modal_h + 12, 10)
@@ -553,13 +630,14 @@ function love.draw()
             love.graphics.setColor(border_color[1], border_color[2], border_color[3], 0.98)
             love.graphics.rectangle("line", modal_x, modal_y, modal_w, modal_h, 8)
 
-            love.graphics.setFont(FontCache.get(30))
+            love.graphics.setFont(FontCache.get(28))
             if is_victory then
+                local win_title = (_G.CURRENT_GAME_MODE == "boss_hunt") and "CYBER-BEAST SLAIN" or "VICTORY ACHIEVED"
                 love.graphics.setColor(0.1, 1.0, 0.5, 0.98)
-                love.graphics.printf("VICTORY ACHIEVED", 0, modal_y + 22, 1280, "center")
+                love.graphics.printf(win_title, 0, modal_y + 18, 1280, "center")
             else
                 love.graphics.setColor(1.0, 0.2, 0.3, 0.98)
-                love.graphics.printf("ANNIHILATED", 0, modal_y + 22, 1280, "center")
+                love.graphics.printf("ANNIHILATED", 0, modal_y + 18, 1280, "center")
             end
 
             love.graphics.setFont(FontCache.get(10))
@@ -569,16 +647,29 @@ function love.draw()
                 (PlayerBoard and PlayerBoard.current_pps_display) or 0,
                 (BotBoard and BotBoard.current_pps_display) or 0
             )
-            love.graphics.printf(match_stat, 0, modal_y + 75, 1280, "center")
+            love.graphics.printf(match_stat, 0, modal_y + 60, 1280, "center")
+
+            if _G.CURRENT_GAME_MODE == "boss_hunt" and is_victory and #PartBreaking.match_carves > 0 then
+                love.graphics.setFont(FontCache.get(9))
+                love.graphics.setColor(1.0, 0.85, 0.0, 0.95)
+                local carves_text = "CARVES: " .. table.concat(PartBreaking.match_carves, " + ")
+                love.graphics.printf(carves_text, 0, modal_y + 88, 1280, "center")
+            end
 
             love.graphics.setFont(FontCache.get(12))
             love.graphics.setColor(1.0, 0.95, 0.4, 0.95)
-            love.graphics.printf("PRESS [R] OR [START] TO REMATCH WITH NEXT TRACK", 0, modal_y + 115, 1280, "center")
+            love.graphics.printf("PRESS [R] OR [START] TO REMATCH WITH NEXT TRACK", 0, modal_y + 130, 1280, "center")
 
             love.graphics.setFont(FontCache.get(10))
             love.graphics.setColor(0.55, 0.65, 0.75, 0.8)
-            love.graphics.printf("[ESC] RETURN TO MAIN MENU", 0, modal_y + 155, 1280, "center")
+            love.graphics.printf("[ESC] RETURN TO MAIN MENU", 0, modal_y + 175, 1280, "center")
         end
+
+    elseif gameState == "forge" then
+        HuntingForge.drawScreen()
+
+    elseif gameState == "benchmark_result" then
+        BenchmarkManager.drawResultModal()
 
     elseif gameState == "settings" then
         drawCyberSettings()
@@ -587,7 +678,6 @@ function love.draw()
         TrackEditor.draw()
     end
 
-    -- ⚠️ DIRECTIVA PRIMARIA PERMANENTE + MARCADOR DE SKIN ACTIVA
     love.graphics.push("all")
     local t = ThemeManager.getCurrent()
     love.graphics.setFont(FontCache.get(10))
@@ -649,8 +739,11 @@ local function adjustActiveSetting(delta)
         end
         opt_idx = ((opt_idx + delta - 1) % #item.options) + 1
         s[item.id] = item.options[opt_idx]
+        
         if item.id == "theme_skin" then
             ThemeManager.setTheme(item.options[opt_idx])
+        elseif item.id == "active_ruleset" then
+            RulesetManager.setRuleset(item.options[opt_idx])
         end
         AudioManager.playSliderTick()
 
@@ -707,10 +800,26 @@ function love.keypressed(key)
         return
     end
 
+    if gameState == "forge" then
+        HuntingForge.keypressed(key)
+        return
+    end
+
+    if _G.CURRENT_GAME_MODE == "benchmark" and BenchmarkManager.isWaitingBriefing() then
+        if key == "return" or key == "space" then
+            BenchmarkManager.advanceFromBriefing()
+            return
+        elseif key == "escape" then
+            BenchmarkManager.is_active = false
+            _G.SetGameState("menu")
+            return
+        end
+    end
+
     if key == "escape" then
         if gameState == "menu" then
             love.event.quit()
-        elseif gameState == "versus" or gameState == "gauntlet" then
+        elseif gameState == "versus" or gameState == "gauntlet" or gameState == "boss_hunt" or gameState == "benchmark" then
             gameState = "pause"
             pauseSelection = 1
             MusicManager.pause()
@@ -740,7 +849,7 @@ function love.keypressed(key)
     end
 
     if key == "r" then
-        if gameState == "versus" or gameState == "gauntlet" or gameState == "pause" or gameState == "gameover" then
+        if gameState == "versus" or gameState == "gauntlet" or gameState == "boss_hunt" or gameState == "benchmark" or gameState == "pause" or gameState == "gameover" then
             _G.GlobalRestart(false)
             gameState = _G.CURRENT_GAME_MODE or "versus"
             return
@@ -762,14 +871,26 @@ function love.keypressed(key)
                 _G.GlobalRestart(true)
                 gameState = "versus"
             elseif menuSelection == 2 then
+                _G.CURRENT_GAME_MODE = "boss_hunt"
+                engage_timer = engage_duration
+                _G.GlobalRestart(true)
+                gameState = "boss_hunt"
+            elseif menuSelection == 3 then
+                _G.SetGameState("forge")
+            elseif menuSelection == 4 then
+                _G.CURRENT_GAME_MODE = "benchmark"
+                engage_timer = engage_duration
+                _G.GlobalRestart(true)
+                gameState = "benchmark"
+            elseif menuSelection == 5 then
                 _G.CURRENT_GAME_MODE = "gauntlet"
                 engage_timer = engage_duration
                 _G.GlobalRestart(true)
                 gameState = "gauntlet"
-            elseif menuSelection == 3 then
+            elseif menuSelection == 6 then
                 TrackEditor.active = true
                 gameState = "editor"
-            elseif menuSelection == 4 then
+            elseif menuSelection == 7 then
                 settingsReturnState = "menu"
                 active_tab_index = 1
                 active_item_index = 1
@@ -835,6 +956,8 @@ function love.keypressed(key)
                 SettingsManager.resetKey(item.id)
                 if item.id == "theme_skin" then
                     ThemeManager.setTheme(SettingsManager.get("theme_skin"))
+                elseif item.id == "active_ruleset" then
+                    RulesetManager.setRuleset(SettingsManager.get("active_ruleset"))
                 end
                 AudioManager.playImmediateSFX("rotate", false)
             end
@@ -873,12 +996,22 @@ function love.mousepressed(x, y, button)
         return
     end
 
+    if gameState == "forge" then
+        HuntingForge.mousepressed(adj_x, adj_y, button)
+        return
+    end
+
+    if _G.CURRENT_GAME_MODE == "benchmark" and BenchmarkManager.isWaitingBriefing() then
+        BenchmarkManager.advanceFromBriefing()
+        return
+    end
+
     if gameState == "menu" then
-        local start_y = (ThemeManager.current_theme == 1) and 130 or ((ThemeManager.current_theme == 3) and 115 or 145)
-        local spacing = (ThemeManager.current_theme == 1) and 92 or ((ThemeManager.current_theme == 3) and 110 or 88)
+        local start_y = (ThemeManager.current_theme == 1) and 115 or ((ThemeManager.current_theme == 3) and 95 or 125)
+        local spacing = (ThemeManager.current_theme == 1) and 80 or ((ThemeManager.current_theme == 3) and 88 or 74)
         for i = 1, #menuItems do
             local by = start_y + (i - 1) * spacing
-            if adj_y >= by and adj_y <= by + 75 and adj_x >= 80 and adj_x <= 750 then
+            if adj_y >= by and adj_y <= by + 70 and adj_x >= 80 and adj_x <= 750 then
                 menuSelection = i
                 AudioManager.playMenuClick()
                 if i == 1 then
@@ -887,14 +1020,26 @@ function love.mousepressed(x, y, button)
                     _G.GlobalRestart(true)
                     gameState = "versus"
                 elseif i == 2 then
+                    _G.CURRENT_GAME_MODE = "boss_hunt"
+                    engage_timer = engage_duration
+                    _G.GlobalRestart(true)
+                    gameState = "boss_hunt"
+                elseif i == 3 then
+                    _G.SetGameState("forge")
+                elseif i == 4 then
+                    _G.CURRENT_GAME_MODE = "benchmark"
+                    engage_timer = engage_duration
+                    _G.GlobalRestart(true)
+                    gameState = "benchmark"
+                elseif i == 5 then
                     _G.CURRENT_GAME_MODE = "gauntlet"
                     engage_timer = engage_duration
                     _G.GlobalRestart(true)
                     gameState = "gauntlet"
-                elseif i == 3 then
+                elseif i == 6 then
                     TrackEditor.active = true
                     gameState = "editor"
-                elseif i == 4 then
+                elseif i == 7 then
                     settingsReturnState = "menu"
                     active_tab_index = 1
                     active_item_index = 1
@@ -975,6 +1120,8 @@ function love.mousepressed(x, y, button)
                 SettingsManager.resetKey(item.id)
                 if item.id == "theme_skin" then
                     ThemeManager.setTheme(SettingsManager.get("theme_skin"))
+                elseif item.id == "active_ruleset" then
+                    RulesetManager.setRuleset(SettingsManager.get("active_ruleset"))
                 end
                 AudioManager.playImmediateSFX("rotate", false)
                 return
@@ -1012,7 +1159,9 @@ function love.mousepressed(x, y, button)
         local btn_reset_y = card_y + card_h - 38
         if adj_x >= btn_reset_x and adj_x <= btn_reset_x + 200 and adj_y >= btn_reset_y and adj_y <= btn_reset_y + 32 then
             SettingsManager.resetTab(active_tab_index)
-            if active_tab_index == 4 then
+            if active_tab_index == 1 then
+                RulesetManager.setRuleset(SettingsManager.get("active_ruleset"))
+            elseif active_tab_index == 5 then
                 ThemeManager.setTheme(SettingsManager.get("theme_skin"))
             end
             AudioManager.playImmediateSFX("rotate", false)
@@ -1039,7 +1188,14 @@ function love.mousepressed(x, y, button)
 end
 
 function love.gamepadpressed(joystick, button)
-    if gameState == "versus" or gameState == "gauntlet" then
+    if gameState == "versus" or gameState == "gauntlet" or gameState == "boss_hunt" or gameState == "benchmark" then
+        if _G.CURRENT_GAME_MODE == "benchmark" and BenchmarkManager.isWaitingBriefing() then
+            if button == "a" or button == "start" then
+                BenchmarkManager.advanceFromBriefing()
+                return
+            end
+        end
+
         if button == "start" then
             gameState = "pause"
             pauseSelection = 1
@@ -1078,6 +1234,10 @@ function love.gamepadpressed(joystick, button)
             end
             AudioManager.playMenuClick()
         end
+    elseif gameState == "forge" then
+        if button == "b" or button == "back" then
+            _G.SetGameState("menu")
+        end
     elseif gameState == "settings" then
         if button == "leftshoulder" then
             active_tab_index = (active_tab_index == 1) and #SettingsManager.tabs or (active_tab_index - 1)
@@ -1110,6 +1270,10 @@ function love.gamepadpressed(joystick, button)
                 MusicManager.resume()
             end
             AudioManager.playMenuClick()
+        end
+    elseif gameState == "benchmark_result" then
+        if button == "a" or button == "start" or button == "b" then
+            _G.SetGameState("menu")
         end
     elseif gameState == "gameover" then
         if button == "start" or button == "a" then

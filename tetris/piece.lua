@@ -3,8 +3,8 @@
 -- ================================================================
 ---@diagnostic disable: undefined-global
 -- ============================================================================
--- MUTRIS ENGINE: TETROMINO PIECE PHYSICS & RHYTHM LOCK
--- SRS 180°, 3-Corners T-Spin, Themed Ghost Piece & Blackbox Telemetry
+-- MUTRIS ENGINE: TETROMINO PIECE PHYSICS & MULTI-RULESET INTEGRATION
+-- SRS / ARS / NES / Status Blights Corruption / Ghost Filtering
 -- ============================================================================
 local Piece = {}
 Piece.__index = Piece
@@ -17,33 +17,44 @@ local CombatStances   = require "combat.combat_stances"
 local KineticParry    = require "combat.kinetic_parry"
 local BloomShader     = require "tetris.bloom_shader"
 local ThemeManager    = require "tetris.theme_manager"
+local RulesetManager  = require "core.ruleset_manager"
+local StatusBlights   = require "combat.status_blights"
 local Blackbox        = require "core.blackbox"
 
 function Piece.new(id, board)
     local self = setmetatable({}, Piece)
     self.id, self.board = id, board
-    local SRS = require "tetris.rotation_systems.srs"
-    self.shape = (SRS and SRS.shapes) and SRS.shapes[id] or { {{1,1,1,1}} }
-    self.rotation, self.x, self.y = 1, 4, 21
+
+    local shapes = RulesetManager.getShapes(id)
+    self.shape = shapes or { {{1,1,1,1}} }
+    self.rotation = 1
+    self.x, self.y = 4, 21
     self.locked, self.gravity_timer, self.lock_timer = false, 0, 0
 
-    self.lock_delay = SettingsManager.get("lock_delay") or 0.50
+    self.lock_delay = RulesetManager.getLockDelay()
     self.move_count = 0
-    self.max_resets = math.floor(SettingsManager.get("max_resets") or 15)
+    self.max_resets = RulesetManager.getCurrent().max_lock_resets
 
     self.spawn_timer = 0.2
-    self.last_move_was_rotate = false 
+    self.last_move_was_rotate = false
 
     if self.board then
         CombatStances.applyPieceModifiers(self.board, self)
+    end
+
+    if RulesetManager.is20G() then
+        while self:move(0, 1, true) do end
     end
 
     return self
 end
 
 function Piece:resetLock()
-    if self.move_count < self.max_resets then 
-        self.lock_timer, self.move_count = 0, self.move_count + 1 
+    if RulesetManager.shouldResetLockOnMove() then
+        if self.move_count < self.max_resets then 
+            self.lock_timer = 0
+            self.move_count = self.move_count + 1 
+        end
     end
 end
 
@@ -61,11 +72,11 @@ function Piece:move(dx, dy, is_gravity)
 end
 
 function Piece:rotate(dir)
-    local SRS = require "tetris.rotation_systems.srs"
     local max_rot = #self.shape
     local old_rot = self.rotation
     local next_rot = ((self.rotation + dir - 1) % max_rot) + 1
-    local kicks = SRS.getKicks(self.id, old_rot, next_rot)
+    
+    local kicks = RulesetManager.getKicks(self.id, old_rot, next_rot)
     if kicks then
         for _, kick in ipairs(kicks) do
             if self.board:canMove(self.x + kick[1], self.y - kick[2], next_rot) then
@@ -103,6 +114,10 @@ function Piece:update(dt, gravity_speed)
 
     CombatStances.applyPieceModifiers(self.board, self)
     local effective_gravity = CombatStances.getGravitySpeed(self.board, gravity_speed)
+
+    if RulesetManager.is20G() then
+        effective_gravity = 0.001
+    end
 
     self.gravity_timer = self.gravity_timer + dt
     local limit = self.board.is_zone_active and 999.0 or effective_gravity
@@ -192,8 +207,7 @@ function Piece:draw(bx, by)
     local shape = self.shape[self.rotation]
     love.graphics.push("all")
 
-    -- Ghost Piece
-    if self.board and bx == self.board.x and by == self.board.y then
+    if self.board and bx == self.board.x and by == self.board.y and RulesetManager.allowGhost() then
         local gy = self.y
         local loop_g = 0
         while self.board:canMove(self.x, gy + 1, self.rotation) do 
@@ -208,7 +222,6 @@ function Piece:draw(bx, by)
         ThemeManager.drawGhostPiece(self, bx, by, shape, gy, ghost_alpha_setting)
     end
 
-    -- Pieza Activa
     for r = 1, #shape do 
         for c = 1, #shape[r] do 
             if shape[r][c] ~= 0 then

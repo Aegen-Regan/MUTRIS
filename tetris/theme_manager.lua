@@ -1,6 +1,10 @@
+-- ================================================================
+-- FILE: tetris/theme_manager.lua
+-- ================================================================
+---@diagnostic disable: undefined-global
 -- ============================================================================
 -- MUTRIS ENGINE: DYNAMIC THEME & SKIN SWITCHER ENGINE (1280x720 WIDESCREEN)
--- Arquitectura: Zero-GC / 4 Universos Visuales / Solid Punchy Restart Halos
+-- Arquitectura: Zero-GC / 4 Universos Visuales / 6-Item Spring Navigation
 -- ============================================================================
 local ThemeManager = {}
 
@@ -19,16 +23,13 @@ ThemeManager.current_theme = 1
 ThemeManager.toast_timer = 0.0
 ThemeManager.toast_text = ""
 
--- Búfer de física elástica para el menú (Zero-GC)
-ThemeManager.menu_offsets = {0, 0, 0, 0}
+-- Búfer de física elástica para 6 opciones en el menú (Zero-GC)
+ThemeManager.menu_offsets = {0, 0, 0, 0, 0, 0}
 
--- Temporizador del Halo Sólido de Reinicio (0.28s ultra-punchy)
+-- Temporizador del Halo Sólido de Reinicio
 ThemeManager.restart_halo_timer = 0.0
 ThemeManager.restart_halo_max_time = 0.28
 
--- ============================================================================
--- 📦 BUFFERS ESTÁTICOS ZERO-GC
--- ============================================================================
 local OSC_SAMPLES = 48
 local osc_points = {}
 for i = 1, OSC_SAMPLES * 2 do osc_points[i] = 0 end
@@ -46,11 +47,8 @@ for i = 1, NUM_STARS do
     }
 end
 
-local vu_meters = {0, 0, 0, 0}
+local vu_meters = {0, 0, 0, 0, 0, 0}
 
--- ============================================================================
--- 🎨 DEFINICIÓN DE LOS 4 TEMAS
--- ============================================================================
 ThemeManager.THEMES = {
     [1] = {
         id = "cyber_daw",
@@ -111,7 +109,7 @@ function ThemeManager.init()
     ThemeManager.current_theme = (type(saved) == "number" and saved >= 1 and saved <= 4) and saved or 1
     ThemeManager.toast_timer = 0.0
     ThemeManager.restart_halo_timer = 0.0
-    ThemeManager.menu_offsets = {0, 0, 0, 0}
+    ThemeManager.menu_offsets = {0, 0, 0, 0, 0, 0}
 end
 
 function ThemeManager.getCurrent()
@@ -130,19 +128,12 @@ function ThemeManager.setTheme(idx)
     SettingsManager.settings.theme_skin = idx
     SettingsManager.save()
 
-    if not Blackbox then
-        Blackbox = require "core.blackbox"
-    end
+    if not Blackbox then Blackbox = require "core.blackbox" end
     Blackbox.log("THEME", "SWITCHED TO: " .. t.id, idx, 0)
 end
 
-function ThemeManager.cycleNext()
-    ThemeManager.setTheme(ThemeManager.current_theme + 1)
-end
-
-function ThemeManager.cyclePrev()
-    ThemeManager.setTheme(ThemeManager.current_theme - 1)
-end
+function ThemeManager.cycleNext() ThemeManager.setTheme(ThemeManager.current_theme + 1) end
+function ThemeManager.cyclePrev() ThemeManager.setTheme(ThemeManager.current_theme - 1) end
 
 function ThemeManager.triggerRestartHalo()
     ThemeManager.restart_halo_timer = ThemeManager.restart_halo_max_time
@@ -161,9 +152,9 @@ function ThemeManager.update(dt)
     local energy = _G.TrackEnergyPunch or 0
     local pulse  = _G.AudioBeatPulse or 0
 
-    for i = 1, 4 do
+    for i = 1, 6 do
         local target = (i == _G.MenuSelectionIndex) and 18.0 or 0.0
-        ThemeManager.menu_offsets[i] = ThemeManager.menu_offsets[i] + (target - ThemeManager.menu_offsets[i]) * 14.0 * dt
+        ThemeManager.menu_offsets[i] = (ThemeManager.menu_offsets[i] or 0) + (target - (ThemeManager.menu_offsets[i] or 0)) * 14.0 * dt
     end
 
     if ThemeManager.current_theme == 4 then
@@ -171,44 +162,35 @@ function ThemeManager.update(dt)
             local s = stars[i]
             s.y = s.y + s.speed * dt * (1.0 + energy * 2.5)
             s.phase = s.phase + dt * 2.5
-            if s.y > 720 then
-                s.y = -5
-                s.x = math.random() * 1280
-            end
+            if s.y > 720 then s.y = -5 s.x = math.random() * 1280 end
         end
     end
 
     if ThemeManager.current_theme == 1 then
-        for i = 1, 4 do
+        for i = 1, 6 do
             local target = (energy * 0.75) + (pulse * 0.25) + math.sin(love.timer.getTime() * 8 + i * 1.5) * 0.15
-            vu_meters[i] = vu_meters[i] + (target - vu_meters[i]) * 16 * dt
+            vu_meters[i] = (vu_meters[i] or 0) + (target - (vu_meters[i] or 0)) * 16 * dt
             vu_meters[i] = math.max(0.05, math.min(1.0, vu_meters[i]))
         end
     end
 end
 
--- ============================================================================
--- 🌟 RENDERIZADO DEL HALO SÓLIDO DE REINICIO (IMPACTO VISCERAL)
--- ============================================================================
 function ThemeManager.drawRestartHalo()
     if ThemeManager.restart_halo_timer <= 0 then return end
 
     local p = ThemeManager.restart_halo_timer / ThemeManager.restart_halo_max_time
-    local alpha = p * p -- Decaimiento cuadrático rápido
-    local exp = 1.0 - (p * p * p) -- Expansión explosiva no-lineal
+    local alpha = p * p
+    local exp = 1.0 - (p * p * p)
     local cx, cy = 640, 360
 
     love.graphics.push("all")
     love.graphics.setBlendMode("add")
 
-    -- 1. Núcleo Blanco Sólido de Impacto Central
     local core_rad = (1.0 - p) * 220
     love.graphics.setColor(1.0, 1.0, 1.0, alpha * 0.85)
     love.graphics.circle("fill", cx, cy, core_rad)
 
-    -- 2. Disco de Onda Sólida Tematizado
     if ThemeManager.current_theme == 1 then
-        -- Ráfaga Sólida Fósforo Esmeralda & Cian CRT
         local rad = exp * 920
         love.graphics.setColor(0.0, 1.0, 0.55, alpha * 0.65)
         love.graphics.circle("fill", cx, cy, rad)
@@ -216,7 +198,6 @@ function ThemeManager.drawRestartHalo()
         love.graphics.circle("fill", cx, cy, rad * 0.72)
 
     elseif ThemeManager.current_theme == 2 then
-        -- Romboide Sólido Oro Solar & Carmesí (Fighter Strike Blast)
         local d_size = exp * 880
         love.graphics.setColor(1.0, 0.08, 0.25, alpha * 0.70)
         love.graphics.polygon("fill", cx, cy - d_size, cx + d_size * 1.35, cy, cx, cy + d_size, cx - d_size * 1.35, cy)
@@ -224,7 +205,6 @@ function ThemeManager.drawRestartHalo()
         love.graphics.polygon("fill", cx, cy - d_size * 0.55, cx + d_size * 0.75, cy, cx, cy + d_size * 0.55, cx - d_size * 0.75, cy)
 
     elseif ThemeManager.current_theme == 3 then
-        -- Disco Sólido de Refracción Holográfica Cian Láser
         local rad = exp * 900
         love.graphics.setColor(0.0, 0.95, 1.0, alpha * 0.65)
         love.graphics.circle("fill", cx, cy, rad)
@@ -232,7 +212,6 @@ function ThemeManager.drawRestartHalo()
         love.graphics.circle("fill", cx, cy, rad * 0.68)
 
     elseif ThemeManager.current_theme == 4 then
-        -- Onda de Singularidad Supernova Sólida Violeta / Astral
         local rad = exp * 950
         love.graphics.setColor(0.60, 0.35, 1.0, alpha * 0.70)
         love.graphics.circle("fill", cx, cy, rad)
@@ -626,17 +605,17 @@ function ThemeManager.drawMenu(menuItems, menuSubtitles, menuSelection, MetaBala
     if ThemeManager.current_theme == 1 then
         love.graphics.setFont(FontCache.get(28))
         love.graphics.setColor(1, 1, 1, 0.98)
-        love.graphics.print("MUTRIS // DIGITAL AUDIO WORKSTATION", 80, 50)
+        love.graphics.print("MUTRIS // DIGITAL AUDIO WORKSTATION", 80, 45)
         love.graphics.setFont(FontCache.get(10))
         love.graphics.setColor(0, 1, 0.55, 0.9)
-        love.graphics.print("MASTER SYNTHESIZER CONSOLE  |  CAMELOT MODAL ENGINE  |  144/240Hz ZERO-GC", 80, 88)
+        love.graphics.print("MASTER SYNTHESIZER CONSOLE  |  CAMELOT MODAL ENGINE  |  144/240Hz ZERO-GC", 80, 80)
 
-        local start_x, start_y = 80, 130
-        local fader_w, fader_h = 580, 78
+        local start_x, start_y = 80, 115
+        local fader_w, fader_h = 580, 68
 
         for i, item in ipairs(menuItems) do
             local off_x = ThemeManager.menu_offsets[i] or 0
-            local fy = start_y + (i - 1) * 92
+            local fy = start_y + (i - 1) * 80
             local is_sel = (i == menuSelection)
 
             love.graphics.setColor(0.02, 0.04, 0.08, 0.92)
@@ -646,18 +625,18 @@ function ThemeManager.drawMenu(menuItems, menuSubtitles, menuSelection, MetaBala
             love.graphics.rectangle("line", start_x + off_x, fy, fader_w, fader_h, 3)
 
             love.graphics.setColor(0.04, 0.08, 0.15, 0.9)
-            love.graphics.rectangle("fill", start_x + off_x + 10, fy + 12, 64, 22, 2)
+            love.graphics.rectangle("fill", start_x + off_x + 10, fy + 10, 64, 20, 2)
             love.graphics.setFont(FontCache.get(9))
             love.graphics.setColor(0, 1, 0.55, 0.9)
-            love.graphics.printf(string.format("CH.0%d", i), start_x + off_x + 10, fy + 17, 64, "center")
+            love.graphics.printf(string.format("CH.0%d", i), start_x + off_x + 10, fy + 14, 64, "center")
 
-            love.graphics.setFont(FontCache.get(15))
+            love.graphics.setFont(FontCache.get(14))
             love.graphics.setColor(is_sel and {1, 1, 1, 1} or {0.7, 0.8, 0.9, 0.8})
-            love.graphics.print(item, start_x + off_x + 85, fy + 14)
+            love.graphics.print(item, start_x + off_x + 85, fy + 12)
 
-            love.graphics.setFont(FontCache.get(9))
+            love.graphics.setFont(FontCache.get(8))
             love.graphics.setColor(0.4, 0.8, 0.7, is_sel and 0.9 or 0.5)
-            love.graphics.print(menuSubtitles[i] or "", start_x + off_x + 85, fy + 42)
+            love.graphics.print(menuSubtitles[i] or "", start_x + off_x + 85, fy + 36)
 
             local vu_val = vu_meters[i] or 0.2
             for seg = 1, 8 do
@@ -670,11 +649,11 @@ function ThemeManager.drawMenu(menuItems, menuSubtitles, menuSelection, MetaBala
                 else
                     love.graphics.setColor(seg_on and {1, 0.1, 0.2, 0.95} or {0.3, 0.05, 0.05, 0.4})
                 end
-                love.graphics.rectangle("fill", seg_x, fy + 26, 6, 26, 1)
+                love.graphics.rectangle("fill", seg_x, fy + 22, 6, 24, 1)
             end
         end
 
-        local osc_x, osc_y, osc_w, osc_h = 700, 130, 500, 240
+        local osc_x, osc_y, osc_w, osc_h = 700, 115, 500, 240
         love.graphics.setColor(0.01, 0.03, 0.06, 0.95)
         love.graphics.rectangle("fill", osc_x, osc_y, osc_w, osc_h, 4)
         love.graphics.setColor(0, 0.8, 0.4, 0.6)
@@ -703,49 +682,49 @@ function ThemeManager.drawMenu(menuItems, menuSubtitles, menuSelection, MetaBala
 
         local arc_y = osc_y + osc_h + 20
         love.graphics.setColor(0.02, 0.04, 0.08, 0.92)
-        love.graphics.rectangle("fill", osc_x, arc_y, osc_w, 106, 4)
+        love.graphics.rectangle("fill", osc_x, arc_y, osc_w, 116, 4)
         love.graphics.setColor(0.0, 0.7, 0.4, 0.5)
-        love.graphics.rectangle("line", osc_x, arc_y, osc_w, 106, 4)
+        love.graphics.rectangle("line", osc_x, arc_y, osc_w, 116, 4)
 
         love.graphics.setFont(FontCache.get(10))
         love.graphics.setColor(0, 1, 0.55, 0.95)
         love.graphics.print("ARCHON AUTO-TUNER TELEMETRY", osc_x + 16, arc_y + 14)
         love.graphics.setFont(FontCache.get(9))
         love.graphics.setColor(0.7, 0.85, 0.9, 0.8)
-        love.graphics.print(MetaBalancer.patch_notes or "SYSTEM EQUILIBRIUM OPTIMAL", osc_x + 16, arc_y + 36)
-        love.graphics.print("HARDWARE TIMEBASE: 0.0ms DRIFT | SAMPLING: 144/240Hz", osc_x + 16, arc_y + 56)
+        love.graphics.print(MetaBalancer.patch_notes or "SYSTEM EQUILIBRIUM OPTIMAL", osc_x + 16, arc_y + 38)
+        love.graphics.print("HARDWARE TIMEBASE: 0.0ms DRIFT | SAMPLING: 144/240Hz", osc_x + 16, arc_y + 60)
 
     elseif ThemeManager.current_theme == 2 then
-        love.graphics.setFont(FontCache.get(44))
+        love.graphics.setFont(FontCache.get(42))
         love.graphics.setColor(1, 0.08, 0.25, 0.98)
-        love.graphics.print("MUTRIS", 100, 42)
-        love.graphics.setFont(FontCache.get(14))
+        love.graphics.print("MUTRIS", 100, 36)
+        love.graphics.setFont(FontCache.get(13))
         love.graphics.setColor(1, 0.85, 0.0, 0.95)
-        love.graphics.print("/// SYNTHETIC TRANSCENDENCE /// [ OVERDRIVE ]", 100, 94)
+        love.graphics.print("/// SYNTHETIC TRANSCENDENCE /// [ OVERDRIVE ]", 100, 84)
 
-        local start_y = 145
-        local ribbon_w, ribbon_h = 620, 68
+        local start_y = 125
+        local ribbon_w, ribbon_h = 620, 60
 
         for i, item in ipairs(menuItems) do
             local off_x = ThemeManager.menu_offsets[i] or 0
-            local ry = start_y + (i - 1) * 88
+            local ry = start_y + (i - 1) * 74
             local is_sel = (i == menuSelection)
-            local slant = 35
+            local slant = 30
 
             if is_sel then
                 love.graphics.setColor(1.0, 0.08, 0.25, 0.95)
                 love.graphics.polygon("fill", 100 + off_x + slant, ry, 100 + off_x + ribbon_w + slant, ry, 100 + off_x + ribbon_w, ry + ribbon_h, 100 + off_x, ry + ribbon_h)
 
                 love.graphics.setColor(1, 0.85, 0, 1.0)
-                love.graphics.polygon("fill", 100 + off_x, ry, 100 + off_x + 18, ry, 100 + off_x + 18 - slant, ry + ribbon_h, 100 + off_x - slant, ry + ribbon_h)
+                love.graphics.polygon("fill", 100 + off_x, ry, 100 + off_x + 16, ry, 100 + off_x + 16 - slant, ry + ribbon_h, 100 + off_x - slant, ry + ribbon_h)
 
-                love.graphics.setFont(FontCache.get(18))
+                love.graphics.setFont(FontCache.get(16))
                 love.graphics.setColor(1, 1, 1, 1)
-                love.graphics.print(string.format("/// 0%d.  %s", i, item), 130 + off_x, ry + 12)
+                love.graphics.print(string.format("/// 0%d.  %s", i, item), 130 + off_x, ry + 10)
 
-                love.graphics.setFont(FontCache.get(9))
+                love.graphics.setFont(FontCache.get(8))
                 love.graphics.setColor(1, 0.9, 0.3, 0.95)
-                love.graphics.print(menuSubtitles[i] or "", 130 + off_x, ry + 40)
+                love.graphics.print(menuSubtitles[i] or "", 130 + off_x, ry + 34)
             else
                 love.graphics.setColor(0.08, 0.08, 0.12, 0.88)
                 love.graphics.polygon("fill", 100 + slant, ry, 100 + ribbon_w + slant, ry, 100 + ribbon_w, ry + ribbon_h, 100, ry + ribbon_h)
@@ -753,17 +732,17 @@ function ThemeManager.drawMenu(menuItems, menuSubtitles, menuSelection, MetaBala
                 love.graphics.setLineWidth(1.5)
                 love.graphics.polygon("line", 100 + slant, ry, 100 + ribbon_w + slant, ry, 100 + ribbon_w, ry + ribbon_h, 100, ry + ribbon_h)
 
-                love.graphics.setFont(FontCache.get(16))
+                love.graphics.setFont(FontCache.get(15))
                 love.graphics.setColor(0.8, 0.8, 0.85, 0.85)
-                love.graphics.print(string.format("    0%d.  %s", i, item), 130, ry + 13)
+                love.graphics.print(string.format("    0%d.  %s", i, item), 130, ry + 11)
 
-                love.graphics.setFont(FontCache.get(9))
+                love.graphics.setFont(FontCache.get(8))
                 love.graphics.setColor(0.5, 0.5, 0.6, 0.6)
-                love.graphics.print(menuSubtitles[i] or "", 130, ry + 40)
+                love.graphics.print(menuSubtitles[i] or "", 130, ry + 34)
             end
         end
 
-        local ac_x, ac_y, ac_w, ac_h = 780, 145, 420, 350
+        local ac_x, ac_y, ac_w, ac_h = 780, 125, 420, 370
         love.graphics.setColor(0.08, 0.08, 0.12, 0.92)
         love.graphics.rectangle("fill", ac_x, ac_y, ac_w, ac_h)
         love.graphics.setColor(1.0, 0.08, 0.25, 0.8)
@@ -774,38 +753,39 @@ function ThemeManager.drawMenu(menuItems, menuSubtitles, menuSelection, MetaBala
         love.graphics.setColor(1.0, 0.85, 0.0, 1.0)
         love.graphics.print("RHYTHMIC STRIKE MATRIX", ac_x + 20, ac_y + 20)
 
-        love.graphics.setFont(FontCache.get(10))
+        love.graphics.setFont(FontCache.get(9))
         love.graphics.setColor(1, 1, 1, 0.9)
-        love.graphics.print("• GROOVE WINDOW: ±35ms (RESONANCE ±45ms)", ac_x + 20, ac_y + 60)
-        love.graphics.print("• KINETIC PARRY: 3 FRAMES (50% COUNTER)", ac_x + 20, ac_y + 90)
-        love.graphics.print("• STANCES: RUSH (1.5x) | BASTION | RESONANCE", ac_x + 20, ac_y + 120)
+        love.graphics.print("• GROOVE WINDOW: ±35ms (RESONANCE ±45ms)", ac_x + 20, ac_y + 55)
+        love.graphics.print("• KINETIC PARRY: 3 FRAMES (50% COUNTER)", ac_x + 20, ac_y + 80)
+        love.graphics.print("• STANCES: RUSH (1.5x) | BASTION | RESONANCE", ac_x + 20, ac_y + 105)
+        love.graphics.print("• RAID HUNT: 2800 HP // 3 PART-BREAKS", ac_x + 20, ac_y + 130)
 
         love.graphics.setColor(1.0, 0.08, 0.25, 0.2)
-        love.graphics.rectangle("fill", ac_x + 20, ac_y + 160, ac_w - 40, 160)
+        love.graphics.rectangle("fill", ac_x + 20, ac_y + 165, ac_w - 40, 180)
         love.graphics.setColor(1.0, 0.08, 0.25, 0.9)
-        love.graphics.rectangle("line", ac_x + 20, ac_y + 160, ac_w - 40, 160)
+        love.graphics.rectangle("line", ac_x + 20, ac_y + 165, ac_w - 40, 180)
 
         love.graphics.setFont(FontCache.get(11))
         love.graphics.setColor(1, 0.85, 0, 1.0)
-        love.graphics.print("[ ARCHON DDA ENGINE ]", ac_x + 35, ac_y + 175)
+        love.graphics.print("[ ARCHON DDA ENGINE ]", ac_x + 35, ac_y + 180)
         love.graphics.setFont(FontCache.get(9))
         love.graphics.setColor(1, 1, 1, 0.85)
-        love.graphics.print(MetaBalancer.patch_notes or "APEX AGGRESSION BALANCED", ac_x + 35, ac_y + 205)
+        love.graphics.print(MetaBalancer.patch_notes or "APEX AGGRESSION BALANCED", ac_x + 35, ac_y + 210)
 
     elseif ThemeManager.current_theme == 3 then
         love.graphics.setFont(FontCache.get(20))
         love.graphics.setColor(0.0, 0.9, 1.0, 0.98)
-        love.graphics.print("MUTRIS ESPORTS", 100, 48)
+        love.graphics.print("MUTRIS ESPORTS", 100, 42)
         love.graphics.setFont(FontCache.get(10))
         love.graphics.setColor(1, 1, 1, 0.6)
-        love.graphics.print("PRECISION GLASSMORPHISM // MATCH ARENA", 280, 55)
+        love.graphics.print("PRECISION GLASSMORPHISM // MATCH ARENA", 280, 49)
 
-        local start_y = 115
-        local card_w, card_h = 520, 95
+        local start_y = 95
+        local card_w, card_h = 520, 75
 
         for i, item in ipairs(menuItems) do
             local off_x = ThemeManager.menu_offsets[i] or 0
-            local cy = start_y + (i - 1) * 110
+            local cy = start_y + (i - 1) * 88
             local is_sel = (i == menuSelection)
 
             love.graphics.setColor(0.02, 0.03, 0.07, 0.85)
@@ -815,35 +795,35 @@ function ThemeManager.drawMenu(menuItems, menuSubtitles, menuSelection, MetaBala
             love.graphics.rectangle("line", 100 + off_x, cy, card_w, card_h, 6)
 
             love.graphics.setColor(is_sel and {0, 0.9, 1.0, 0.25} or {0.1, 0.15, 0.25, 0.4})
-            love.graphics.rectangle("fill", 100 + off_x + card_w - 110, cy + 16, 95, 22, 10)
+            love.graphics.rectangle("fill", 100 + off_x + card_w - 105, cy + 12, 90, 20, 10)
             love.graphics.setFont(FontCache.get(8))
             love.graphics.setColor(is_sel and {0, 0.95, 1.0, 1.0} or {0.5, 0.6, 0.7, 0.7})
-            love.graphics.printf(is_sel and "ENGAGE [A]" or "READY", 100 + off_x + card_w - 110, cy + 22, 95, "center")
+            love.graphics.printf(is_sel and "ENGAGE" or "READY", 100 + off_x + card_w - 105, cy + 17, 90, "center")
 
-            love.graphics.setFont(FontCache.get(16))
+            love.graphics.setFont(FontCache.get(15))
             love.graphics.setColor(is_sel and {1, 1, 1, 1} or {0.7, 0.8, 0.9, 0.85})
-            love.graphics.print(item, 125 + off_x, cy + 18)
+            love.graphics.print(item, 125 + off_x, cy + 14)
 
-            love.graphics.setFont(FontCache.get(9))
+            love.graphics.setFont(FontCache.get(8))
             love.graphics.setColor(0.0, 0.9, 1.0, is_sel and 0.9 or 0.5)
-            love.graphics.print(menuSubtitles[i] or "", 125 + off_x, cy + 50)
+            love.graphics.print(menuSubtitles[i] or "", 125 + off_x, cy + 42)
         end
 
         local p_x, p_w = 660, 520
         love.graphics.setColor(0.02, 0.03, 0.07, 0.85)
-        love.graphics.rectangle("fill", p_x, 115, p_w, 200, 6)
+        love.graphics.rectangle("fill", p_x, 95, p_w, 220, 6)
         love.graphics.setColor(0, 0.9, 1.0, 0.35)
-        love.graphics.rectangle("line", p_x, 115, p_w, 200, 6)
+        love.graphics.rectangle("line", p_x, 95, p_w, 220, 6)
 
         love.graphics.setFont(FontCache.get(12))
         love.graphics.setColor(0, 0.95, 1.0, 0.95)
-        love.graphics.print("PLAYER PERFORMANCE PASSPORT", p_x + 20, 135)
+        love.graphics.print("PLAYER PERFORMANCE PASSPORT", p_x + 20, 115)
 
         love.graphics.setFont(FontCache.get(10))
         love.graphics.setColor(1, 1, 1, 0.85)
-        love.graphics.print("• TARGET ENGINE PPS: 1.45 - 2.50 PPS", p_x + 20, 175)
-        love.graphics.print("• BEAT-LOCK GROOVE ACCURACY: 92.4%", p_x + 20, 205)
-        love.graphics.print("• HARDWARE LATENCY: 0.00ms DETERMINISTIC", p_x + 20, 235)
+        love.graphics.print("• TARGET ENGINE PPS: 1.45 - 2.50 PPS", p_x + 20, 150)
+        love.graphics.print("• BEAT-LOCK GROOVE ACCURACY: 92.4%", p_x + 20, 175)
+        love.graphics.print("• HARDWARE LATENCY: 0.00ms DETERMINISTIC", p_x + 20, 200)
 
         love.graphics.setColor(0.02, 0.03, 0.07, 0.85)
         love.graphics.rectangle("fill", p_x, 335, p_w, 210, 6)
@@ -859,30 +839,30 @@ function ThemeManager.drawMenu(menuItems, menuSubtitles, menuSelection, MetaBala
         love.graphics.print("ADAPTIVE DIFFICULTY ADJUSTMENT: ON", p_x + 20, 425)
 
     elseif ThemeManager.current_theme == 4 then
-        love.graphics.setFont(FontCache.get(34))
+        love.graphics.setFont(FontCache.get(32))
         love.graphics.setColor(1, 1, 1, 0.98)
-        love.graphics.printf("MUTRIS", 0, 55, 1280, "center")
-        love.graphics.setFont(FontCache.get(12))
+        love.graphics.printf("MUTRIS", 0, 45, 1280, "center")
+        love.graphics.setFont(FontCache.get(11))
         love.graphics.setColor(0.6, 0.35, 1.0, 0.95)
-        love.graphics.printf("✦  S I N E S T E S I A   C O S M I C A  ✦", 0, 100, 1280, "center")
+        love.graphics.printf("✦  S I N E S T E S I A   C O S M I C A  ✦", 0, 85, 1280, "center")
 
         love.graphics.setColor(0.6, 0.35, 1.0, 0.25)
         love.graphics.setLineWidth(1.5)
-        love.graphics.line(640, 130, 640, 520)
+        love.graphics.line(640, 115, 640, 560)
 
-        local start_y = 150
-        local node_w, node_h = 560, 64
+        local start_y = 125
+        local node_w, node_h = 560, 56
         local node_x = 640 - (node_w / 2)
 
         for i, item in ipairs(menuItems) do
             local off_x = ThemeManager.menu_offsets[i] or 0
-            local cy = start_y + (i - 1) * 88
+            local cy = start_y + (i - 1) * 72
             local is_sel = (i == menuSelection)
 
             if is_sel then
                 love.graphics.setBlendMode("add")
                 love.graphics.setColor(0.6, 0.35, 1.0, 0.35 + pulse * 0.25)
-                love.graphics.circle("fill", 640 + off_x, cy + node_h/2, 45 + pulse * 15)
+                love.graphics.circle("fill", 640 + off_x, cy + node_h/2, 40 + pulse * 12)
                 love.graphics.setBlendMode("alpha")
 
                 love.graphics.setColor(0.03, 0.02, 0.08, 0.94)
@@ -892,16 +872,16 @@ function ThemeManager.drawMenu(menuItems, menuSubtitles, menuSelection, MetaBala
                 love.graphics.rectangle("line", node_x + off_x, cy, node_w, node_h, 8)
 
                 love.graphics.setColor(1.0, 0.85, 0.25, 0.95)
-                love.graphics.polygon("fill", node_x + off_x + 35, cy + 22, node_x + off_x + 41, cy + 32, node_x + off_x + 35, cy + 42, node_x + off_x + 29, cy + 32)
-                love.graphics.polygon("fill", node_x + off_x + node_w - 35, cy + 22, node_x + off_x + node_w - 29, cy + 32, node_x + off_x + node_w - 35, cy + 42, node_x + off_x + node_w - 41, cy + 32)
+                love.graphics.polygon("fill", node_x + off_x + 35, cy + 18, node_x + off_x + 41, cy + 28, node_x + off_x + 35, cy + 38, node_x + off_x + 29, cy + 28)
+                love.graphics.polygon("fill", node_x + off_x + node_w - 35, cy + 18, node_x + off_x + node_w - 29, cy + 28, node_x + off_x + node_w - 35, cy + 38, node_x + off_x + node_w - 41, cy + 28)
 
-                love.graphics.setFont(FontCache.get(16))
+                love.graphics.setFont(FontCache.get(15))
                 love.graphics.setColor(1, 1, 1, 1.0)
-                love.graphics.printf(item, node_x + off_x, cy + 12, node_w, "center")
+                love.graphics.printf(item, node_x + off_x, cy + 10, node_w, "center")
 
-                love.graphics.setFont(FontCache.get(9))
+                love.graphics.setFont(FontCache.get(8))
                 love.graphics.setColor(0.1, 0.9, 1.0, 0.95)
-                love.graphics.printf(menuSubtitles[i] or "", node_x + off_x, cy + 36, node_w, "center")
+                love.graphics.printf(menuSubtitles[i] or "", node_x + off_x, cy + 32, node_w, "center")
             else
                 love.graphics.setColor(0.01, 0.01, 0.04, 0.80)
                 love.graphics.rectangle("fill", node_x, cy, node_w, node_h, 8)
@@ -909,24 +889,24 @@ function ThemeManager.drawMenu(menuItems, menuSubtitles, menuSelection, MetaBala
                 love.graphics.setLineWidth(1.0)
                 love.graphics.rectangle("line", node_x, cy, node_w, node_h, 8)
 
-                love.graphics.setFont(FontCache.get(15))
+                love.graphics.setFont(FontCache.get(14))
                 love.graphics.setColor(0.75, 0.70, 0.85, 0.85)
-                love.graphics.printf(item, node_x, cy + 12, node_w, "center")
+                love.graphics.printf(item, node_x, cy + 10, node_w, "center")
 
-                love.graphics.setFont(FontCache.get(9))
+                love.graphics.setFont(FontCache.get(8))
                 love.graphics.setColor(0.5, 0.45, 0.65, 0.6)
-                love.graphics.printf(menuSubtitles[i] or "", node_x, cy + 36, node_w, "center")
+                love.graphics.printf(menuSubtitles[i] or "", node_x, cy + 32, node_w, "center")
             end
         end
 
         love.graphics.setFont(FontCache.get(10))
         love.graphics.setColor(0.6, 0.35, 1.0, 0.9)
-        love.graphics.printf("[ ARCHON COSMIC HARMONY LOCKED ]", 0, 525, 1280, "center")
+        love.graphics.printf("[ ARCHON COSMIC HARMONY LOCKED ]", 0, 565, 1280, "center")
     end
 
     love.graphics.setFont(FontCache.get(9))
     love.graphics.setColor(1, 1, 1, 0.50)
-    love.graphics.printf("[ UP / DOWN ] NAVEGAR   |   [ ENTER ] SELECCIONAR   |   [ F5 ] CAMBIAR SKIN   |   [ F9 ] REC   |   [ F12 ] CAPTURA", 0, 620, 1280, "center")
+    love.graphics.printf("[ UP / DOWN ] NAVEGAR   |   [ ENTER ] SELECCIONAR   |   [ F5 ] CAMBIAR SKIN   |   [ F9 ] REC   |   [ F12 ] CAPTURA", 0, 625, 1280, "center")
 
     love.graphics.pop()
 end

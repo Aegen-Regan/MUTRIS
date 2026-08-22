@@ -4,12 +4,15 @@
 ---@diagnostic disable: undefined-global
 -- ============================================================================
 -- MUTRIS ENGINE: INPUT & DAS/ARR COMPETITIVE ENGINE
--- Mapeo Universal, Stance Switching [F8], Theme Switcher [F5] & Timebase Zero-GC
+-- Mapeo Universal, Multi-Ruleset Gateways & Status Blights Integration
 -- ============================================================================
 local Input = {}
 local SettingsManager = require "settings_manager"
 local CombatStances   = require "combat.combat_stances"
 local ThemeManager    = require "tetris.theme_manager"
+local RulesetManager  = require "core.ruleset_manager"
+local HuntingForge    = require "combat.hunting_forge"
+local StatusBlights   = require "combat.status_blights"
 
 INPUT_CONFIG = {
     TIMEBASE_MODE           = "gpu",
@@ -76,7 +79,6 @@ local function _isGamepadAxisDown(axis_name, threshold, greater_than)
     return false
 end
 
--- Factor de caída suave reactivo al ajuste SDF
 function Input.getSoftDropFactor()
     if Input.player and Input.player.active_piece then
         if love.keyboard.isDown("kp5") or love.keyboard.isDown("5") or
@@ -96,22 +98,15 @@ function Input.update(dt)
     local p = Input.player.active_piece
     if p.locked then return end
 
-    local t
-    if INPUT_CONFIG.TIMEBASE_MODE == "audio" then
-        local MusicManager = require "music_manager"
-        local audio_now = 0
-        if MusicManager and MusicManager.getTime then audio_now = MusicManager.getTime() end
-        t = audio_now - Input.last_audio_time
-        Input.last_audio_time = audio_now
-        if t <= 0 or t > INPUT_CONFIG.MAX_AUDIO_DT_SAFETY then t = dt end
-    else
-        t = dt
-    end
+    local t = dt
+    
+    -- Compensación física por Frostbite y Joyas
+    local frost_das = StatusBlights.getDASOffset(Input.player)
+    local frost_arr = StatusBlights.getARROffset(Input.player)
 
-    local das = SettingsManager.get("das") or INPUT_CONFIG.FALLBACK_DAS
-    local arr = math.max(INPUT_CONFIG.ARR_ABSOLUTE_MIN, SettingsManager.get("arr") or INPUT_CONFIG.FALLBACK_ARR)
+    local das = (SettingsManager.get("das") or INPUT_CONFIG.FALLBACK_DAS) + HuntingForge.getDASOffset() + frost_das
+    local arr = math.max(INPUT_CONFIG.ARR_ABSOLUTE_MIN, (SettingsManager.get("arr") or INPUT_CONFIG.FALLBACK_ARR) + frost_arr)
 
-    -- Modificador ARR en Stance RUSH
     if Input.player.current_stance == 1 then
         arr = INPUT_CONFIG.ARR_ABSOLUTE_MIN
     end
@@ -167,7 +162,6 @@ function Input.handleAction(action)
         return
     end
 
-    -- Conmutador de Skins en vivo [F5] / [F6]
     if action == "theme_next" then
         ThemeManager.cycleNext()
         return
@@ -178,7 +172,6 @@ function Input.handleAction(action)
 
     if not Input.player then return end
 
-    -- Conmutación de Postura [F8]
     if action == "stance_switch" then
         CombatStances.cycleStance(Input.player)
         return
@@ -195,14 +188,20 @@ function Input.handleAction(action)
         if srs_180 == 1 or srs_180 == true or (type(srs_180) == "number" and srs_180 >= 0.5) then
             p:rotate(2)
         end
-    elseif action == "hold" then Input.player:hold()
-    elseif action == "zone" then Input.player:enterZone()
+    elseif action == "hold" then
+        if RulesetManager.allowHold() then
+            Input.player:hold()
+        end
+    elseif action == "zone" then 
+        Input.player:enterZone()
     elseif action == "hard_drop" then
-        local startY = p.y
-        while p:move(0, 1, true) do end
-        local endY = p.y
-        Input.player:spawnTrail(p.x, startY, endY, p.id, p.shape[p.rotation])
-        p:lock()
+        if RulesetManager.allowHardDrop() then
+            local startY = p.y
+            while p:move(0, 1, true) do end
+            local endY = p.y
+            Input.player:spawnTrail(p.x, startY, endY, p.id, p.shape[p.rotation])
+            p:lock()
+        end
     end
 end
 
