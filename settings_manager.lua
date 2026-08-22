@@ -17,6 +17,17 @@ SettingsManager.defaults = {
     max_resets        = 15,      -- 15 movimientos
     srs_180           = 1,       -- 1 = Activo, 0 = Inactivo
 
+    -- MAPEO DE CONTROLES PERSONALIZADOS
+    key_left          = "left",
+    key_right         = "right",
+    key_soft_drop     = "down",
+    key_hard_drop     = "space",
+    key_rot_cw        = "x",     -- Rotación Horaria
+    key_rot_ccw       = "z",     -- Rotación Antihoraria
+    key_rot_180       = "a",     -- Rotación 180
+    key_hold          = "c",     -- Hold / Reserva
+    key_zone          = "tab",   -- Zone Mode / Recital
+
     -- AUDIO / DAW
     master_vol        = 1.0,     -- 100%
     bgm_vol           = 0.85,    -- 85%
@@ -35,7 +46,7 @@ SettingsManager.defaults = {
     zone_trigger_mode = 1,       -- 1=Flexible (25%+), 2=Hyper Only (100%)
 
     -- VIDEO / FX & SKINS
-    theme_skin        = 1,       -- 1=Cyber-DAW, 2=Neo-Kinetic, 3=Esports, 4=Cosmic
+    theme_skin        = 4,       -- 1=Cyber-DAW, 2=Neo-Kinetic, 3=Esports, 4=Cosmic
     bloom_intensity   = 1.0,     -- 100%
     screen_shake      = 1.0,     -- 100%
     ghost_alpha       = 0.35,    -- 35%

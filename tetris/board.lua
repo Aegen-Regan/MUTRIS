@@ -28,6 +28,7 @@ local BenchmarkManager = require "core.benchmark_manager"
 local HuntingForge     = require "combat.hunting_forge"
 local StatusBlights    = require "combat.status_blights"
 local Blackbox         = require "core.blackbox"
+local EventBus         = require "core.event_bus"
 
 Board.colors = {
     [1] = {0.0, 0.9, 1.0},
@@ -114,6 +115,9 @@ function Board:spawnPiece()
     local next_id = self.bag:next()
     self.active_piece = Piece.new(next_id, self)
 
+    -- 🪝 HOOK ZERO-GC: Spawn de Pieza
+    EventBus.emit(EventBus.ON_PIECE_SPAWN, next_id, self.player_type == "human" and 1 or 2)
+
     if not self:canMove(self.active_piece.x, self.active_piece.y, self.active_piece.rotation) then
         Blackbox.log(
             (self.player_type == "human") and "P1_BLOCK_OUT" or "BOT_BLOCK_OUT",
@@ -153,8 +157,8 @@ function Board:enterZone()
     self.zone_timer = self.zone_max_time * self.zone_meter
     self.zone_lines_cleared = 0
 
-    -- Entrar en Zone purga los estados alterados
     StatusBlights.cleanse(self)
+    EventBus.emit(EventBus.ON_ZONE_ENTER, self.player_type == "human" and 1 or 2, self.zone_tier)
 
     if self.zone_tier == 2 then
         AudioManager.playImmediateSFX("zone_enter_hyper", self.player_type == "bot")
@@ -184,6 +188,7 @@ function Board:exitZone()
 
     self:clearCompletedLinesInZone()
     AudioManager.playImmediateSFX("ultimatris", self.player_type == "bot")
+    EventBus.emit(EventBus.ON_ZONE_EXIT, self.player_type == "human" and 1 or 2, attack)
 end
 
 function Board:isGridEmpty()
@@ -266,13 +271,14 @@ function Board:checkLines(is_tspin)
             self.b2b_count = 0 
         end
 
-        -- Registro en Benchmark
         if self.player_type == "human" and _G.CURRENT_GAME_MODE == "benchmark" then
             BenchmarkManager.registerPlayerLineClear(cleared, is_tspin)
         end
 
-        -- 🩸 CAUTERIZAR Y APLICAR STATUS BLIGHTS
         StatusBlights.onPlayerLineClear(self, cleared, is_tspin)
+        
+        -- 🪝 HOOK ZERO-GC: Limpieza de Líneas
+        EventBus.emit(EventBus.ON_LINE_CLEAR, cleared, is_tspin and 1 or 0, self.player_type == "human" and 1 or 2, self.combo_count)
 
         if self.is_zone_active then
             self.zone_lines_cleared = self.zone_lines_cleared + cleared
@@ -421,6 +427,9 @@ function Board:triggerDeath()
     AudioManager.playImmediateSFX("death", self.player_type == "bot")
     BloomShader.triggerShockwave(self.x + 120, self.y + 240)
     self:triggerShake(16, 0.6)
+
+    -- 🪝 HOOK ZERO-GC: Muerte del Tablero
+    EventBus.emit(EventBus.ON_BOARD_DEATH, self.player_type == "human" and 1 or 2)
 end
 
 function Board:drawBlock(x, y, id, alpha)
@@ -508,7 +517,6 @@ function Board:draw()
         love.graphics.line(self.x + c * 24, self.y, self.x + c * 24, self.y + 480)
     end
 
-    -- Bloques Fijos
     local block_alpha = self.is_dying and math.max(0.2, self.death_timer / 1.5) or 1.0
     for r = 21, 40 do
         for c = 1, 10 do
@@ -519,7 +527,6 @@ function Board:draw()
         end
     end
 
-    -- Estelas de Hard Drop
     love.graphics.setBlendMode("add")
     for i = 1, #self.trail_pool do
         local tr = self.trail_pool[i]
@@ -540,12 +547,10 @@ function Board:draw()
         end
     end
 
-    -- Pieza Activa y Ghost Piece
     if self.active_piece and not self.is_dying then
         self.active_piece:draw(self.x, self.y)
     end
 
-    -- Hard Drop Ground Slam
     if self.lock_impact > 0 then
         love.graphics.setBlendMode("add")
         love.graphics.setColor(t.secondary[1], t.secondary[2], t.secondary[3], self.lock_impact * 0.5)
@@ -559,15 +564,12 @@ function Board:draw()
     KineticParry.draw(self)
     ThemeManager.drawGarbageBar(self)
 
-    -- Auras de Estados Alterados (Frostbite, Bleed, Corruption)
     StatusBlights.drawAura(self)
 
-    -- Dron Palico
     if self.player_type == "human" then
         HuntingForge.drawPalico(self)
     end
 
-    -- Corchetes anatómicos sobre el jefe
     if self.player_type == "bot" and _G.CURRENT_GAME_MODE == "boss_hunt" then
         PartBreaking.drawIndicators(self)
     end

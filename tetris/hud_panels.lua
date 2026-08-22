@@ -4,14 +4,12 @@
 ---@diagnostic disable: undefined-global
 -- ============================================================================
 -- MUTRIS ENGINE: DYNAMIC HUD PANELS (NEXT / HOLD / ZONE BAR) (1280x720)
--- 4 Universos Visuales: Eurorack Synth / Persona Slash / Glass / Celestial
 -- ============================================================================
 local HUDPanels = {}
 local SRS          = require "tetris.rotation_systems.srs"
 local FontCache    = require "tetris.font_cache"
 local ThemeManager = require "tetris.theme_manager"
 
--- Calibración submétrica exacta para centrar cada una de las 7 piezas en 70x70
 local PREVIEW_CONFIG = {
     [1] = { ox = 11, oy = 14, scale = 0.50 }, -- I piece (4x4)
     [2] = { ox = 15, oy = 18, scale = 0.55 }, -- J piece (3x3)
@@ -35,9 +33,6 @@ function HUDPanels.draw(board)
 
     love.graphics.push("all")
 
-    -- ────────────────────────────────────────────────────────────────────────
-    -- 1. RENDERIZADO DE PANELES NEXT & HOLD POR TEMA
-    -- ────────────────────────────────────────────────────────────────────────
     local function drawThemedPanel(x, y, label)
         if theme_idx == 1 then
             love.graphics.setColor(0.02, 0.03, 0.06, 0.94)
@@ -97,7 +92,7 @@ function HUDPanels.draw(board)
     if board.hold_piece then
         local pid = board.hold_piece.id
         local cfg = PREVIEW_CONFIG[pid] or { ox = 15, oy = 18, scale = 0.55 }
-        local shape = SRS.shapes[pid][1]
+        local shape = SRS.shapes[pid] and SRS.shapes[pid][1] or {{{1}}}
         
         love.graphics.push()
         love.graphics.translate(hold_x + cfg.ox, panel_y + cfg.oy)
@@ -115,11 +110,14 @@ function HUDPanels.draw(board)
     end
 
     drawThemedPanel(next_x, panel_y, (theme_idx == 2 and "INCOMING") or "NEXT")
-    if board.bag then
-        local next_id = board.bag:peek(1)[1]
-        if next_id then
+    if board.bag and board.bag.peek then
+        -- 🛡️ Resolución defensiva de tipo para soportar tanto {id} como números planos
+        local peek_res = board.bag:peek(1)
+        local next_id = type(peek_res) == "table" and (peek_res[1] or peek_res.id) or peek_res
+
+        if next_id and type(next_id) == "number" then
             local cfg = PREVIEW_CONFIG[next_id] or { ox = 15, oy = 18, scale = 0.55 }
-            local shape = SRS.shapes[next_id][1]
+            local shape = SRS.shapes[next_id] and SRS.shapes[next_id][1] or {{{1}}}
             
             love.graphics.push()
             love.graphics.translate(next_x + cfg.ox, panel_y + cfg.oy)
@@ -146,7 +144,7 @@ function HUDPanels.draw(board)
     local zone_w = 10
 
     local fill_val = board.is_zone_active and (board.zone_timer / (board.zone_max_time * math.max(0.1, board.zone_meter))) or board.zone_meter
-    fill_val = math.max(0, math.min(1, fill_val))
+    fill_val = math.max(0, math.min(1, fill_val or 0))
     local current_h = zone_h * fill_val
 
     if theme_idx == 1 then

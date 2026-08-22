@@ -4,6 +4,7 @@
 ---@diagnostic disable: undefined-global
 local AudioManager = {}
 local SettingsManager = require "settings_manager"
+local EventBus = require "core.event_bus"
 
 AUDIO_CONFIG = {
     SFX_DURATION_BASE_BOOST_MIN = 1.0,
@@ -95,15 +96,13 @@ function AudioManager.playVoiceAnnounce(voice_type)
     if sfx_vol <= 0.01 then return end
 
     local announcer_mode = SettingsManager.get("announcer_mode") or 1
-    if announcer_mode == 0 then return end -- Apagado
+    if announcer_mode == 0 then return end
 
-    -- Si está en modo "Critical Only", solo reproduce eventos de alto impacto
     if announcer_mode == 2 then
         local is_critical = (voice_type == "victory" or voice_type == "danger" or voice_type == "hyper" or voice_type == "ultimatris" or voice_type == "perfect_clear")
         if not is_critical then return end
     end
     
-    -- Ensordecimiento proporcional configurado
     AudioManager.triggerSidechain(1.0, 0.75)
 
     local key = voice_type:lower()
@@ -197,12 +196,11 @@ function AudioManager.playSubBassThud(power)
     love.audio.play(src)
 end
 
--- 💎 IMPACTO MECÁNICO TÁCTIL (Limpieza de líneas sin bloops)
+-- 💎 IMPACTO MECÁNICO TÁCTIL
 function AudioManager.playMechanicalClear(lines_count, is_bot)
     local sfx_vol = SettingsManager.getSFX()
     if sfx_vol <= 0.01 then return end
 
-    -- Para el bot, la atenuación es mucho más suave para no silenciar la partida del usuario
     local duck_amount = is_bot and (0.30 + lines_count * 0.05) or (0.60 + lines_count * 0.08)
     AudioManager.triggerSidechain(duck_amount, 0.35)
 
@@ -366,8 +364,10 @@ function AudioManager.update(dt, stats)
         local fraction = current_beat - math.floor(current_beat)
         if fraction < 0.09 and _G.AudioBeatPulse <= 0.1 then
             _G.AudioBeatPulse = 1.0
+            
+            -- 🪝 HOOK ZERO-GC: Disparo del beat a plugins y subsistemas
+            EventBus.emit(EventBus.ON_BEAT, math.floor(current_beat), AudioManager.current_bpm)
 
-            -- 🔊 METRÓNOMO AUDIBLE SI ESTÁ ACTIVADO EN AJUSTES
             local beat_click = SettingsManager.get("beat_click") or 0
             if beat_click == 2 or (beat_click == 1 and danger > 0.45) then
                 AudioManager.playHatClosed(0.12)

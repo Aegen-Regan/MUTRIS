@@ -4,7 +4,6 @@
 ---@diagnostic disable: undefined-global
 -- ============================================================================
 -- MUTRIS ENGINE: TETROMINO PIECE PHYSICS & MULTI-RULESET INTEGRATION
--- SRS / ARS / NES / Status Blights Corruption / Ghost Filtering
 -- ============================================================================
 local Piece = {}
 Piece.__index = Piece
@@ -20,6 +19,7 @@ local ThemeManager    = require "tetris.theme_manager"
 local RulesetManager  = require "core.ruleset_manager"
 local StatusBlights   = require "combat.status_blights"
 local Blackbox        = require "core.blackbox"
+local EventBus        = require "core.event_bus"
 
 function Piece.new(id, board)
     local self = setmetatable({}, Piece)
@@ -65,6 +65,7 @@ function Piece:move(dx, dy, is_gravity)
             AudioManager.playImmediateSFX("move", self.board.player_type == "bot") 
             self:resetLock() 
             self.last_move_was_rotate = false
+            EventBus.emit(EventBus.ON_PIECE_MOVE, self.id, dx, dy, self.board.player_type == "human" and 1 or 2)
         end
         return true
     end
@@ -84,6 +85,7 @@ function Piece:rotate(dir)
                 AudioManager.playImmediateSFX("rotate", self.board.player_type == "bot")
                 self:resetLock()
                 self.last_move_was_rotate = true
+                EventBus.emit(EventBus.ON_PIECE_ROTATE, self.id, next_rot, self.board.player_type == "human" and 1 or 2)
                 return true
             end
         end
@@ -157,6 +159,10 @@ function Piece:lock()
     local shape = self.shape[self.rotation]
     local has_mino_in_buffer = false
 
+    local lock_x = self.x
+    local lock_y = self.y
+    local lock_rot = self.rotation
+
     for r = 1, #shape do
         for c = 1, #shape[r] do
             if shape[r][c] ~= 0 then
@@ -181,6 +187,9 @@ function Piece:lock()
         self.id,
         self.y
     )
+
+    -- 🪝 HOOK ZERO-GC CON COORDENADAS PRECISAS (id, x, y, rot, player_id)
+    EventBus.emit(EventBus.ON_PIECE_LOCK, self.id, lock_x, lock_y, lock_rot, self.board.player_type == "human" and 1 or 2)
 
     if is_tspin then
         self.board.tspin_flash = 1.0

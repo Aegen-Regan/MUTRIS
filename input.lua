@@ -16,7 +16,7 @@ local StatusBlights   = require "combat.status_blights"
 
 INPUT_CONFIG = {
     TIMEBASE_MODE           = "gpu",
-    FALLBACK_DAS            = 0.094,
+    FALLBACK_DAS            = 0.096,
     FALLBACK_ARR            = 0.008,
     ARR_ABSOLUTE_MIN        = 0.001,
     JOY_DEADZONE_LEFT_RIGHT = 0.5,
@@ -81,8 +81,8 @@ end
 
 function Input.getSoftDropFactor()
     if Input.player and Input.player.active_piece then
-        if love.keyboard.isDown("kp5") or love.keyboard.isDown("5") or
-           love.keyboard.isDown("down") or love.keyboard.isDown("clear") or
+        if love.keyboard.isDown("down") or love.keyboard.isDown("kp5") or love.keyboard.isDown("5") or
+           love.keyboard.isDown("s") or
            _isGamepadDown("dpdown") or _isGamepadAxisDown("lefty", INPUT_CONFIG.JOY_DEADZONE_DOWN, true) then
             
             local sdf_mult = SettingsManager.get("sdf") or 40.0
@@ -100,7 +100,6 @@ function Input.update(dt)
 
     local t = dt
     
-    -- Compensación física por Frostbite y Joyas
     local frost_das = StatusBlights.getDASOffset(Input.player)
     local frost_arr = StatusBlights.getARROffset(Input.player)
 
@@ -111,8 +110,8 @@ function Input.update(dt)
         arr = INPUT_CONFIG.ARR_ABSOLUTE_MIN
     end
 
-    -- Izquierda
-    local move_left_held = love.keyboard.isDown("kp4") or love.keyboard.isDown("left") or
+    -- Mover Izquierda: Flecha Izquierda o Numpad 4
+    local move_left_held = love.keyboard.isDown("left") or love.keyboard.isDown("kp4") or
                            _isGamepadDown("dpleft") or _isGamepadAxisDown("leftx", -INPUT_CONFIG.JOY_DEADZONE_LEFT_RIGHT, false)
     if move_left_held then
         if not Input.das_active.left then
@@ -133,8 +132,8 @@ function Input.update(dt)
         Input.das_active.left = false
     end
 
-    -- Derecha
-    local move_right_held = love.keyboard.isDown("kp6") or love.keyboard.isDown("right") or
+    -- Mover Derecha: Flecha Derecha o Numpad 6
+    local move_right_held = love.keyboard.isDown("right") or love.keyboard.isDown("kp6") or
                             _isGamepadDown("dpright") or _isGamepadAxisDown("leftx", INPUT_CONFIG.JOY_DEADZONE_LEFT_RIGHT, true)
     if move_right_held then
         if not Input.das_active.right then
@@ -181,8 +180,10 @@ function Input.handleAction(action)
     local p = Input.player.active_piece
     if p.locked then return end
 
-    if action == "rot_cw" then p:rotate(1)
-    elseif action == "rot_ccw" then p:rotate(-1)
+    if action == "rot_cw" then 
+        p:rotate(1)
+    elseif action == "rot_ccw" then 
+        p:rotate(-1)
     elseif action == "rot_180" then
         local srs_180 = SettingsManager.get("srs_180")
         if srs_180 == 1 or srs_180 == true or (type(srs_180) == "number" and srs_180 >= 0.5) then
@@ -206,16 +207,38 @@ function Input.handleAction(action)
 end
 
 function Input.keypressed(key)
-    if key == "r" then Input.handleAction("restart")
-    elseif key == "f5" then Input.handleAction("theme_next")
-    elseif key == "f6" then Input.handleAction("theme_prev")
-    elseif key == "tab" or key == "lshift" or key == "rshift" then Input.handleAction("stance_switch")
-    elseif key == "a" or key == "z" then Input.handleAction("rot_cw")
-    elseif key == "d" or key == "x" then Input.handleAction("rot_ccw")
-    elseif key == "kp8" or key == "up" then Input.handleAction("rot_180")
-    elseif key == "s" or key == "c" then Input.handleAction("hold")
-    elseif key == "q" or key == "e" then Input.handleAction("zone")
-    elseif key == "space" then Input.handleAction("hard_drop")
+    if key == "r" then 
+        Input.handleAction("restart")
+    elseif key == "f5" then 
+        Input.handleAction("theme_next")
+    elseif key == "f6" then 
+        Input.handleAction("theme_prev")
+    elseif key == "tab" or key == "lshift" or key == "rshift" then 
+        Input.handleAction("stance_switch")
+
+    -- 🔄 Rotación Horaria (CW): A o Z
+    elseif key == "a" or key == "z" then 
+        Input.handleAction("rot_cw")
+
+    -- 🔄 Rotación Antihoraria (CCW): D o X
+    elseif key == "d" or key == "x" then 
+        Input.handleAction("rot_ccw")
+
+    -- 🔄 Rotación 180°: Flecha Arriba o Numpad 8
+    elseif key == "up" or key == "kp8" then 
+        Input.handleAction("rot_180")
+
+    -- 📦 Hold / Reserva: S o C
+    elseif key == "s" or key == "c" then 
+        Input.handleAction("hold")
+
+    -- ⚡ Zone Mode / Recital: Q o E
+    elseif key == "q" or key == "e" then 
+        Input.handleAction("zone")
+
+    -- 💥 Hard Drop: Barra Espaciadora
+    elseif key == "space" then 
+        Input.handleAction("hard_drop")
     end
 end
 
