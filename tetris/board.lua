@@ -300,7 +300,16 @@ function Board:checkLines(is_tspin)
     else
         self.combo_count = -1
         if not self.is_zone_active then
-            GarbageManager.pushToGrid(self)
+            local lines_to_push = 0
+            if self.garbage_queue then
+                for _, g in ipairs(self.garbage_queue) do
+                    lines_to_push = lines_to_push + (type(g) == "table" and g.lines or g)
+                end
+                self.garbage_queue = {}
+            end
+            if lines_to_push > 0 then
+                self:pushToGrid(lines_to_push)
+            end
         end
     end
 
@@ -623,6 +632,44 @@ function Board:draw()
     end
 
     love.graphics.pop()
+end
+
+-- ================================================================
+-- GARBAGE INJECTION & ROW-SHIFTING (ZERO-GC)
+-- ================================================================
+function Board:pushToGrid(line_count)
+    if not line_count or line_count <= 0 then return end
+
+    local count = math.min(20, line_count)
+    local hole_col = math.random(1, 10)
+
+    -- Desplazar filas hacia arriba (filas 1 a 39 copian de r+1)
+    for _ = 1, count do
+        for r = 1, 39 do
+            for c = 1, 10 do
+                self.grid[r][c] = self.grid[r + 1][c]
+            end
+        end
+        -- Inyectar la nueva fila de basura en la base (fila 40)
+        for c = 1, 10 do
+            self.grid[40][c] = (c == hole_col) and 0 or 8
+        end
+    end
+
+    if self.triggerShake then
+        self:triggerShake(math.min(12, count * 3), 0.25)
+    end
+end
+
+-- ALIASES DEFENSIVOS CRUZADOS
+Board.receiveGarbage = Board.pushToGrid
+Board.injectGarbage  = Board.pushToGrid
+
+-- Vincular cálculo de daño defensivo
+Board.calculateAttack = GarbageManager.calculateAttack
+
+function Board:calculateAttack(lines_cleared, is_tspin, is_b2b, combo)
+    return GarbageManager.calculateAttack(lines_cleared, is_tspin, is_b2b, combo)
 end
 
 return Board

@@ -2,10 +2,6 @@
 -- FILE: combat/status_blights.lua
 -- ================================================================
 ---@diagnostic disable: undefined-global
--- ============================================================================
--- MUTRIS ENGINE: STATUS BLIGHTS & AILMENTS FRAMEWORK (FASE 17)
--- Arquitectura: Zero-GC / Frostbite / Bleed / Corruption / Theme Integration
--- ============================================================================
 local StatusBlights = {}
 
 local FontCache    = require "tetris.font_cache"
