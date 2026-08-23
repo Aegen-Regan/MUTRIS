@@ -512,17 +512,17 @@ Attempt to index local 'item' (number)	Se esperaba una tabla {lines=X} pero se r
 Cajones vacíos ▯ en textos de combate	Caracteres Unicode (⚠, ★, ◇) no incluidos en la fuente rasterizada.	Saneamiento estricto a caracteres ASCII imprimibles y dibujado procedural de polígonos.
 Texto de Game Over ilegible / sucio	El Flight Recorder central se traslucía por detrás del modal de victoria.	Ocultar eventos centrales en gameover y aplicar fondo opaco 1.0 con drop shadow.
 Micro-tirones cada 4 segundos (GC Stutter)	Creación de tablas {} o llamadas a newFont() en draw() o update().	Migración obligatoria a pools estáticos y FontCache.get(size).
-🎮 MAPEO UNIVERSAL DE CONTROLES & HOTKEYS
+🎮 MAPEO UNIVERSAL DE CONTROLES & HOTKEYS (Mati Custom)
 Acción	Teclado Primario	Teclado Secundario	Gamepad / Mando
-Mover Izquierda / Derecha	Left / Right	KP 4 / KP 6	D-Pad L/R o Stick Izq
-Soft Drop (Caída Suave)	Down	KP 5	D-Pad Down o Stick Abajo
+Mover Izquierda / Derecha	KP 4 / KP 6	Left / Right	D-Pad L/R o Stick Izq
+Soft Drop (Caída Suave)	KP 5	Down	D-Pad Down o Stick Abajo
 Hard Drop (Fijación Instantánea)	Space	—	RB / RT
 Rotación Horaria (CW)	A	Z	Botón A / Botón B
 Rotación Antihoraria (CCW)	D	X	Botón X / Botón Y
-Rotación 180°	Up	KP 8	D-Pad Up
+Rotación 180°	KP 8	Up	D-Pad Up
 Hold (Reserva de Pieza)	S	C	LB / LT
-Zone Mode / Recital Melódico	Q	E	Gatillo L2 / R2
-Cambio de Postura (Stance Switch)	Tab	LShift / RShift	L3 / R3 / Back
+Zone Mode / Recital Melódico	E	Q	Gatillo L2 / R2
+Cambio de Postura (Stance Switch)	Q	Tab	L3 / R3 / Back
 Conmutador de Skin en Vivo	F5 (Next) / F6 (Prev)	—	—
 Grabar Clip MP4 60FPS (Win32 Pipe)	F9	—	—
 Captura HD Lossless a Portapapeles	F12	F2 / PrintScreen	—

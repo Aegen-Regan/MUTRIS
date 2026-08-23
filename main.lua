@@ -46,6 +46,7 @@ local HuntingForge       = require "combat.hunting_forge"
 local EventBus           = require "core.event_bus"
 local PluginManager      = require "core.plugin_manager"
 local SceneManager       = require "core.scene_manager"
+local SceneCampaign      = require "scenes.scene_campaign"
 
 local PlayerBoard = nil
 local BotBoard    = nil
@@ -175,6 +176,7 @@ function love.load()
     EventBus.init()
     PluginManager.init()
     SceneManager.init()
+    SceneManager.register("campaign", SceneCampaign)
     
     if MusicManager.start then 
         MusicManager.start() 

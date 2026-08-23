@@ -14,23 +14,23 @@ local MetaBalancer = require "core.meta_balancer"
 SceneMenu.selection = 1
 
 SceneMenu.items = {
+    "CAMPAÑA: EL DESCENSO",
     "VS BOT DUEL",
     "CYBER-BEAST HUNT",
     "THE HUNTER'S FORGE",
     "PILOT BENCHMARK",
     "TRAINER LAB & FINESSE",
-    "GAUNTLET RUSH",
     "SOUNDTRACK & FX LAB",
     "SETTINGS & CALIBRATION"
 }
 
 SceneMenu.subtitles = {
+    "50-STAGE ROGUELIKE MAINFRAME VS T.U.N.E.R. AI",
     "CLASSIC 1v1 DUEL VS ADAPTIVE DDA BOT",
     "3-PHASE COLOSSUS ASSAULT & HUNTER'S FORGE",
     "ARMOR JEWEL CRAFTING & CYBER-PALICO BAY",
     "OFFICIAL 3-STAGE PILOT CALIBRATION TRIAL",
     "HOLOGRAPHIC OPENING BOOK, TIME-TRAVEL & KPP COACH",
-    "ENDLESS SURVIVAL AGAINST FREQUENT ANOMALIES",
     "DAW TIMELINE, CUE PLACEMENT & SFX AUDITION",
     "MASTER CALIBRATION SUITE, DAS / ARR & PIPELINE"
 }
@@ -48,36 +48,35 @@ function SceneMenu.executeSelection(index)
     AudioManager.playMenuClick()
 
     if index == 1 then
+        _G.CURRENT_GAME_MODE = "campaign"
+        _G.StartEngageTransition()
+        _G.GlobalRestart(true)
+        SceneManager.setState("campaign")
+    elseif index == 2 then
         _G.CURRENT_GAME_MODE = "versus"
         _G.StartEngageTransition()
         _G.GlobalRestart(true)
         SceneManager.setState("versus")
 
-    elseif index == 2 then
+    elseif index == 3 then
         _G.CURRENT_GAME_MODE = "boss_hunt"
         _G.StartEngageTransition()
         _G.GlobalRestart(true)
         SceneManager.setState("boss_hunt")
 
-    elseif index == 3 then
+    elseif index == 4 then
         SceneManager.setState("forge")
 
-    elseif index == 4 then
+    elseif index == 5 then
         _G.CURRENT_GAME_MODE = "benchmark"
         _G.StartEngageTransition()
         _G.GlobalRestart(true)
         SceneManager.setState("benchmark")
 
-    elseif index == 5 then
+    elseif index == 6 then
         _G.CURRENT_GAME_MODE = "trainer"
         _G.StartEngageTransition()
         SceneManager.setState("trainer")
-
-    elseif index == 6 then
-        _G.CURRENT_GAME_MODE = "gauntlet"
-        _G.StartEngageTransition()
-        _G.GlobalRestart(true)
-        SceneManager.setState("gauntlet")
 
     elseif index == 7 then
         TrackEditor.active = true

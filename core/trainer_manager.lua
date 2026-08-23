@@ -2,14 +2,12 @@
 -- FILE: core/trainer_manager.lua
 -- ================================================================
 ---@diagnostic disable: undefined-global
--- ============================================================================
--- MUTRIS TRAINER LAB: ADAPTIVE ENGINE WITH FORCED DETERMINISTIC QUEUE
--- ============================================================================
 local TrainerManager = {}
 local TrainerDatabase = require "core.trainer_database"
 local AudioManager    = require "audio_manager"
 local Piece           = require "tetris.piece"
 local RulesetManager  = require "core.ruleset_manager"
+local FontCache       = require "tetris.font_cache"
 
 TrainerManager.selected_opener_idx = 1
 TrainerManager.current_step = 1
@@ -18,7 +16,6 @@ TrainerManager.current_streak = 0
 TrainerManager.finesse_faults = 0
 TrainerManager.hologram_active = true
 
--- Búfer de Snapshots Zero-GC (32 slots)
 local MAX_SNAPSHOTS = 32
 local snapshots = {}
 local snapshot_head = 0
@@ -39,7 +36,6 @@ for i = 1, MAX_SNAPSHOTS do
     }
 end
 
--- 🎯 Inyección de Bolsa Determinista que cumple el contrato exacto de 7bag.lua
 local function attachDeterministicBag(board, opener)
     local contents = {}
     local preview = {}
@@ -76,8 +72,9 @@ local function attachDeterministicBag(board, opener)
         end
     }
 
-    local first_piece = board.bag:next()
-    board.active_piece = Piece.new(first_piece, board)
+    local target_first = opener.steps[1]
+    local first_piece_id = target_first and target_first.piece or board.bag:next()
+    board.active_piece = Piece.new(first_piece_id, board)
     board.hold_piece = nil
     board.can_hold = true
 end
@@ -120,7 +117,7 @@ end
 
 function TrainerManager.undo(board)
     if snapshot_count <= 1 then
-        AudioManager.playTone(150, 0.08, 0.3, "sine", true, 0, 40, true)
+        AudioManager.playImmediateSFX("rotate", false)
         return false
     end
 
@@ -150,7 +147,6 @@ function TrainerManager.undo(board)
         board.active_piece = Piece.new(target.piece, board)
     end
 
-    AudioManager.playSliderTick()
     board:setPopup("PASO REBOBINADO", {0.2, 0.9, 1.0}, false, "MODO TIME-TRAVEL")
     return true
 end
@@ -169,19 +165,19 @@ function TrainerManager.onPieceLocked(board, piece_id, px, py, prot)
             if TrainerManager.current_step > #opener.steps then
                 TrainerManager.completed_reps = TrainerManager.completed_reps + 1
                 TrainerManager.current_streak = TrainerManager.current_streak + 1
-                board:setPopup("PLANO COMPLETADO! +1 RACHA", {0.1, 1.0, 0.5}, true, "REPETICION AUTOMATICA")
-                AudioManager.playImmediateSFX("zone_enter_hyper", false)
-
+                board:setPopup("APERTURA COMPLETADA!", {0.1, 1.0, 0.5}, true, "+1 RACHA DE MAESTRIA")
+                AudioManager.playImmediateSFX("ultimatris", false)
                 TrainerManager.init(board, true)
                 return
             else
                 board:setPopup(string.format("PASO %d/%d OK!", TrainerManager.current_step - 1, #opener.steps), {0.2, 0.95, 0.6})
+                AudioManager.playImmediateSFX("move", false)
             end
         else
             TrainerManager.finesse_faults = TrainerManager.finesse_faults + 1
             TrainerManager.current_streak = 0
             board:setPopup("ERROR DE COLOCACION", {1.0, 0.3, 0.3}, false, "[BACKSPACE] PARA REBOBINAR")
-            AudioManager.playTone(160, 0.12, 0.4, "triangle", true, 0, 50, true)
+            AudioManager.playImmediateSFX("death", false)
         end
     end
 
@@ -202,15 +198,28 @@ function TrainerManager.drawHologram(board)
     love.graphics.push("all")
     love.graphics.setBlendMode("add")
     
-    local pulse = 0.45 + math.sin(love.timer.getTime() * 6.0) * 0.18
+    local time = love.timer.getTime()
+    local pulse = 0.50 + math.sin(time * 6.0) * 0.25
 
+    -- Guía Láser Vertical
+    if board.active_piece and not board.active_piece.locked then
+        local p = board.active_piece
+        local target_cx = board.x + (target.x + 1) * 24
+        local target_top_y = board.y + (target.y - 22) * 24
+
+        love.graphics.setColor(clr[1], clr[2], clr[3], 0.18 + pulse * 0.12)
+        love.graphics.setLineWidth(1.5)
+        love.graphics.line(target_cx, board.y, target_cx, target_top_y)
+    end
+
+    -- Holograma en cuadrícula
     for r = 1, #shape do
         for c = 1, #shape[r] do
             if shape[r][c] ~= 0 then
                 local rx = board.x + (target.x + c - 2) * 24
                 local ry = board.y + (target.y + r - 22) * 24
 
-                love.graphics.setColor(clr[1], clr[2], clr[3], pulse * 0.50)
+                love.graphics.setColor(clr[1], clr[2], clr[3], pulse * 0.45)
                 love.graphics.rectangle("fill", rx + 2, ry + 2, 20, 20, 3)
 
                 love.graphics.setLineWidth(2.0)

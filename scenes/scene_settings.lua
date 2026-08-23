@@ -13,6 +13,7 @@ local FontCache = require "tetris.font_cache"
 SceneSettings.active_tab_index = 1
 SceneSettings.active_item_index = 1
 SceneSettings.return_state = "menu"
+SceneSettings.awaiting_key = nil
 
 function SceneSettings.adjustActiveSetting(delta)
     local tab = SettingsManager.tabs[SceneSettings.active_tab_index]
@@ -44,7 +45,47 @@ function SceneSettings.adjustActiveSetting(delta)
             ThemeManager.setTheme(item.options[opt_idx])
         elseif item.id == "active_ruleset" then
             RulesetManager.setRuleset(item.options[opt_idx])
+        elseif item.id == "control_preset" then
+            local preset = item.options[opt_idx]
+            if preset == 1 then -- ARROWS + A/D/S/C
+                s.key_left = "left"
+                s.key_right = "right"
+                s.key_soft_drop = "down"
+                s.key_hard_drop = "space"
+                s.key_rot_cw = "d"
+                s.key_rot_ccw = "a"
+                s.key_rot_180 = "s"
+                s.key_hold = "c"
+                s.key_zone = "v"
+                s.key_stance = "tab"
+            elseif preset == 2 then -- GUIDELINE (Z/X/A/C)
+                s.key_left = "left"
+                s.key_right = "right"
+                s.key_soft_drop = "down"
+                s.key_hard_drop = "space"
+                s.key_rot_cw = "x"
+                s.key_rot_ccw = "z"
+                s.key_rot_180 = "a"
+                s.key_hold = "c"
+                s.key_zone = "v"
+                s.key_stance = "tab"
+            elseif preset == 3 then -- WASD + NUMPAD
+                s.key_left = "a"
+                s.key_right = "d"
+                s.key_soft_drop = "s"
+                s.key_hard_drop = "w"
+                s.key_rot_cw = "kp8"
+                s.key_rot_ccw = "kp7"
+                s.key_rot_180 = "kp5"
+                s.key_hold = "kp0"
+                s.key_zone = "v"
+                s.key_stance = "tab"
+            end
         end
+        AudioManager.playSliderTick()
+
+    elseif item.is_key then
+        -- En mapeos de teclas, los presets son el switch principal
         AudioManager.playSliderTick()
 
     else
@@ -91,19 +132,22 @@ function SceneSettings.draw()
     love.graphics.setColor(0.5, 0.7, 0.9, 0.85)
     love.graphics.printf(current_tab.title or "SYSTEM TUNING", 0, 58, 1280, "center")
 
-    local tab_w = 172
+    local tab_count = #SettingsManager.tabs
+    local total_available_w = 980
+    local tab_gap = 6
+    local tab_w = math.min(145, math.floor((total_available_w - (tab_count - 1) * tab_gap) / tab_count))
     local tab_h = 32
-    local total_tabs_w = #SettingsManager.tabs * (tab_w + 8) - 8
+    local total_tabs_w = tab_count * (tab_w + tab_gap) - tab_gap
     local tabs_start_x = 640 - (total_tabs_w / 2)
     local tabs_y = 82
 
     for i, tab in ipairs(SettingsManager.tabs) do
-        local tx = tabs_start_x + (i - 1) * (tab_w + 8)
+        local tx = tabs_start_x + (i - 1) * (tab_w + tab_gap)
         local is_active_tab = (i == SceneSettings.active_tab_index)
 
         ThemeManager.drawPanel(tx, tabs_y, tab_w, tab_h, "", is_active_tab)
 
-        love.graphics.setFont(FontCache.get(10))
+        love.graphics.setFont(FontCache.get(9))
         love.graphics.setColor(is_active_tab and {1,1,1,1} or {0.65, 0.75, 0.85, 0.75})
         love.graphics.printf(tab.name, tx, tabs_y + 9, tab_w, "center")
     end
@@ -117,6 +161,12 @@ function SceneSettings.draw()
 
     local row_start_y = card_y + 16
     local row_spacing = 49
+    local sel_h = 43
+    local usable_h = card_h - 90
+    if #current_tab.items * row_spacing > usable_h then
+        row_spacing = usable_h / #current_tab.items
+        sel_h = row_spacing - 4
+    end
 
     for i, item in ipairs(current_tab.items) do
         local is_sel = (i == SceneSettings.active_item_index)
@@ -124,20 +174,21 @@ function SceneSettings.draw()
 
         if is_sel then
             love.graphics.setColor(t.primary[1], t.primary[2], t.primary[3], 0.15)
-            love.graphics.rectangle("fill", card_x + 12, ry - 4, card_w - 24, 43, 4)
+            love.graphics.rectangle("fill", card_x + 12, ry - 4, card_w - 24, sel_h, 4)
             love.graphics.setLineWidth(1.2)
             love.graphics.setColor(t.secondary[1], t.secondary[2], t.secondary[3], 0.85)
-            love.graphics.rectangle("line", card_x + 12, ry - 4, card_w - 24, 43, 4)
+            love.graphics.rectangle("line", card_x + 12, ry - 4, card_w - 24, sel_h, 4)
         end
 
+        local text_y = ry + math.floor((row_spacing - 12) / 2)
         love.graphics.setFont(FontCache.get(11))
         love.graphics.setColor(is_sel and {1.0, 1.0, 1.0, 1.0} or {0.75, 0.85, 0.95, 0.85})
-        love.graphics.print(item.label, card_x + 28, ry + 8)
+        love.graphics.print(item.label, card_x + 28, text_y)
 
         local slider_x = card_x + 360
-        local slider_y = ry + 8
-        local slider_w = 260
         local slider_h = 16
+        local slider_y = ry + math.floor((row_spacing - slider_h) / 2)
+        local slider_w = 260
 
         local cur_val = SettingsManager.get(item.id)
         local def_val = SettingsManager.defaults[item.id]
@@ -163,6 +214,21 @@ function SceneSettings.draw()
             love.graphics.setFont(FontCache.get(10))
             love.graphics.setColor(1.0, 1.0, 1.0, 0.95)
             love.graphics.printf("< " .. label_text .. " >", slider_x, slider_y + 3, 220, "center")
+
+        elseif item.is_key or type(cur_val) == "string" then
+            love.graphics.setColor(0.02, 0.12, 0.22, 0.85)
+            love.graphics.rectangle("fill", slider_x, slider_y - 2, 170, 22, 3)
+            love.graphics.setColor(t.border)
+            love.graphics.rectangle("line", slider_x, slider_y - 2, 170, 22, 3)
+            love.graphics.setFont(FontCache.get(10))
+            
+            if SceneSettings.awaiting_key == item.id then
+                love.graphics.setColor(1.0, 0.8, 0.2, 0.95)
+                love.graphics.printf("[ PRESIONA TECLA ]", slider_x, slider_y + 3, 170, "center")
+            else
+                love.graphics.setColor(0.2, 0.95, 0.7, 0.95)
+                love.graphics.printf("[ TECLA: " .. tostring(cur_val):upper() .. " ]", slider_x, slider_y + 3, 170, "center")
+            end
 
         else
             love.graphics.setColor(0.02, 0.04, 0.08, 0.9)
@@ -193,7 +259,7 @@ function SceneSettings.draw()
         end
 
         local reset_btn_x = card_x + card_w - 120
-        local reset_btn_y = ry + 4
+        local reset_btn_y = ry + math.floor((row_spacing - 22) / 2)
         love.graphics.setColor(0.03, 0.06, 0.12, 0.85)
         love.graphics.rectangle("fill", reset_btn_x, reset_btn_y, 44, 22, 3)
         love.graphics.setColor(t.border)
@@ -202,13 +268,15 @@ function SceneSettings.draw()
         love.graphics.setColor(t.primary)
         love.graphics.printf("RST", reset_btn_x, reset_btn_y + 4, 44, "center")
 
-        love.graphics.setFont(FontCache.get(8))
-        love.graphics.setColor(0.45, 0.55, 0.65, 0.75)
-        local def_str = item.is_ms and string.format("%dms", def_val * 1000)
-                     or (item.is_pct and string.format("%d%%", def_val * 100)
-                     or (item.is_int and string.format("%d", def_val)
-                     or tostring(def_val)))
-        love.graphics.print("BASE: " .. def_str, reset_btn_x + 52, reset_btn_y + 5)
+        if not item.is_key then
+            love.graphics.setFont(FontCache.get(8))
+            love.graphics.setColor(0.45, 0.55, 0.65, 0.75)
+            local def_str = item.is_ms and string.format("%dms", def_val * 1000)
+                         or (item.is_pct and string.format("%d%%", def_val * 100)
+                         or (item.is_int and string.format("%d", def_val)
+                         or tostring(def_val)))
+            love.graphics.print("BASE: " .. def_str, reset_btn_x + 52, reset_btn_y + 5)
+        end
     end
 
     if current_tab.id == "handling" then
@@ -227,6 +295,13 @@ function SceneSettings.draw()
             das_ms, f60_das, f144_das, f240_das, arr_ms
         )
         love.graphics.printf(telemetry_line, card_x + 12, card_y + card_h - 62, card_w - 24, "center")
+    elseif current_tab.id == "controls" then
+        love.graphics.setColor(0.0, 0.05, 0.1, 0.88)
+        love.graphics.rectangle("fill", card_x + 12, card_y + card_h - 68, card_w - 24, 24, 3)
+        love.graphics.setFont(FontCache.get(9))
+        love.graphics.setColor(0.2, 0.95, 0.6, 0.9)
+        local controls_line = "MAPEO UNIVERSAL: Usa ENTER para reasignar cualquier tecla a tu gusto. Evita solapar teclas."
+        love.graphics.printf(controls_line, card_x + 12, card_y + card_h - 62, card_w - 24, "center")
     end
 
     local btn_reset_w = 200
@@ -261,6 +336,19 @@ function SceneSettings.draw()
 end
 
 function SceneSettings.keypressed(key)
+    if SceneSettings.awaiting_key then
+        if key == "escape" then
+            SceneSettings.awaiting_key = nil
+            AudioManager.playMenuBack()
+            return true
+        end
+        SettingsManager.settings[SceneSettings.awaiting_key] = key
+        SettingsManager.save()
+        SceneSettings.awaiting_key = nil
+        AudioManager.playSliderTick()
+        return true
+    end
+
     local current_tab = SettingsManager.tabs[SceneSettings.active_tab_index]
 
     if key == "q" then
@@ -303,6 +391,9 @@ function SceneSettings.keypressed(key)
         local item = current_tab.items[SceneSettings.active_item_index]
         if item and (item.is_toggle or item.is_enum) then
             SceneSettings.adjustActiveSetting(1)
+        elseif item and (item.is_key or type(SettingsManager.get(item.id)) == "string") then
+            SceneSettings.awaiting_key = item.id
+            AudioManager.playMenuHover()
         else
             SceneSettings.close()
         end
@@ -338,8 +429,12 @@ function SceneSettings.mousepressed(adj_x, adj_y, button)
     local card_w = 920
     local card_h = 450
     local row_start_y = card_y + 16
-    local row_spacing = 49
     local current_tab = SettingsManager.tabs[SceneSettings.active_tab_index]
+    local usable_h = card_h - 90
+    local row_spacing = 49
+    if #current_tab.items * row_spacing > usable_h then
+        row_spacing = usable_h / #current_tab.items
+    end
 
     for i, item in ipairs(current_tab.items) do
         local ry = row_start_y + (i - 1) * row_spacing
@@ -371,6 +466,14 @@ function SceneSettings.mousepressed(adj_x, adj_y, button)
             if adj_x >= slider_x and adj_x <= slider_x + 220 and adj_y >= slider_y - 2 and adj_y <= slider_y + 20 then
                 SceneSettings.active_item_index = i
                 SceneSettings.adjustActiveSetting(1)
+                return true
+            end
+        elseif item.is_key or type(SettingsManager.get(item.id)) == "string" then
+            -- Mapeos de teclas (ahora entra en modo rebind)
+            if adj_x >= slider_x and adj_x <= slider_x + 170 and adj_y >= slider_y - 2 and adj_y <= slider_y + 20 then
+                SceneSettings.active_item_index = i
+                SceneSettings.awaiting_key = item.id
+                AudioManager.playMenuHover()
                 return true
             end
         else

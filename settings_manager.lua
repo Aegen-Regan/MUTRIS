@@ -18,15 +18,17 @@ SettingsManager.defaults = {
     srs_180           = 1,       -- 1 = Activo, 0 = Inactivo
 
     -- MAPEO DE CONTROLES PERSONALIZADOS
+    control_preset    = 1,       -- 1=Standard (A/D/S/C + Arrows), 2=Guideline Classic (Z/X/A/C), 3=WASD
     key_left          = "left",
     key_right         = "right",
     key_soft_drop     = "down",
     key_hard_drop     = "space",
-    key_rot_cw        = "x",     -- Rotación Horaria
-    key_rot_ccw       = "z",     -- Rotación Antihoraria
-    key_rot_180       = "a",     -- Rotación 180
-    key_hold          = "c",     -- Hold / Reserva
-    key_zone          = "tab",   -- Zone Mode / Recital
+    key_rot_cw        = "d",     -- Rotación Horaria (D / X / UP)
+    key_rot_ccw       = "a",     -- Rotación Antihoraria (A / Z)
+    key_rot_180       = "s",     -- Rotación 180 (S / F)
+    key_hold          = "c",     -- Hold / Reserva (C / Shift)
+    key_zone          = "v",     -- Zone Mode / Recital
+    key_stance        = "tab",   -- Stance Switch
 
     -- AUDIO / DAW
     master_vol        = 1.0,     -- 100%
@@ -65,6 +67,14 @@ SettingsManager.defaults = {
     auto_save_replay  = 1        -- 1=On, 0=Off
 }
 
+-- Cargar configuración maestra personalizada (default_keybinds.lua) si existe
+local custom_binds_ok, custom_binds = pcall(require, "default_keybinds")
+if custom_binds_ok and type(custom_binds) == "table" then
+    for k, v in pairs(custom_binds) do
+        SettingsManager.defaults[k] = v
+    end
+end
+
 SettingsManager.settings = {}
 for k, v in pairs(SettingsManager.defaults) do
     SettingsManager.settings[k] = v
@@ -73,7 +83,7 @@ end
 SettingsManager.tabs = {
     {
         id = "rules",
-        name = "01 // RULESET & PHYSICS",
+        name = "01 // RULESET",
         title = "UNIVERSAL MULTI-RULESET ENGINE & ROTATION PHYSICS",
         items = {
             { id = "active_ruleset", label = "ACTIVE RULESET ENGINE", is_enum = true, options = {1, 2, 3, 4}, labels = {"01 // GUIDELINE MODERN", "02 // TGM 20G SHIRASE", "03 // NES 1989 RETRO", "04 // PENTOMINO 18"} },
@@ -94,8 +104,26 @@ SettingsManager.tabs = {
         }
     },
     {
+        id = "controls",
+        name = "03 // CONTROLS",
+        title = "KEYBOARD & GAMEPAD INPUT MAPPING CALIBRATION",
+        items = {
+            { id = "control_preset", label = "CONTROL SCHEME PRESET", is_enum = true, options = {1, 2, 3}, labels = {"01 // ARROWS + A/D/S/C", "02 // GUIDELINE (Z/X/A/C)", "03 // WASD + NUMPAD"} },
+            { id = "key_left",       label = "MOVE LEFT (IZQUIERDA)",    is_key = true },
+            { id = "key_right",      label = "MOVE RIGHT (DERECHA)",     is_key = true },
+            { id = "key_soft_drop",  label = "SOFT DROP (ABAJO)",        is_key = true },
+            { id = "key_hard_drop",  label = "HARD DROP (CAIDA INSTANT)",is_key = true },
+            { id = "key_rot_ccw",    label = "ROTATE CCW (ANTIHORARIO)", is_key = true },
+            { id = "key_rot_cw",     label = "ROTATE CW (HORARIO)",      is_key = true },
+            { id = "key_rot_180",    label = "ROTATE 180 (180 GRADOS)",  is_key = true },
+            { id = "key_hold",       label = "HOLD / RESERVA",           is_key = true },
+            { id = "key_zone",       label = "ZONE MODE / RECITAL",      is_key = true },
+            { id = "key_stance",     label = "STANCE SWITCH / POSTURA",  is_key = true }
+        }
+    },
+    {
         id = "audio",
-        name = "03 // AUDIO & DAW",
+        name = "04 // AUDIO",
         title = "PROCEDURAL SYNTHESIZER, MIXER & HARMONICS",
         items = {
             { id = "master_vol",     label = "MASTER VOLUME",          min = 0, max = 100, step = 5, unit = "%", is_pct = true, is_int = true },
@@ -109,7 +137,7 @@ SettingsManager.tabs = {
     },
     {
         id = "combat",
-        name = "04 // COMBAT",
+        name = "05 // COMBAT",
         title = "STANCES, KINETIC PARRY & ATTACK GAUGES",
         items = {
             { id = "parry_window",      label = "KINETIC PARRY WINDOW", min = 1,     max = 6,     step = 1,     unit = "frames", is_int = true },
@@ -121,7 +149,7 @@ SettingsManager.tabs = {
     },
     {
         id = "video",
-        name = "05 // VIDEO & SKINS",
+        name = "06 // VIDEO",
         title = "THEME ENGINES, NEON BLOOM & GLSL SHADERS",
         items = {
             { id = "theme_skin",      label = "ACTIVE THEME SKIN [F5]", is_enum = true, options = {1, 2, 3, 4}, labels = {"01 // CYBER-DAW RACK", "02 // NEO-KINETIC STRIKE", "03 // ESPORTS GLASS", "04 // COSMIC SINESTESIA"} },
@@ -135,7 +163,7 @@ SettingsManager.tabs = {
     },
     {
         id = "archon",
-        name = "06 // ARCHON IA",
+        name = "07 // ARCHON",
         title = "AUTO-BALANCING & DDA ADAPTIVE ENGINE",
         items = {
             { id = "archon_mode",    label = "ARCHON DDA ENGINE",    is_enum = true, options = {1, 2, 3}, labels = {"ADAPTIVE DDA", "LOCKED BASELINE", "APEX HARDCORE"} },
@@ -180,6 +208,15 @@ function SettingsManager.init()
                 if SettingsManager.defaults[k] ~= nil then
                     SettingsManager.settings[k] = v
                 end
+            end
+            
+            -- [BUGFIX] Limpiar mapeos corruptos de la versión anterior
+            -- Si la rotación 180 está en D, y están en el preset 1, se rompió.
+            if SettingsManager.settings.key_rot_180 == "d" then
+                SettingsManager.settings.key_rot_180 = "s"
+                SettingsManager.settings.key_rot_cw = "d"
+                SettingsManager.settings.key_rot_ccw = "a"
+                SettingsManager.save()
             end
         end
     else

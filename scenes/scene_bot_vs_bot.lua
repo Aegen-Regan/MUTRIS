@@ -113,19 +113,8 @@ local function drawBottomTimeline(time)
 end
 
 function SceneBotVsBot.init()
-    player_board = Board.new(220, 120, "human")
-    bot_board    = Board.new(820, 120, "bot")
-
-    player_board.opponent = bot_board
-    bot_board.opponent    = player_board
-
-    _G.LAST_PLAYER_BOARD = player_board
-    _G.LAST_BOT_BOARD    = bot_board
-
-    Input.init(player_board)
-    AIBot.init(bot_board)
-    AnomalyManager.init()
-    FogLayer.init()
+    -- main.lua handles board initialization for versus mode via GlobalRestart
+    -- We do not create duplicate boards here to prevent hijacking the Input singleton
 end
 
 function SceneBotVsBot.enter()
@@ -240,11 +229,13 @@ function SceneBotVsBot.draw()
 end
 
 function SceneBotVsBot.keypressed(key)
-    Input.keypressed(key)
     if key == "r" then
         TrackManager.nextTrack()
         ThemeManager.triggerRestartHalo()
         SceneBotVsBot.enter()
+        return true
+    elseif key == "f6" then
+        ThemeManager.cyclePrev()
         return true
     elseif key == "escape" then
         SceneManager.setState("menu")

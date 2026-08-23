@@ -2,10 +2,6 @@
 -- FILE: input.lua
 -- ================================================================
 ---@diagnostic disable: undefined-global
--- ============================================================================
--- MUTRIS ENGINE: COMPETITIVE INPUT ENGINE & ANTI-GLITCH HOLD PROTOCOL
--- 1000Hz Determinism / Zero-GC / Mutual Exclusion Guard
--- ============================================================================
 local Input = {}
 
 local SettingsManager = require "settings_manager"
@@ -41,8 +37,6 @@ function Input.init(player_ref)
     Input.timers = { left = 0, right = 0 }
     Input.das_active = { left = false, right = false }
     Input.last_audio_time = 0.0
-
-    -- GUARDIA ANTI-GLITCH: 2 frames de exclusión para inputs verticales tras un Hold
     Input.drop_lock_frames = 0
 
     Input._refreshJoystickCache()
@@ -84,14 +78,13 @@ local function _isGamepadAxisDown(axis_name, threshold, greater_than)
 end
 
 function Input.getSoftDropFactor()
-    -- Si el lockout por Hold está activo, no aplicar Soft Drop
     if (Input.drop_lock_frames or 0) > 0 then
         return 0.8
     end
 
     if Input.player and Input.player.active_piece then
-        -- Desvinculamos estrictamente 'S' de la caída suave para evitar el conflicto con Hold
-        local down_held = love.keyboard.isDown("down") or love.keyboard.isDown("kp5") or love.keyboard.isDown("5") or
+        local custom_down = SettingsManager.get("key_soft_drop") or "down"
+        local down_held = love.keyboard.isDown(custom_down) or
                           _isGamepadDown("dpdown") or _isGamepadAxisDown("lefty", INPUT_CONFIG.JOY_DEADZONE_DOWN, true)
 
         if down_held then
@@ -104,7 +97,6 @@ function Input.getSoftDropFactor()
 end
 
 function Input.update(dt)
-    -- Decrementar el buffer de bloqueo de caída
     if (Input.drop_lock_frames or 0) > 0 then
         Input.drop_lock_frames = Input.drop_lock_frames - 1
     end
@@ -124,8 +116,9 @@ function Input.update(dt)
         arr = INPUT_CONFIG.ARR_ABSOLUTE_MIN
     end
 
-    -- Movimiento Izquierda
-    local move_left_held = love.keyboard.isDown("left") or love.keyboard.isDown("kp4") or
+    -- Mover Izquierda
+    local custom_left = SettingsManager.get("key_left") or "left"
+    local move_left_held = love.keyboard.isDown(custom_left) or
                            _isGamepadDown("dpleft") or _isGamepadAxisDown("leftx", -INPUT_CONFIG.JOY_DEADZONE_LEFT_RIGHT, false)
     if move_left_held then
         if not Input.das_active.left then
@@ -146,8 +139,9 @@ function Input.update(dt)
         Input.das_active.left = false
     end
 
-    -- Movimiento Derecha
-    local move_right_held = love.keyboard.isDown("right") or love.keyboard.isDown("kp6") or
+    -- Mover Derecha
+    local custom_right = SettingsManager.get("key_right") or "right"
+    local move_right_held = love.keyboard.isDown(custom_right) or
                             _isGamepadDown("dpright") or _isGamepadAxisDown("leftx", INPUT_CONFIG.JOY_DEADZONE_LEFT_RIGHT, true)
     if move_right_held then
         if not Input.das_active.right then
@@ -204,9 +198,9 @@ function Input.handleAction(action)
             p:rotate(2)
         end
     elseif action == "hold" then
-        if RulesetManager.allowHold() then
+        local can_hold = not RulesetManager.allowHold or RulesetManager.allowHold()
+        if can_hold then
             Input.player:hold()
-            -- Activamos el bloqueo de caída inmediata para proteger la nueva pieza
             Input.drop_lock_frames = 2
             if Input.player.active_piece then
                 Input.player.active_piece.gravity_timer = 0.0
@@ -216,37 +210,58 @@ function Input.handleAction(action)
     elseif action == "zone" then 
         Input.player:enterZone()
     elseif action == "hard_drop" then
-        if RulesetManager.allowHardDrop() and (Input.drop_lock_frames or 0) == 0 then
+        local can_hd = not RulesetManager.allowHardDrop or RulesetManager.allowHardDrop()
+        if can_hd and (Input.drop_lock_frames or 0) == 0 then
+            Input.drop_lock_frames = 2 -- Prevent double drops
             local startY = p.y
-            while p:move(0, 1, true) do end
+            while p:canMove(p.x, p.y + 1, p.rotation) do
+                p.y = p.y + 1
+            end
             local endY = p.y
-            Input.player:spawnTrail(p.x, startY, endY, p.id, p.shape[p.rotation])
+            if Input.player.spawnTrail then
+                Input.player:spawnTrail(p.x, startY, endY, p.id, p.shape[p.rotation])
+            end
             p:lock()
         end
     end
 end
 
 function Input.keypressed(key)
+    -- 1. Atajos de Sistema / Metagame
     if key == "r" then 
         Input.handleAction("restart")
+        return
     elseif key == "f5" then 
         Input.handleAction("theme_next")
+        return
     elseif key == "f6" then 
         Input.handleAction("theme_prev")
-    elseif key == "tab" or key == "lshift" or key == "rshift" then 
-        Input.handleAction("stance_switch")
-    elseif key == "a" or key == "z" then 
-        Input.handleAction("rot_cw")
-    elseif key == "d" or key == "x" then 
+        return
+    end
+
+    -- 2. Mapeos Personalizados de SettingsManager (TOTAL AUTHORITY)
+    local k_cw     = SettingsManager.get("key_rot_cw")
+    local k_ccw    = SettingsManager.get("key_rot_ccw")
+    local k_180    = SettingsManager.get("key_rot_180")
+    local k_hold   = SettingsManager.get("key_hold")
+    local k_hd     = SettingsManager.get("key_hard_drop")
+    local k_zone   = SettingsManager.get("key_zone")
+    local k_stance = SettingsManager.get("key_stance")
+
+    if k_ccw and key == k_ccw then
         Input.handleAction("rot_ccw")
-    elseif key == "up" or key == "kp8" then 
+    elseif k_cw and key == k_cw then
+        Input.handleAction("rot_cw")
+    elseif k_180 and key == k_180 then
         Input.handleAction("rot_180")
-    elseif key == "s" or key == "c" then 
+    elseif k_hold and key == k_hold then
         Input.handleAction("hold")
-    elseif key == "q" or key == "e" then 
-        Input.handleAction("zone")
-    elseif key == "space" then 
+    elseif k_hd and key == k_hd then
         Input.handleAction("hard_drop")
+    elseif k_zone and key == k_zone then
+        Input.handleAction("zone")
+    elseif k_stance and key == k_stance then
+        Input.handleAction("stance_switch")
     end
 end
 
