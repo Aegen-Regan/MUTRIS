@@ -58,6 +58,12 @@ function Board.new(x, y, player_type)
     self.hold_piece = nil
     self.can_hold = true
     self.garbage_queue = {}
+    
+    self.pieces_placed = 0
+    self.lines_cleared = 0
+    self.garbage_sent = 0
+    self.garbage_received = 0
+    self.max_combo = 0
     self.combo_count = -1
     self.b2b_count = 0
 
@@ -283,6 +289,9 @@ function Board:checkLines(is_tspin)
         if self.is_zone_active then
             self.zone_lines_cleared = self.zone_lines_cleared + cleared
         else
+            self.lines_cleared = self.lines_cleared + cleared
+            self.max_combo = math.max(self.max_combo, self.combo_count)
+            
             if _G.CURRENT_GAME_MODE == "boss_hunt" and self.player_type == "human" then
                 PartBreaking.registerLineClear(self, cleared, is_tspin)
             elseif _G.CURRENT_GAME_MODE ~= "benchmark" or BenchmarkManager.state == BenchmarkManager.STAGE_2_PLAY then
@@ -292,6 +301,7 @@ function Board:checkLines(is_tspin)
                         attack = math.max(1, math.floor(attack * 0.5))
                     end
                     GarbageManager.sendGarbage(self, self.opponent, attack)
+                    self.garbage_sent = self.garbage_sent + attack
                 end
             end
 
@@ -450,6 +460,20 @@ function Board:drawBlock(x, y, id, alpha)
     love.graphics.rectangle("fill", x + 2, y + 2, 20, 3)
     love.graphics.setColor(0, 0, 0, a * 0.45)
     love.graphics.rectangle("fill", x + 2, y + 19, 20, 3)
+end
+
+function Board:getStackHeight()
+    local height = 0
+    if self.grid then
+        for r = 1, 40 do
+            for c = 1, 10 do
+                if self.grid[r][c] ~= 0 then
+                    height = math.max(height, 41 - r)
+                end
+            end
+        end
+    end
+    return height
 end
 
 function Board:update(dt)
@@ -662,8 +686,12 @@ function Board:pushToGrid(line_count)
 end
 
 -- ALIASES DEFENSIVOS CRUZADOS
-Board.receiveGarbage = Board.pushToGrid
-Board.injectGarbage  = Board.pushToGrid
+function Board:receiveGarbage(line_count)
+    if not line_count or line_count <= 0 then return end
+    self.garbage_received = self.garbage_received + line_count
+    self:pushToGrid(line_count)
+end
+Board.injectGarbage  = Board.receiveGarbage
 
 -- Vincular cálculo de daño defensivo
 Board.calculateAttack = GarbageManager.calculateAttack

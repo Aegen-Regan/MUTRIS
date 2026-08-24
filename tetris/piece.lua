@@ -178,6 +178,7 @@ function Piece:lock()
     end
 
     self.locked = true
+    self.board.pieces_placed = self.board.pieces_placed + 1
     PPSCounter.register(self.board)
     AudioManager.playImmediateSFX("drop", self.board.player_type == "bot", self.y)
 

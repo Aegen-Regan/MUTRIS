@@ -83,6 +83,8 @@ function AIBot.init(self_or_board, maybe_board)
     AIBot.loadProfile()
     AIBot.has_target = false
     AIBot.step_timer = 0.0
+    AIBot.emote_cooldown = 0.0
+    AIBot.EMOTE_INTERVAL = 3.5
 end
 
 local function findGarbageHoleColumn(board)
@@ -294,6 +296,43 @@ function AIBot.registerMatchOutcome(human_won, player_pps)
 
     AIBot.base_pps = prof.ai_target_pps
     AIBot.saveProfile()
+end
+
+function AIBot:updateEmoteLogic(dt, opponent_board, emote_system)
+    if self.emote_cooldown > 0 then
+        self.emote_cooldown = self.emote_cooldown - dt
+        return
+    end
+
+    if not self.board or not opponent_board then return end
+    local my_height = self.board:getStackHeight()
+    local opp_height = opponent_board:getStackHeight()
+    
+    local emote_x = 740 -- Centro-Derecha de la pantalla (área de Flight Recorder)
+    local emote_y = 340 + love.math.random(-40, 40)
+
+    -- CASO 1: BM / WINNING (Rival en zona crítica >= 14 y Bot seguro < 8)
+    if opp_height >= 14 and my_height < 8 then
+        emote_system:triggerPreset("BM_WINNING", emote_x, emote_y, 1.0, 0.25, 0.25)
+        self.emote_cooldown = 4.5
+        return
+    end
+
+    -- CASO 2: PANIC (Bot en peligro crítico >= 15)
+    if my_height >= 15 then
+        emote_system:triggerPreset("PANIC", emote_x, emote_y, 1.0, 0.85, 0.2)
+        self.emote_cooldown = 3.5
+        return
+    end
+end
+
+function AIBot:onGarbageSent(lines, emote_system)
+    if lines >= 4 and self.emote_cooldown <= 0 then
+        local emote_x = self.board.x + (self.board.pixel_width or 200) / 2
+        local emote_y = self.board.y + 35
+        emote_system:triggerPreset("ATTACK_SPIKE", emote_x, emote_y, 0.2, 0.9, 1.0)
+        self.emote_cooldown = 3.5
+    end
 end
 
 return AIBot

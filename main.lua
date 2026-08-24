@@ -247,6 +247,11 @@ function love.update(dt)
 
         AnomalyManager.update(dt, PlayerBoard, BotBoard)
         
+        local current_scene = SceneManager.getScene(st)
+        if current_scene and current_scene.updateOverlay then
+            current_scene.updateOverlay(dt, PlayerBoard, BotBoard)
+        end
+        
         if _G.CURRENT_GAME_MODE == "boss_hunt" then
             PoiseSystem.update(dt)
             PartBreaking.update(dt)
@@ -265,12 +270,12 @@ function love.update(dt)
         local titan_defeated = (_G.CURRENT_GAME_MODE == "boss_hunt" and BossPhases.current_phase == 3 and PoiseSystem.hp <= 0)
         local bot_knockout = (BotBoard and BotBoard.is_dying and BotBoard.death_timer <= 0.05 and _G.CURRENT_GAME_MODE ~= "boss_hunt")
 
-        if PlayerBoard and PlayerBoard.is_dying and PlayerBoard.death_timer <= 0.05 and _G.CURRENT_GAME_MODE ~= "benchmark" then
+        if PlayerBoard and PlayerBoard.is_dying and PlayerBoard.death_timer <= 0.05 and _G.CURRENT_GAME_MODE ~= "benchmark" and _G.CURRENT_GAME_MODE ~= "versus" then
             MetaBalancer.registerMatchOutcome(false, _G.RealMatchTimer, p1_pps, bot_pps)
             ReplayManager.saveReplay()
             Blackbox.log("MATCH_END", "PLAYER DEFEATED", math.floor(p1_pps * 10), math.floor(bot_pps * 10))
             SceneManager.setState("gameover")
-        elseif (titan_defeated or bot_knockout) and st ~= "gameover" and _G.CURRENT_GAME_MODE ~= "benchmark" then
+        elseif (titan_defeated or bot_knockout) and st ~= "gameover" and _G.CURRENT_GAME_MODE ~= "benchmark" and _G.CURRENT_GAME_MODE ~= "versus" then
             MetaBalancer.registerMatchOutcome(true, _G.RealMatchTimer, p1_pps, bot_pps)
             ReplayManager.saveReplay()
             Blackbox.log("MATCH_END", titan_defeated and "TITAN COLOSSUS DEFEATED" or "BOT DEFEATED", math.floor(p1_pps * 10), math.floor(bot_pps * 10))
@@ -317,6 +322,11 @@ function love.draw()
 
         PluginManager.draw()
         ThemeManager.drawRestartHalo()
+
+        local current_scene = SceneManager.getScene(st)
+        if current_scene and current_scene.drawOverlay then
+            current_scene.drawOverlay()
+        end
 
         if st == "pause" or st == "gameover" then
             local modal_scene = SceneManager.getScene(st)
