@@ -26,8 +26,9 @@ function HUDPanels.draw(board)
     local pulse = _G.AudioBeatPulse or 0
     local is_human = (board.player_type == "human")
     
-    local hold_x = is_human and (board.x - 78) or (board.x + 250)
-    local next_x = is_human and (board.x + 250) or (board.x - 78)
+    local bw = board.cols * (board.block_size or 24)
+    local hold_x = is_human and (board.x - 78) or (board.x + bw + 10)
+    local next_x = is_human and (board.x + bw + 10) or (board.x - 78)
     local panel_y = board.y + 10
     local p_w, p_h = 70, 70
 
@@ -101,7 +102,7 @@ function HUDPanels.draw(board)
         for r = 1, #shape do
             for c = 1, #shape[r] do
                 if shape[r][c] ~= 0 then
-                    board:drawBlock((c - 1) * 24, (r - 1) * 24, pid, 0.92)
+                    board:drawBlock((c - 1) * 24, (r - 1) * 24, pid, 0.92, 24)
                 end
             end
         end
@@ -126,7 +127,7 @@ function HUDPanels.draw(board)
             for r = 1, #shape do
                 for c = 1, #shape[r] do
                     if shape[r][c] ~= 0 then
-                        board:drawBlock((c - 1) * 24, (r - 1) * 24, next_id, 0.92)
+                        board:drawBlock((c - 1) * 24, (r - 1) * 24, next_id, 0.92, 24)
                     end
                 end
             end
@@ -138,7 +139,8 @@ function HUDPanels.draw(board)
     -- ────────────────────────────────────────────────────────────────────────
     -- 2. BARRA DE ZONE METER
     -- ────────────────────────────────────────────────────────────────────────
-    local zone_x = is_human and (board.x - 16) or (board.x + 246)
+    local bw = board.cols * (board.block_size or 24)
+    local zone_x = is_human and (board.x - 16) or (board.x + bw + 6)
     local zone_y = board.y + 90
     local zone_h = 300
     local zone_w = 10

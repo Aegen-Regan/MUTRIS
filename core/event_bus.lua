@@ -3,39 +3,42 @@
 -- ================================================================
 ---@diagnostic disable: undefined-global
 -- ============================================================================
--- MUTRIS ENGINE: ZERO-GC HIGH PERFORMANCE EVENT BUS
--- Pre-allocated listener arrays with direct scalar dispatch
+-- MUTRIS ENGINE: DYNAMIC ZERO-GC HIGH PERFORMANCE EVENT BUS
+-- Pre-allocated listener arrays for dynamic string-based events
 -- ============================================================================
 local EventBus = {}
 
-EventBus.ON_BEAT            = 1
-EventBus.ON_PIECE_SPAWN     = 2
-EventBus.ON_PIECE_MOVE      = 3
-EventBus.ON_PIECE_ROTATE    = 4
-EventBus.ON_PIECE_LOCK      = 5
-EventBus.ON_LINE_CLEAR      = 6
-EventBus.ON_PARRY           = 7
-EventBus.ON_STANCE_CHANGE   = 8
-EventBus.ON_ZONE_ENTER      = 9
-EventBus.ON_ZONE_EXIT       = 10
-EventBus.ON_BOARD_DEATH     = 11
-EventBus.ON_MATCH_RESTART   = 12
-EventBus.ON_PLUGIN_RELOAD   = 13
+EventBus.ON_BEAT            = "on_beat"
+EventBus.ON_PIECE_SPAWN     = "on_piece_spawn"
+EventBus.ON_PIECE_MOVE      = "on_piece_move"
+EventBus.ON_PIECE_ROTATE    = "on_piece_rotate"
+EventBus.ON_PIECE_LOCK      = "on_piece_lock"
+EventBus.ON_LINE_CLEAR      = "on_line_clear"
+EventBus.ON_PARRY           = "on_parry"
+EventBus.ON_STANCE_CHANGE   = "on_stance_change"
+EventBus.ON_ZONE_ENTER      = "on_zone_enter"
+EventBus.ON_ZONE_EXIT       = "on_zone_exit"
+EventBus.ON_BOARD_DEATH     = "on_board_death"
+EventBus.ON_MATCH_RESTART   = "on_match_restart"
+EventBus.ON_PLUGIN_RELOAD   = "on_plugin_reload"
 
 local MAX_LISTENERS_PER_EVENT = 32
 local listeners = {}
 local listener_counts = {}
 
-for event_id = 1, 32 do
-    listeners[event_id] = {}
-    listener_counts[event_id] = 0
-    for i = 1, MAX_LISTENERS_PER_EVENT do
-        listeners[event_id][i] = false
+local function ensureEvent(event_id)
+    if not listeners[event_id] then
+        listeners[event_id] = {}
+        listener_counts[event_id] = 0
+        for i = 1, MAX_LISTENERS_PER_EVENT do
+            listeners[event_id][i] = false
+        end
     end
 end
 
 function EventBus.init()
-    for event_id = 1, 32 do
+    -- Clears out all current listeners but keeps the structure for reuse
+    for event_id, _ in pairs(listeners) do
         listener_counts[event_id] = 0
         for i = 1, MAX_LISTENERS_PER_EVENT do
             listeners[event_id][i] = false
@@ -44,9 +47,11 @@ function EventBus.init()
 end
 
 function EventBus.on(event_id, callback)
-    if not event_id or event_id < 1 or event_id > 32 or type(callback) ~= "function" then
+    if not event_id or type(event_id) ~= "string" or type(callback) ~= "function" then
         return false
     end
+
+    ensureEvent(event_id)
 
     local count = listener_counts[event_id]
     if count >= MAX_LISTENERS_PER_EVENT then
@@ -66,7 +71,8 @@ function EventBus.on(event_id, callback)
 end
 
 function EventBus.off(event_id, callback)
-    if not event_id or event_id < 1 or event_id > 32 then return end
+    if not event_id or type(event_id) ~= "string" then return end
+    if not listeners[event_id] then return end
 
     local count = listener_counts[event_id]
     for i = 1, count do
@@ -80,7 +86,9 @@ function EventBus.off(event_id, callback)
 end
 
 function EventBus.emit(event_id, a, b, c, d, e)
-    if not event_id or event_id < 1 or event_id > 32 then return end
+    if not event_id or type(event_id) ~= "string" then return end
+    if not listeners[event_id] then return end
+    
     local count = listener_counts[event_id]
     local list = listeners[event_id]
 

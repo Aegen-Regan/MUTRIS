@@ -21,7 +21,8 @@ SceneMenu.items = {
     "PILOT BENCHMARK",
     "TRAINER LAB & FINESSE",
     "SOUNDTRACK & FX LAB",
-    "SETTINGS & CALIBRATION"
+    "SETTINGS & CALIBRATION",
+    "LOGICAL EDITOR"
 }
 
 SceneMenu.subtitles = {
@@ -32,7 +33,8 @@ SceneMenu.subtitles = {
     "OFFICIAL 3-STAGE PILOT CALIBRATION TRIAL",
     "HOLOGRAPHIC OPENING BOOK, TIME-TRAVEL & KPP COACH",
     "DAW TIMELINE, CUE PLACEMENT & SFX AUDITION",
-    "MASTER CALIBRATION SUITE, DAS / ARR & PIPELINE"
+    "MASTER CALIBRATION SUITE, DAS / ARR & PIPELINE",
+    "CUSTOMIZE MATRICES AND GAME RULES DYNAMICALLY"
 }
 
 function SceneMenu.draw()
@@ -48,45 +50,27 @@ function SceneMenu.executeSelection(index)
     AudioManager.playMenuClick()
 
     if index == 1 then
-        _G.CURRENT_GAME_MODE = "campaign"
-        _G.StartEngageTransition()
-        _G.GlobalRestart(true)
-        SceneManager.setState("campaign")
+        SceneManager.setState("game", { mode = "campaign" })
     elseif index == 2 then
-        _G.CURRENT_GAME_MODE = "versus"
-        _G.StartEngageTransition()
-        _G.GlobalRestart(true)
-        SceneManager.setState("versus")
-
+        SceneManager.setState("game", { mode = "versus" })
     elseif index == 3 then
-        _G.CURRENT_GAME_MODE = "boss_hunt"
-        _G.StartEngageTransition()
-        _G.GlobalRestart(true)
-        SceneManager.setState("boss_hunt")
-
+        SceneManager.setState("game", { mode = "boss_hunt" })
     elseif index == 4 then
         SceneManager.setState("forge")
-
     elseif index == 5 then
-        _G.CURRENT_GAME_MODE = "benchmark"
-        _G.StartEngageTransition()
-        _G.GlobalRestart(true)
-        SceneManager.setState("benchmark")
-
+        SceneManager.setState("game", { mode = "benchmark" })
     elseif index == 6 then
-        _G.CURRENT_GAME_MODE = "trainer"
-        _G.StartEngageTransition()
         SceneManager.setState("trainer")
-
     elseif index == 7 then
         TrackEditor.active = true
         SceneManager.setState("editor")
-
     elseif index == 8 then
         SceneSettings.return_state = "menu"
         SceneSettings.active_tab_index = 1
         SceneSettings.active_item_index = 1
-        SceneManager.setState("settings")
+        SceneManager.push("settings")
+    elseif index == 9 then
+        SceneManager.setState("editor")
     end
 end
 

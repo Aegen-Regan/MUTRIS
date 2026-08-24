@@ -3,37 +3,24 @@
 -- ================================================================
 ---@diagnostic disable: undefined-global
 -- ============================================================================
--- MUTRIS ENGINE: DDA HEURISTIC BOT ENGINE 2.0 (FASE 13)
--- Zero-GC / Benchmark Adaptive Speed / Anti-Stall / Hole-Seeking
+-- MUTRIS ENGINE: DDA HEURISTIC BOT ENGINE 3.0 (INSTANTIABLE)
+-- Fully decoupled for multi-bot duels and boss fights
 -- ============================================================================
 local AIBot = {}
+AIBot.__index = AIBot
 
 local SRS          = require "tetris.rotation_systems.srs"
 local MetaBalancer = require "core.meta_balancer"
 local Blackbox     = require "core.blackbox"
+local EditorConfig = require "core.editor_config"
 
-_G.AI_ADAPTIVE_PROFILE = {
+_G.AI_ADAPTIVE_PROFILE = _G.AI_ADAPTIVE_PROFILE or {
     player_avg_pps = 1.20,
     ai_target_pps  = 1.45,
     player_wins    = 0,
     bot_wins       = 0,
     total_matches  = 0
 }
-
-AIBot.board = nil
-AIBot.base_pps = 1.45
-AIBot.pps = 1.45
-AIBot.step_timer = 0.0
-AIBot.has_target = false
-AIBot.target_x = 4
-AIBot.target_rot = 1
-AIBot.hole_seeking_col = 5
-
-local _sim_grid = {}
-for r = 1, 40 do
-    _sim_grid[r] = {}
-    for c = 1, 10 do _sim_grid[r][c] = 0 end
-end
 
 local function serializeJSON(tbl)
     local s = "{\n"
@@ -54,7 +41,7 @@ local function parseJSON(str)
     return data
 end
 
-function AIBot.loadProfile()
+function AIBot.loadGlobalProfile()
     if love.filesystem.getInfo("saves/ai_profile.json") then
         local contents = love.filesystem.read("saves/ai_profile.json")
         if contents then
@@ -64,62 +51,84 @@ function AIBot.loadProfile()
             end
         end
     end
-    AIBot.base_pps = _G.AI_ADAPTIVE_PROFILE.ai_target_pps or 1.45
-    AIBot.pps = AIBot.base_pps
 end
 
-function AIBot.saveProfile()
+function AIBot.saveGlobalProfile()
     if not love.filesystem.getInfo("saves") then
         love.filesystem.createDirectory("saves")
     end
     love.filesystem.write("saves/ai_profile.json", serializeJSON(_G.AI_ADAPTIVE_PROFILE))
 end
 
-function AIBot.init(self_or_board, maybe_board)
-    local board = (type(self_or_board) == "table" and self_or_board.grid) and self_or_board or maybe_board
-    AIBot.board = board
-    if board then board.ai = AIBot end
+function AIBot.new(board, profile_name)
+    local self = setmetatable({}, AIBot)
+    self.board = board
+    self.board.ai = self
 
-    AIBot.loadProfile()
-    AIBot.has_target = false
-    AIBot.step_timer = 0.0
-    AIBot.emote_cooldown = 0.0
-    AIBot.EMOTE_INTERVAL = 3.5
+    self.profile_name = profile_name or "normal"
+    local config = EditorConfig.ai_profiles[self.profile_name] or EditorConfig.ai_profiles["normal"]
+    
+    self.base_pps = config.target_pps or _G.AI_ADAPTIVE_PROFILE.ai_target_pps or 1.45
+    self.pps = self.base_pps
+    self.error_rate = config.error_rate or 0.05
+
+    self.step_timer = 0.0
+    self.has_target = false
+    self.target_x = math.floor(board.cols / 2)
+    self.target_rot = 1
+    self.hole_seeking_col = math.floor(board.cols / 2)
+    
+    self.emote_cooldown = 0.0
+    self.EMOTE_INTERVAL = 3.5
+
+    -- Dedicated sim grid for this instance to avoid race conditions in multi-bot
+    self._sim_grid = {}
+    for r = 1, board.rows do
+        self._sim_grid[r] = {}
+        for c = 1, board.cols do self._sim_grid[r][c] = 0 end
+    end
+    
+    return self
 end
 
-local function findGarbageHoleColumn(board)
-    for r = 40, 21, -1 do
+function AIBot:findGarbageHoleColumn()
+    for r = self.board.rows, 1, -1 do
         local hole_col = 0
         local solid_count = 0
-        for c = 1, 10 do
-            if board.grid[r][c] == 8 then
+        for c = 1, self.board.cols do
+            if self.board.grid[r][c] == 8 then
                 solid_count = solid_count + 1
-            elseif board.grid[r][c] == 0 then
+            elseif self.board.grid[r][c] == 0 then
                 hole_col = c
             end
         end
-        if solid_count >= 8 and hole_col > 0 then
+        if solid_count >= (self.board.cols - 2) and hole_col > 0 then
             return hole_col
         end
     end
-    return 10
+    return math.floor(self.board.cols / 2)
 end
 
-local function evaluatePlacement(board, piece, target_rot, target_x)
+function AIBot:evaluatePlacement(piece, target_rot, target_x)
     local shape = piece.shape[target_rot]
     if not shape then return -999999 end
+
+    local b_rows = self.board.rows
+    local b_cols = self.board.cols
+    local spawn_r = self.board.visible_rows + 1
 
     for r = 1, #shape do
         for c = 1, #shape[r] do
             if shape[r][c] ~= 0 then
                 local tx = target_x + c - 1
-                if tx < 1 or tx > 10 then return -999999 end
-                if board.grid[21][tx] ~= 0 then return -999999 end
+                local ty = spawn_r + r - 1
+                if tx < 1 or tx > b_cols then return -999999 end
+                if ty >= 1 and ty <= b_rows and self.board.grid[ty][tx] ~= 0 then return -999999 end
             end
         end
     end
 
-    local drop_y = 21
+    local drop_y = spawn_r
     while true do
         local collision = false
         for r = 1, #shape do
@@ -127,7 +136,7 @@ local function evaluatePlacement(board, piece, target_rot, target_x)
                 if shape[r][c] ~= 0 then
                     local tx = target_x + c - 1
                     local ty = drop_y + r
-                    if ty > 40 or (ty >= 1 and board.grid[ty][tx] ~= 0) then
+                    if ty > b_rows or (ty >= 1 and self.board.grid[ty][tx] ~= 0) then
                         collision = true
                         break
                     end
@@ -139,8 +148,8 @@ local function evaluatePlacement(board, piece, target_rot, target_x)
         drop_y = drop_y + 1
     end
 
-    for r = 1, 40 do
-        for c = 1, 10 do _sim_grid[r][c] = board.grid[r][c] end
+    for r = 1, b_rows do
+        for c = 1, b_cols do self._sim_grid[r][c] = self.board.grid[r][c] end
     end
 
     for r = 1, #shape do
@@ -148,18 +157,18 @@ local function evaluatePlacement(board, piece, target_rot, target_x)
             if shape[r][c] ~= 0 then
                 local tx = target_x + c - 1
                 local ty = drop_y + r - 1
-                if ty >= 1 and ty <= 40 and tx >= 1 and tx <= 10 then
-                    _sim_grid[ty][tx] = piece.id
+                if ty >= 1 and ty <= b_rows and tx >= 1 and tx <= b_cols then
+                    self._sim_grid[ty][tx] = piece.id
                 end
             end
         end
     end
 
     local lines_cleared = 0
-    for r = 40, 21, -1 do
+    for r = b_rows, 1, -1 do
         local full = true
-        for c = 1, 10 do
-            if _sim_grid[r][c] == 0 then full = false break end
+        for c = 1, b_cols do
+            if self._sim_grid[r][c] == 0 then full = false break end
         end
         if full then lines_cleared = lines_cleared + 1 end
     end
@@ -168,14 +177,16 @@ local function evaluatePlacement(board, piece, target_rot, target_x)
     local holes = 0
     local bumpiness = 0
     local prev_h = 0
+    local top_out = false
 
-    for c = 1, 10 do
+    for c = 1, b_cols do
         local h = 0
         local found_block = false
-        for r = 21, 40 do
-            if _sim_grid[r][c] ~= 0 then
+        for r = 1, b_rows do
+            if self._sim_grid[r][c] ~= 0 then
+                if r == 1 then top_out = true end
                 if not found_block then
-                    h = 41 - r
+                    h = (b_rows + 1) - r
                     found_block = true
                 end
             elseif found_block then
@@ -187,20 +198,28 @@ local function evaluatePlacement(board, piece, target_rot, target_x)
         prev_h = h
     end
 
-    local hole_col = AIBot.hole_seeking_col or 10
+    if top_out then return -999999 end
+
+    local hole_col = self.hole_seeking_col or b_cols
     local hole_penalty = 0
-    if _sim_grid[40][hole_col] ~= 0 and lines_cleared == 0 then
+    if self._sim_grid[b_rows][hole_col] ~= 0 and lines_cleared == 0 then
         hole_penalty = 120
     end
 
     local score = (-0.51 * agg_height) + (0.85 * lines_cleared * lines_cleared) - (0.95 * holes * 12) - (0.28 * bumpiness) - hole_penalty
+    
+    -- Introduce error based on profile
+    if love.math.random() < self.error_rate then
+        score = score - love.math.random(50, 200)
+    end
+    
     return score
 end
 
-function AIBot.findBestMove(board)
-    if not board or not board.active_piece then return end
-    local p = board.active_piece
-    AIBot.hole_seeking_col = findGarbageHoleColumn(board)
+function AIBot:findBestMove()
+    if not self.board or not self.board.active_piece then return end
+    local p = self.board.active_piece
+    self.hole_seeking_col = self:findGarbageHoleColumn()
 
     local best_score = -9999999
     local best_rot = p.rotation
@@ -208,8 +227,8 @@ function AIBot.findBestMove(board)
 
     local max_rot = (p.shape and #p.shape) or 4
     for rot = 1, max_rot do
-        for x = -2, 10 do
-            local score = evaluatePlacement(board, p, rot, x)
+        for x = -2, self.board.cols do
+            local score = self:evaluatePlacement(p, rot, x)
             if score > best_score then
                 best_score = score
                 best_rot = rot
@@ -218,54 +237,51 @@ function AIBot.findBestMove(board)
         end
     end
 
-    AIBot.target_rot = best_rot
-    AIBot.target_x = best_x
-    AIBot.has_target = true
+    self.target_rot = best_rot
+    self.target_x = best_x
+    self.has_target = true
 end
 
-function AIBot.update(self_or_dt, maybe_dt)
-    local dt = (type(self_or_dt) == "number") and self_or_dt or maybe_dt
-    local board = AIBot.board
-    if not board or board.is_dying or not board.active_piece then return end
+function AIBot:update(dt)
+    if not self.board or self.board.is_dying or not self.board.active_piece then return end
 
-    local p = board.active_piece
+    local p = self.board.active_piece
     if p.locked then
-        AIBot.has_target = false
+        self.has_target = false
         return
     end
 
     local punch = _G.TrackEnergyPunch or 0
-    AIBot.base_pps = _G.AI_ADAPTIVE_PROFILE.ai_target_pps or 1.45
-    AIBot.pps = AIBot.base_pps + (punch * 0.40)
+    self.pps = self.base_pps + (punch * 0.40)
 
-    if not AIBot.has_target then
-        AIBot.findBestMove(board)
+    if not self.has_target then
+        self:findBestMove()
     end
 
-    local step_interval = 1.0 / math.max(0.5, AIBot.pps * 4.0)
-    AIBot.step_timer = AIBot.step_timer + dt
+    local step_interval = 1.0 / math.max(0.5, self.pps * 4.0)
+    self.step_timer = self.step_timer + dt
 
-    while AIBot.step_timer >= step_interval do
-        AIBot.step_timer = AIBot.step_timer - step_interval
+    while self.step_timer >= step_interval do
+        self.step_timer = self.step_timer - step_interval
 
-        if p.rotation ~= AIBot.target_rot then
-            local dir = (AIBot.target_rot > p.rotation) and 1 or -1
+        if p.rotation ~= self.target_rot then
+            local dir = (self.target_rot > p.rotation) and 1 or -1
             if not p:rotate(dir) then
-                AIBot.target_rot = p.rotation
+                self.target_rot = p.rotation
             else
                 return
             end
         end
 
-        if p.x < AIBot.target_x then
+        if p.x < self.target_x then
             if not p:move(1, 0) then
-                AIBot.target_x = p.x
+                self.target_x = p.x
             else
                 return
             end
-        elseif p.x > AIBot.target_x then
+        elseif p.x > self.target_x then
             if not p:move(-1, 0) then
-                AIBot.target_x = p.x
+                self.target_x = p.x
             else
                 return
             end
@@ -274,9 +290,9 @@ function AIBot.update(self_or_dt, maybe_dt)
         local startY = p.y
         while p:move(0, 1, true) do end
         local endY = p.y
-        board:spawnTrail(p.x, startY, endY, p.id, p.shape[p.rotation])
+        self.board:spawnTrail(p.x, startY, endY, p.id, p.shape[p.rotation])
         p:lock()
-        AIBot.has_target = false
+        self.has_target = false
         break
     end
 end
@@ -294,8 +310,7 @@ function AIBot.registerMatchOutcome(human_won, player_pps)
     prof.player_avg_pps = (prof.player_avg_pps * 0.70) + (valid_player_pps * 0.30)
     prof.ai_target_pps = math.max(0.9, math.min(4.5, prof.player_avg_pps * 1.10))
 
-    AIBot.base_pps = prof.ai_target_pps
-    AIBot.saveProfile()
+    AIBot.saveGlobalProfile()
 end
 
 function AIBot:updateEmoteLogic(dt, opponent_board, emote_system)
@@ -308,18 +323,16 @@ function AIBot:updateEmoteLogic(dt, opponent_board, emote_system)
     local my_height = self.board:getStackHeight()
     local opp_height = opponent_board:getStackHeight()
     
-    local emote_x = 740 -- Centro-Derecha de la pantalla (área de Flight Recorder)
-    local emote_y = 340 + love.math.random(-40, 40)
+    local emote_x = self.board.x + (self.board.cols * 12)
+    local emote_y = self.board.y + 40 + love.math.random(-20, 20)
 
-    -- CASO 1: BM / WINNING (Rival en zona crítica >= 14 y Bot seguro < 8)
-    if opp_height >= 14 and my_height < 8 then
+    if opp_height >= math.floor(opponent_board.rows * 0.7) and my_height < math.floor(self.board.rows * 0.4) then
         emote_system:triggerPreset("BM_WINNING", emote_x, emote_y, 1.0, 0.25, 0.25)
         self.emote_cooldown = 4.5
         return
     end
 
-    -- CASO 2: PANIC (Bot en peligro crítico >= 15)
-    if my_height >= 15 then
+    if my_height >= math.floor(self.board.rows * 0.75) then
         emote_system:triggerPreset("PANIC", emote_x, emote_y, 1.0, 0.85, 0.2)
         self.emote_cooldown = 3.5
         return
@@ -328,7 +341,7 @@ end
 
 function AIBot:onGarbageSent(lines, emote_system)
     if lines >= 4 and self.emote_cooldown <= 0 then
-        local emote_x = self.board.x + (self.board.pixel_width or 200) / 2
+        local emote_x = self.board.x + (self.board.cols * 12)
         local emote_y = self.board.y + 35
         emote_system:triggerPreset("ATTACK_SPIKE", emote_x, emote_y, 0.2, 0.9, 1.0)
         self.emote_cooldown = 3.5

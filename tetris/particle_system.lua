@@ -24,11 +24,12 @@ end
 
 function ParticleSystem.spawnLineBlast(board, row_index, color_id)
     local clr = board.colors[color_id] or {1, 1, 1}
-    local y_pos = board.y + (row_index - 21) * 24 + 12
+    local bs = board.block_size or 24
+    local y_pos = board.y + (row_index - (board.visible_rows + 1)) * bs + (bs / 2)
     local cur_theme = ThemeManager.current_theme
 
-    for c = 1, 10 do
-        local x_pos = board.x + (c - 1) * 24 + 12
+    for c = 1, board.cols do
+        local x_pos = board.x + (c - 1) * bs + (bs / 2)
         local p = board.particles[board.particle_head]
         p.active = true
         p.x, p.y = x_pos, y_pos
@@ -70,8 +71,9 @@ end
 
 function ParticleSystem.spawnSupernova(board, color)
     local clr = color or {1.0, 0.85, 0.2}
-    local center_x = board.x + 120
-    local center_y = board.y + 240
+    local bs = board.block_size or 24
+    local center_x = board.x + (board.cols * bs / 2)
+    local center_y = board.y + (board.visible_rows * bs / 2)
 
     for i = 1, 60 do
         local p = board.particles[board.particle_head]

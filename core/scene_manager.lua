@@ -3,15 +3,14 @@
 -- ================================================================
 ---@diagnostic disable: undefined-global
 -- ============================================================================
--- MUTRIS ENGINE: MASTER SCENE & STATE ORCHESTRATOR
--- Unified lifecycle dispatching with dynamic registration & defensive fallback
+-- MUTRIS ENGINE: MASTER SCENE & STATE ORCHESTRATOR (V2)
+-- Stack-based architecture for nested sub-scenes & dynamic registration
 -- ============================================================================
 local SceneManager = {}
 local Blackbox = require "core.blackbox"
 
-local current_state = "menu"
-local previous_state = "menu"
 local scenes = {}
+local stack = {} -- Array of active scenes: { id = string, instance = table, data = table }
 
 local function safeRequireScene(mod_name)
     local ok, mod = pcall(require, "scenes." .. mod_name)
@@ -24,55 +23,95 @@ local function safeRequireScene(mod_name)
 end
 
 function SceneManager.init()
-    -- Carga perezosa de escenas base
-    scenes["menu"]             = safeRequireScene("scene_menu")
-    scenes["campaign"]         = safeRequireScene("scene_campaign")
-    scenes["versus"]           = safeRequireScene("scene_bot_vs_bot")
-    scenes["bot_vs_bot"]       = scenes["versus"]
-    scenes["boss_hunt"]        = safeRequireScene("scene_boss_hunt")
-    scenes["settings"]         = safeRequireScene("scene_settings")
-    scenes["pause"]            = safeRequireScene("scene_pause")
-    scenes["gameover"]         = safeRequireScene("scene_gameover")
-    scenes["forge"]            = safeRequireScene("scene_forge")
-    scenes["editor"]           = safeRequireScene("scene_soundtrack") or safeRequireScene("scene_editor")
-    scenes["soundtrack"]       = scenes["editor"]
-    scenes["benchmark_result"] = safeRequireScene("scene_benchmark")
-    scenes["benchmark"]        = scenes["benchmark_result"]
-    scenes["trainer"]          = safeRequireScene("scene_trainer")
-    scenes["sandbox"]          = safeRequireScene("scene_sandbox")
+    -- Base scenes dynamic loading (can be expanded easily)
+    local base_scenes = {
+        "menu", "campaign", "boss_hunt", "settings", "pause", 
+        "gameover", "forge", "sandbox", "trainer"
+    }
 
-    for _, scene in pairs(scenes) do
-        if scene and scene.init then scene.init() end
+    for _, name in ipairs(base_scenes) do
+        local s = safeRequireScene("scene_" .. name)
+        if s then
+            SceneManager.register(name, s)
+        end
+    end
+    
+    -- Legacy aliases and fallbacks
+    local bot_vs_bot = safeRequireScene("scene_bot_vs_bot")
+    if bot_vs_bot then
+        SceneManager.register("versus", bot_vs_bot)
+        SceneManager.register("bot_vs_bot", bot_vs_bot)
+    end
+    
+    local editor = safeRequireScene("scene_soundtrack") or safeRequireScene("scene_editor")
+    if editor then
+        SceneManager.register("editor", editor)
+        SceneManager.register("soundtrack", editor)
+    end
+    
+    local bench = safeRequireScene("scene_benchmark")
+    if bench then
+        SceneManager.register("benchmark", bench)
+        SceneManager.register("benchmark_result", bench)
     end
 end
 
 function SceneManager.register(name, scene_obj)
-    if not name then return end
+    if not name or not scene_obj then return end
     scenes[name] = scene_obj
-    if scene_obj and scene_obj.init then
+    if scene_obj.init then
         scene_obj.init()
+    end
+    Blackbox.log("SCENE", "Registered scene: " .. name, 0, 0)
+end
+
+-- Completely replaces the stack with a single new scene
+function SceneManager.setState(new_state, data)
+    -- Exit all currently active scenes from top to bottom
+    for i = #stack, 1, -1 do
+        local s = stack[i].instance
+        if s.onExit then s.onExit() end
+        if s.exit then s.exit() end
+        stack[i] = nil
+    end
+
+    local next_scene = scenes[new_state]
+    if next_scene then
+        table.insert(stack, { id = new_state, instance = next_scene, data = data or {} })
+        if next_scene.onEnter then next_scene.onEnter(data) end
+        if next_scene.enter then next_scene.enter(data) end
+        Blackbox.log("STATE", "SCENE SWITCH: " .. tostring(new_state), 0, 0)
+    else
+        Blackbox.log("ERROR", "Attempted to set unknown state: " .. tostring(new_state), 0, 0)
     end
 end
 
-function SceneManager.setState(new_state)
-    if current_state == new_state then return end
-    
-    local old_scene = scenes[current_state]
-    if old_scene then
-        if old_scene.onExit then old_scene.onExit() end
-        if old_scene.exit then old_scene.exit() end
-    end
-
-    previous_state = current_state
-    current_state = new_state
-
-    local next_scene = scenes[current_state]
+-- Pushes a sub-scene on top of the current one
+function SceneManager.push(new_state, data)
+    local next_scene = scenes[new_state]
     if next_scene then
-        if next_scene.onEnter then next_scene.onEnter() end
-        if next_scene.enter then next_scene.enter() end
+        table.insert(stack, { id = new_state, instance = next_scene, data = data or {} })
+        if next_scene.onEnter then next_scene.onEnter(data) end
+        if next_scene.enter then next_scene.enter(data) end
+        Blackbox.log("STATE", "SCENE PUSHED: " .. tostring(new_state), 0, 0)
+    else
+        Blackbox.log("ERROR", "Attempted to push unknown sub-scene: " .. tostring(new_state), 0, 0)
     end
+end
 
-    Blackbox.log("STATE", "SCENE SWITCH: " .. tostring(new_state), 0, 0)
+-- Pops the top sub-scene, returning focus to the previous one
+function SceneManager.pop()
+    if #stack <= 1 then return end -- Don't pop the base scene
+    local top = table.remove(stack)
+    if top.instance.onExit then top.instance.onExit() end
+    if top.instance.exit then top.instance.exit() end
+    Blackbox.log("STATE", "SCENE POPPED: " .. tostring(top.id), 0, 0)
+    
+    -- Notify the newly exposed top scene that it has resumed (optional hook)
+    if #stack > 0 then
+        local current = stack[#stack].instance
+        if current.resume then current.resume() end
+    end
 end
 
 -- ALIASES DE COMPATIBILIDAD
@@ -80,55 +119,73 @@ SceneManager.switch = SceneManager.setState
 SceneManager.switchState = SceneManager.setState
 
 function SceneManager.getState()
-    return current_state
+    if #stack > 0 then return stack[#stack].id end
+    return "none"
 end
 
 function SceneManager.getCurrentName()
-    return current_state
+    return SceneManager.getState()
 end
 
+-- Helper to get the previous state name for legacy support
 function SceneManager.getPreviousState()
-    return previous_state
+    if #stack > 1 then
+        return stack[#stack - 1].id
+    end
+    return "menu"
 end
 
 function SceneManager.getScene(name)
-    return scenes[name or current_state]
+    return scenes[name] or (#stack > 0 and stack[#stack].instance or nil)
 end
 
 function SceneManager.update(dt)
-    local scene = scenes[current_state]
-    if scene and scene.update then
-        scene.update(dt)
+    -- Typically only the top scene updates, but you could iterate if needed.
+    -- For now, update ONLY the top scene to pause background logic.
+    if #stack > 0 then
+        local scene = stack[#stack].instance
+        if scene.update then
+            scene.update(dt)
+        end
     end
 end
 
 function SceneManager.draw()
-    local scene = scenes[current_state]
-    if scene and scene.draw then
-        scene.draw()
+    -- Draw all scenes in the stack from bottom to top (backgrounds first)
+    for i = 1, #stack do
+        local scene = stack[i].instance
+        if scene.draw then
+            scene.draw()
+        end
     end
 end
 
 function SceneManager.keypressed(key)
-    local scene = scenes[current_state]
-    if scene and scene.keypressed then
-        return scene.keypressed(key)
+    if #stack > 0 then
+        local scene = stack[#stack].instance
+        if scene.keypressed then
+            return scene.keypressed(key)
+        end
     end
     return false
 end
 
 function SceneManager.mousepressed(x, y, button)
-    local scene = scenes[current_state]
-    if scene and scene.mousepressed then
-        return scene.mousepressed(x, y, button)
+    if #stack > 0 then
+        local scene = stack[#stack].instance
+        if scene.mousepressed then
+            return scene.mousepressed(x, y, button)
+        end
     end
     return false
 end
 
 function SceneManager.gamepadpressed(joystick, button)
-    local scene = scenes[current_state]
-    if scene and scene.gamepadpressed then
-        return scene.gamepadpressed(joystick, button)
+    if #stack > 0 then
+        local scene = stack[#stack].instance
+        if scene.gamepadpressed then
+            return scene.gamepadpressed(joystick, button)
+        end
     end
     return false
 end

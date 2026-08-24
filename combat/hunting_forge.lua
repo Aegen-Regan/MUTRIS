@@ -228,19 +228,20 @@ function HuntingForge.updatePalico(dt, player_board)
         HuntingForge.palico_rescue_flash = math.max(0, HuntingForge.palico_rescue_flash - dt * 3.0)
     end
 
-    -- Trigger de Rescate si la matriz supera altura 14/20
+    -- Trigger de Rescate si la matriz supera el 70% de altura
     local p_height = 0
     if player_board.grid then
-        for r = 21, 40 do
-            for c = 1, 10 do
+        for r = 1, player_board.rows do
+            for c = 1, player_board.cols do
                 if player_board.grid[r][c] ~= 0 then
-                    p_height = math.max(p_height, 41 - r)
+                    p_height = math.max(p_height, (player_board.rows + 1) - r)
                 end
             end
         end
     end
 
-    if p_height >= 14 and HuntingForge.palico_cooldown <= 0 then
+    local danger_threshold = math.floor(player_board.visible_rows * 0.7)
+    if p_height >= danger_threshold and HuntingForge.palico_cooldown <= 0 then
         local q_len = (player_board.garbage_queue and #player_board.garbage_queue) or 0
         if q_len > 0 then
             -- Cancela 3 líneas de basura entrante

@@ -28,7 +28,8 @@ function Piece.new(id, board)
     local shapes = RulesetManager.getShapes(id)
     self.shape = shapes or { {{1,1,1,1}} }
     self.rotation = 1
-    self.x, self.y = 4, 21
+    self.x = board and (math.floor(board.cols / 2) - 1) or 4
+    self.y = board and (board.visible_rows + 1) or 21
     self.locked, self.gravity_timer, self.lock_timer = false, 0, 0
 
     self.lock_delay = RulesetManager.getLockDelay()
@@ -99,7 +100,7 @@ function Piece:checkTSpin()
     local corners = {{x=0,y=0}, {x=2,y=0}, {x=0,y=2}, {x=2,y=2}}
     for _, c in ipairs(corners) do
         local tx, ty = self.x + c.x, self.y + c.y
-        if tx < 1 or tx > 10 or ty > 40 or (ty >= 1 and self.board.grid[ty][tx] ~= 0) then
+        if tx < 1 or tx > self.board.cols or ty > self.board.rows or (ty >= 1 and self.board.grid[ty][tx] ~= 0) then
             occupied = occupied + 1
         end
     end
@@ -167,9 +168,9 @@ function Piece:lock()
         for c = 1, #shape[r] do
             if shape[r][c] ~= 0 then
                 local tx, ty = self.x + c - 1, self.y + r - 1
-                if ty >= 1 and ty <= 40 then 
+                if ty >= 1 and ty <= self.board.rows then 
                     self.board.grid[ty][tx] = self.id
-                    if ty <= 20 then
+                    if ty <= self.board.visible_rows then
                         has_mino_in_buffer = true
                     end
                 end
@@ -203,7 +204,7 @@ function Piece:lock()
     if has_mino_in_buffer and not self.board.is_zone_active then
         Blackbox.log(
             (self.board.player_type == "human") and "P1_DEATH" or "BOT_DEATH",
-            "LOCK OUT (MINO IN BUFFER Y<=20)",
+            "LOCK OUT (MINO IN BUFFER Y<=" .. tostring(self.board.visible_rows) .. ")",
             self.id, self.y
         )
         self.board:triggerDeath()
@@ -232,10 +233,11 @@ function Piece:draw(bx, by)
         ThemeManager.drawGhostPiece(self, bx, by, shape, gy, ghost_alpha_setting)
     end
 
+    local bs = self.board and self.board.block_size or 24
     for r = 1, #shape do 
         for c = 1, #shape[r] do 
             if shape[r][c] ~= 0 then
-                self.board:drawBlock(bx + (self.x + c - 2) * 24, by + (self.y + r - 22) * 24, self.id)
+                self.board:drawBlock(bx + (self.x + c - 2) * bs, by + (self.y + r - (self.board.visible_rows + 2)) * bs, self.id)
             end 
         end 
     end

@@ -70,11 +70,14 @@ function BeatLock.drawFeedback(board)
         love.graphics.push("all")
         love.graphics.setBlendMode("add")
         love.graphics.setColor(1.0, 0.85, 0.2, board.beat_lock_flash * 0.45)
-        love.graphics.rectangle("fill", board.x, board.y, 240, 480, 4)
+        local bs = board.block_size or 24
+        local bw = board.cols * bs
+        local bh = board.visible_rows * bs
+        love.graphics.rectangle("fill", board.x, board.y, bw, bh, 4)
         
         love.graphics.setLineWidth(2.5)
         love.graphics.setColor(1.0, 1.0, 0.4, board.beat_lock_flash * 0.8)
-        love.graphics.rectangle("line", board.x - 2, board.y - 2, 244, 484, 4)
+        love.graphics.rectangle("line", board.x - 2, board.y - 2, bw + 4, bh + 4, 4)
         love.graphics.pop()
     end
 end

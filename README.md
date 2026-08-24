@@ -24,6 +24,7 @@
    - 4.5. [Pilot Benchmark & Calibration Suite (Fases 12 y 13)](#45-pilot-benchmark--calibration-suite-fases-12-y-13)
    - 4.6. [Motor Universal de 4 Skins & Shaders GLSL](#46-motor-universal-de-4-skins--shaders-glsl)
    - 4.7. [Sincronización Acústica, Camelot & The Punch](#47-sincronización-acústica-camelot--the-punch)
+   - 4.8. [Arquitectura de Layout Responsivo & Auto-Centrado](#48-arquitectura-de-layout-responsivo--auto-centrado)
 5. [EL CRONOGRAMA MAESTRO ESTRATÉGICO (26 FASES EN 4 CLUSTERS)](#-el-cronograma-maestro-estratégico)
 6. [PRESUPUESTO DE RENDIMIENTO POR FRAME (144Hz / 240Hz)](#-presupuesto-de-rendimiento-por-frame)
 7. [MATRIZ DE DIAGNÓSTICO & RESOLUCIÓN DE BUGS (TROUBLESHOOTING)](#-matriz-de-diagnóstico--resolución-de-bugs)
@@ -418,6 +419,11 @@ Conmutador en tiempo real con tecla F5 / F6 (tetris/theme_manager.lua):
           
 
     en Resonance) otorgando Groove Strikes (+1 línea) y golpe de subgraves a 30 Hz.
+
+4.8. Arquitectura de Layout Responsivo & Auto-Centrado
+
+    El motor elimina los "Magic Numbers" en renderizado. La propiedad `board.block_size` se calcula matemáticamente basada en las dimensiones de la pantalla `(sw, sh)` y la cantidad de bots/jugadores activos, con un límite máximo (clamp) de `32px` para preservar la estética original. 
+    Los HUD Panels (Next/Hold), partículas y los Shader GLSL ahora giran paramétricamente alrededor de este tamaño celular, garantizando CERO solapamientos (overlappings) visuales sin importar si el tablero es un gigante 20x40 o un enano 4x8.
 
 👑 EL CRONOGRAMA MAESTRO ESTRATÉGICO
 (26 Fases Organizadas por Arquitectura de Sistemas)

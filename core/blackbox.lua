@@ -99,17 +99,20 @@ function Blackbox.drawPermanentHUD(player, bot)
 
     love.graphics.setFont(FontCache.get(8))
     local p1_height = 0
-    if player and player.grid then
-        for r = 21, 40 do
-            for c = 1, 10 do
-                if player.grid[r][c] ~= 0 then
-                    p1_height = math.max(p1_height, 41 - r)
+    if player and player.grid and player.rows and player.cols then
+        for r = 1, player.rows do
+            local row_data = player.grid[r]
+            if row_data then
+                for c = 1, player.cols do
+                    if row_data[c] and row_data[c] ~= 0 then
+                        p1_height = math.max(p1_height, (player.rows + 1) - r)
+                    end
                 end
             end
         end
     end
     love.graphics.setColor(t.secondary[1], t.secondary[2], t.secondary[3], 0.9)
-    love.graphics.printf(string.format("HEIGHT: %d/20", p1_height), p1_x, p1_y + 26, p1_w, "center")
+    love.graphics.printf(string.format("HEIGHT: %d/%d", p1_height, player and player.visible_rows or 20), p1_x, p1_y + 26, p1_w, "center")
 
     local p1_garb = (player and player.garbage_queue and #player.garbage_queue) or 0
     love.graphics.setColor(0.85, 0.85, 0.90, 0.85)
@@ -157,18 +160,21 @@ function Blackbox.drawPermanentHUD(player, bot)
     love.graphics.printf("BOT TELEM", bot_x, bot_y + 8, bot_w, "center")
 
     local bot_height = 0
-    if bot and bot.grid then
-        for r = 21, 40 do
-            for c = 1, 10 do
-                if bot.grid[r][c] ~= 0 then
-                    bot_height = math.max(bot_height, 41 - r)
+    if bot and bot.grid and bot.rows and bot.cols then
+        for r = 1, bot.rows do
+            local row_data = bot.grid[r]
+            if row_data then
+                for c = 1, bot.cols do
+                    if row_data[c] and row_data[c] ~= 0 then
+                        bot_height = math.max(bot_height, (bot.rows + 1) - r)
+                    end
                 end
             end
         end
     end
     love.graphics.setFont(FontCache.get(8))
     love.graphics.setColor(t.secondary[1], t.secondary[2], t.secondary[3], 0.9)
-    love.graphics.printf(string.format("HEIGHT: %d/20", bot_height), bot_x, bot_y + 26, bot_w, "center")
+    love.graphics.printf(string.format("HEIGHT: %d/%d", bot_height, bot and bot.visible_rows or 20), bot_x, bot_y + 26, bot_w, "center")
 
     local bot_garb = (bot and bot.garbage_queue and #bot.garbage_queue) or 0
     love.graphics.setColor(0.85, 0.85, 0.90, 0.85)

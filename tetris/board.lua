@@ -41,16 +41,20 @@ Board.colors = {
     [8] = {0.5, 0.5, 0.55}
 }
 
-function Board.new(x, y, player_type)
+function Board.new(x, y, player_type, cols, rows, block_size)
     local self = setmetatable({}, Board)
     self.x, self.y = x, y
     self.player_type = player_type or "human"
+    self.cols = cols or 10
+    self.rows = rows or 40
+    self.block_size = block_size or 24
+    self.visible_rows = math.floor(self.rows / 2)
     self.opponent = nil
 
     self.grid = {}
-    for r = 1, 40 do
+    for r = 1, self.rows do
         self.grid[r] = {}
-        for c = 1, 10 do self.grid[r][c] = 0 end
+        for c = 1, self.cols do self.grid[r][c] = 0 end
     end
 
     self.bag = Bag.new()
@@ -127,7 +131,7 @@ function Board:spawnPiece()
     if not self:canMove(self.active_piece.x, self.active_piece.y, self.active_piece.rotation) then
         Blackbox.log(
             (self.player_type == "human") and "P1_BLOCK_OUT" or "BOT_BLOCK_OUT",
-            "SPAWN OVERLAP (4, 21)",
+            "SPAWN OVERLAP (" .. tostring(self.active_piece.x) .. ", " .. tostring(self.active_piece.y) .. ")",
             next_id, 0
         )
         self:triggerDeath()
@@ -169,7 +173,7 @@ function Board:enterZone()
     if self.zone_tier == 2 then
         AudioManager.playImmediateSFX("zone_enter_hyper", self.player_type == "bot")
         ParticleSystem.spawnSupernova(self, {1.0, 0.85, 0.2})
-        BloomShader.triggerShockwave(self.x + 120, self.y + 240)
+        BloomShader.triggerShockwave(self.x + (self.cols * 12), self.y + (self.visible_rows * 12))
     else
         AudioManager.playImmediateSFX("zone_enter", self.player_type == "bot")
         ParticleSystem.spawnSupernova(self, {0.0, 0.9, 1.0})
@@ -198,8 +202,8 @@ function Board:exitZone()
 end
 
 function Board:isGridEmpty()
-    for r = 21, 40 do
-        for c = 1, 10 do
+    for r = self.visible_rows + 1, self.rows do
+        for c = 1, self.cols do
             if self.grid[r][c] ~= 0 then return false end
         end
     end
@@ -207,15 +211,15 @@ function Board:isGridEmpty()
 end
 
 function Board:clearCompletedLinesInZone()
-    local r = 40
-    while r >= 21 do
+    local r = self.rows
+    while r >= self.visible_rows + 1 do
         local full = true
-        for c = 1, 10 do
+        for c = 1, self.cols do
             if self.grid[r][c] == 0 then full = false break end
         end
         if full then
             local row = table.remove(self.grid, r)
-            for c = 1, 10 do row[c] = 0 end
+            for c = 1, self.cols do row[c] = 0 end
             table.insert(self.grid, 1, row)
         else
             r = r - 1
@@ -231,7 +235,7 @@ function Board:canMove(px, py, pr)
         for c = 1, #shape[r] do
             if shape[r][c] ~= 0 then
                 local tx, ty = px + c - 1, py + r - 1
-                if tx < 1 or tx > 10 or ty < 1 or ty > 40 then 
+                if tx < 1 or tx > self.cols or ty < 1 or ty > self.rows then 
                     return false 
                 end
                 if self.grid[ty][tx] ~= 0 then 
@@ -245,11 +249,11 @@ end
 
 function Board:checkLines(is_tspin)
     local cleared = 0
-    local r = 40
+    local r = self.rows
 
     while r >= 1 do
         local full = true
-        for c = 1, 10 do
+        for c = 1, self.cols do
             if self.grid[r][c] == 0 then full = false break end
         end
 
@@ -259,7 +263,7 @@ function Board:checkLines(is_tspin)
 
             if not self.is_zone_active then
                 local removed_row = table.remove(self.grid, r)
-                for c = 1, 10 do removed_row[c] = 0 end
+                for c = 1, self.cols do removed_row[c] = 0 end
                 table.insert(self.grid, 1, removed_row)
             else
                 r = r - 1
@@ -325,8 +329,8 @@ function Board:checkLines(is_tspin)
 
     if not self.is_zone_active then
         local ceiling_breach = false
-        for row_idx = 1, 20 do
-            for c = 1, 10 do
+        for row_idx = 1, self.visible_rows do
+            for c = 1, self.cols do
                 if self.grid[row_idx][c] ~= 0 then
                     ceiling_breach = true
                     break
@@ -338,7 +342,7 @@ function Board:checkLines(is_tspin)
         if ceiling_breach then
             Blackbox.log(
                 (self.player_type == "human") and "P1_DEATH" or "BOT_DEATH",
-                "CEILING OVERFLOW (MINOS IN R<=20)",
+                "CEILING OVERFLOW (MINOS IN R<=" .. tostring(self.visible_rows) .. ")",
                 0, 0
             )
             self:triggerDeath()
@@ -382,28 +386,28 @@ function Board:swapGrids(other)
 end
 
 function Board:shiftColumnsLocal(dir)
-    for r = 1, 40 do
+    for r = 1, self.rows do
         if dir > 0 then
-            local last = self.grid[r][10]
-            for c = 10, 2, -1 do self.grid[r][c] = self.grid[r][c - 1] end
+            local last = self.grid[r][self.cols]
+            for c = self.cols, 2, -1 do self.grid[r][c] = self.grid[r][c - 1] end
             self.grid[r][1] = last
         else
             local first = self.grid[r][1]
-            for c = 1, 9 do self.grid[r][c] = self.grid[r][c + 1] end
-            self.grid[r][10] = first
+            for c = 1, self.cols - 1 do self.grid[r][c] = self.grid[r][c + 1] end
+            self.grid[r][self.cols] = first
         end
     end
     self:triggerShake(4, 0.15)
 end
 
 function Board:shiftColumnsGlobal(other, dir)
-    for r = 21, 40 do
-        local p_edge = self.grid[r][10]
+    for r = self.visible_rows + 1, self.rows do
+        local p_edge = self.grid[r][self.cols]
         local o_edge = other.grid[r][1]
-        for c = 10, 2, -1 do self.grid[r][c] = self.grid[r][c - 1] end
+        for c = self.cols, 2, -1 do self.grid[r][c] = self.grid[r][c - 1] end
         self.grid[r][1] = o_edge
-        for c = 1, 9 do other.grid[r][c] = other.grid[r][c + 1] end
-        other.grid[r][10] = p_edge
+        for c = 1, self.cols - 1 do other.grid[r][c] = other.grid[r][c + 1] end
+        other.grid[r][self.cols] = p_edge
     end
     self:triggerShake(6, 0.2)
     other:triggerShake(6, 0.2)
@@ -440,35 +444,73 @@ function Board:triggerDeath()
         end
     end
 
+    if self.player_type == "bot" then
+        local has_garbage = false
+        for r = self.rows, 1, -1 do
+            for c = 1, self.cols do
+                if self.grid[r][c] == 8 then
+                    has_garbage = true
+                    break
+                end
+            end
+            if has_garbage then break end
+        end
+
+        if not has_garbage then
+            local clear_count = 0
+            local r = 1
+            while r <= self.rows and clear_count < 4 do
+                local row_has_blocks = false
+                for c = 1, self.cols do
+                    if self.grid[r][c] ~= 0 then row_has_blocks = true break end
+                end
+                
+                if row_has_blocks then
+                    local removed = table.remove(self.grid, r)
+                    for c = 1, self.cols do removed[c] = 0 end
+                    table.insert(self.grid, 1, removed)
+                    clear_count = clear_count + 1
+                end
+                r = r + 1
+            end
+            
+            local Blackbox = require "core.blackbox"
+            Blackbox.log("BOT_RESCUE", "[AUTO_RESCUE] MATRIX CLEARED", 0, 0)
+            self:triggerShake(12, 0.4)
+            return
+        end
+    end
+
     self.is_dying = true
     self.death_timer = 1.5
     _G.HitStopTimer = 0.25
     AudioManager.playImmediateSFX("death", self.player_type == "bot")
-    BloomShader.triggerShockwave(self.x + 120, self.y + 240)
+    BloomShader.triggerShockwave(self.x + (self.cols * (self.block_size / 2)), self.y + (self.visible_rows * (self.block_size / 2)))
     self:triggerShake(16, 0.6)
 
     -- 🪝 HOOK ZERO-GC: Muerte del Tablero
     EventBus.emit(EventBus.ON_BOARD_DEATH, self.player_type == "human" and 1 or 2)
 end
 
-function Board:drawBlock(x, y, id, alpha)
+function Board:drawBlock(x, y, id, alpha, override_size)
     local clr = self.colors[id] or {0.6, 0.6, 0.6}
     local a = alpha or 1.0
+    local bs = override_size or self.block_size
     love.graphics.setColor(clr[1], clr[2], clr[3], a * 0.92)
-    love.graphics.rectangle("fill", x + 1, y + 1, 22, 22, 2)
+    love.graphics.rectangle("fill", x + 1, y + 1, bs - 2, bs - 2, 2)
     love.graphics.setColor(1, 1, 1, a * 0.40)
-    love.graphics.rectangle("fill", x + 2, y + 2, 20, 3)
+    love.graphics.rectangle("fill", x + 2, y + 2, bs - 4, math.max(1, math.floor(bs * 0.15)))
     love.graphics.setColor(0, 0, 0, a * 0.45)
-    love.graphics.rectangle("fill", x + 2, y + 19, 20, 3)
+    love.graphics.rectangle("fill", x + 2, y + bs - math.max(1, math.floor(bs * 0.2)), bs - 4, math.max(1, math.floor(bs * 0.15)))
 end
 
 function Board:getStackHeight()
     local height = 0
     if self.grid then
-        for r = 1, 40 do
-            for c = 1, 10 do
+        for r = 1, self.rows do
+            for c = 1, self.cols do
                 if self.grid[r][c] ~= 0 then
-                    height = math.max(height, 41 - r)
+                    height = math.max(height, (self.rows + 1) - r)
                 end
             end
         end
@@ -543,19 +585,23 @@ function Board:draw()
 
     local t = ThemeManager.getCurrent()
     love.graphics.setColor(t.primary[1], t.primary[2], t.primary[3], 0.04)
-    for r = 1, 20 do
-        love.graphics.line(self.x, self.y + r * 24, self.x + 240, self.y + r * 24)
+    local bs = self.block_size
+    local bw = self.cols * bs
+    local bh = self.visible_rows * bs
+
+    for r = 1, self.visible_rows do
+        love.graphics.line(self.x, self.y + r * bs, self.x + bw, self.y + r * bs)
     end
-    for c = 1, 10 do
-        love.graphics.line(self.x + c * 24, self.y, self.x + c * 24, self.y + 480)
+    for c = 1, self.cols do
+        love.graphics.line(self.x + c * bs, self.y, self.x + c * bs, self.y + bh)
     end
 
     local block_alpha = self.is_dying and math.max(0.2, self.death_timer / 1.5) or 1.0
-    for r = 21, 40 do
-        for c = 1, 10 do
+    for r = self.visible_rows + 1, self.rows do
+        for c = 1, self.cols do
             local id = self.grid[r][c]
             if id ~= 0 then
-                self:drawBlock(self.x + (c - 1) * 24, self.y + (r - 21) * 24, id, block_alpha)
+                self:drawBlock(self.x + (c - 1) * bs, self.y + (r - (self.visible_rows + 1)) * bs, id, block_alpha)
             end
         end
     end
@@ -570,10 +616,10 @@ function Board:draw()
             for r = 1, #tr.shape do
                 for c = 1, #tr.shape[r] do
                     if tr.shape[r][c] ~= 0 then
-                        local rx = self.x + (tr.x + c - 2) * 24
-                        local ry1 = self.y + (tr.startY + r - 22) * 24
-                        local ry2 = self.y + (tr.endY + r - 22) * 24
-                        love.graphics.rectangle("fill", rx + 4, ry1, 16, math.max(4, ry2 - ry1 + 24))
+                        local rx = self.x + (tr.x + c - 2) * bs
+                        local ry1 = self.y + (tr.startY + r - (self.visible_rows + 2)) * bs
+                        local ry2 = self.y + (tr.endY + r - (self.visible_rows + 2)) * bs
+                        love.graphics.rectangle("fill", rx + 4, ry1, bs - 8, math.max(4, ry2 - ry1 + bs))
                     end
                 end
             end
@@ -585,9 +631,11 @@ function Board:draw()
     end
 
     if self.lock_impact > 0 then
+        local bw = self.cols * bs
+        local bh = self.visible_rows * bs
         love.graphics.setBlendMode("add")
         love.graphics.setColor(t.secondary[1], t.secondary[2], t.secondary[3], self.lock_impact * 0.5)
-        love.graphics.rectangle("fill", self.x, self.y + 474, 240, 6, 2)
+        love.graphics.rectangle("fill", self.x, self.y + bh - (bs / 4), bw, (bs / 4), 2)
         love.graphics.setBlendMode("alpha")
     end
 
@@ -611,7 +659,7 @@ function Board:draw()
         love.graphics.push("all")
         love.graphics.setBlendMode("add")
         love.graphics.setColor(0.85, 0.15, 1.0, self.tspin_flash * 0.35)
-        love.graphics.rectangle("fill", self.x, self.y, 240, 480, 4)
+        love.graphics.rectangle("fill", self.x, self.y, self.cols * self.block_size, self.visible_rows * self.block_size, 4)
         love.graphics.pop()
     end
 
@@ -619,8 +667,8 @@ function Board:draw()
         local progress = self.popup_timer / self.popup_max_time
         local alpha = math.min(1.0, progress * 1.9)
         local float_y = (1.0 - progress) * 45.0
-        local cx = self.x + 120
-        local cy = self.y + 135 - float_y
+        local cx = self.x + (self.cols * (self.block_size / 2))
+        local cy = self.y + (self.visible_rows * (self.block_size / 2)) - 105 - float_y
         local sc = self.popup_scale
         local clr = self.popup_color
 
@@ -665,18 +713,18 @@ function Board:pushToGrid(line_count)
     if not line_count or line_count <= 0 then return end
 
     local count = math.min(20, line_count)
-    local hole_col = math.random(1, 10)
+    local hole_col = math.random(1, self.cols)
 
     -- Desplazar filas hacia arriba (filas 1 a 39 copian de r+1)
     for _ = 1, count do
-        for r = 1, 39 do
-            for c = 1, 10 do
+        for r = 1, self.rows - 1 do
+            for c = 1, self.cols do
                 self.grid[r][c] = self.grid[r + 1][c]
             end
         end
         -- Inyectar la nueva fila de basura en la base (fila 40)
-        for c = 1, 10 do
-            self.grid[40][c] = (c == hole_col) and 0 or 8
+        for c = 1, self.cols do
+            self.grid[self.rows][c] = (c == hole_col) and 0 or 8
         end
     end
 

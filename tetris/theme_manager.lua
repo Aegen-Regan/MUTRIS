@@ -303,7 +303,8 @@ end
 function ThemeManager.drawMatrixFrame(board)
     local t = ThemeManager.getCurrent()
     local bx, by = board.x, board.y
-    local bw, bh = 240, 480
+    local bs = board.block_size
+    local bw, bh = board.cols * bs, board.visible_rows * bs
 
     love.graphics.setColor(0.01, 0.015, 0.025, 0.88)
     love.graphics.rectangle("fill", bx, by, bw, bh, 4)
@@ -330,9 +331,11 @@ function ThemeManager.drawGarbageBar(board)
     end
     if total_lines <= 0 then return end
 
-    local bar_h = math.min(480, total_lines * 24)
+    local bs = board.block_size
+    local max_h = board.visible_rows * bs
+    local bar_h = math.min(max_h, total_lines * bs)
     local bar_x = board.x - 10
-    local bar_y = board.y + 480 - bar_h
+    local bar_y = board.y + max_h - bar_h
 
     love.graphics.setColor(1.0, 0.15, 0.25, 0.95)
     love.graphics.rectangle("fill", bar_x, bar_y, 5, bar_h, 2)
@@ -342,13 +345,14 @@ function ThemeManager.drawGhostPiece(piece, bx, by, shape, gy, alpha)
     local t = ThemeManager.getCurrent()
     love.graphics.setColor(t.secondary[1], t.secondary[2], t.secondary[3], alpha or 0.35)
 
+    local bs = piece.board and piece.board.block_size or 24
     for r = 1, #shape do
         for c = 1, #shape[r] do
             if shape[r][c] ~= 0 then
-                local rx = bx + (piece.x + c - 2) * 24
-                local ry = by + (gy + r - 22) * 24
+                local rx = bx + (piece.x + c - 2) * bs
+                local ry = by + (gy + r - (piece.board.visible_rows + 2)) * bs
                 love.graphics.setLineWidth(1.4)
-                love.graphics.rectangle("line", rx + 2, ry + 2, 20, 20, 2)
+                love.graphics.rectangle("line", rx + 2, ry + 2, bs - 4, bs - 4, 2)
             end
         end
     end
