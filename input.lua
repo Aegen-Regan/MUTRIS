@@ -1,49 +1,45 @@
 -- ================================================================
--- FILE: input.lua
+-- FILE: input.lua (SISTEMA DE CONTROL DE BAJO IMPACTO ZERO-GC)
 -- ================================================================
 ---@diagnostic disable: undefined-global
-local Input = {}
+local Input = {
+    -- Pools estáticas pre-asignadas en la carga inicial
+    keys_pressed = {},
+    keys_down = {},
+    
+    -- Configuración competitiva milimétrica (Estilo Jstris / TETR.IO)
+    das_setting = 0.120, -- Delayed Auto Shift (120 milisegundos)
+    arr_setting = 0.006, -- Auto Repeat Rate (6 milisegundos por iteración)
+    sdf_setting = 40,    -- Soft Drop Factor (Multiplicador de gravedad x40)
+}
 
 local SettingsManager = require "settings_manager"
 local ThemeManager    = require "tetris.theme_manager"
 local RulesetManager  = require "core.ruleset_manager"
 local HuntingForge    = require "combat.hunting_forge"
+local BlackBox        = require "core.blackbox"
 
-INPUT_CONFIG = {
-    TIMEBASE_MODE           = "gpu",
-    FALLBACK_DAS            = 0.096,
-    FALLBACK_ARR            = 0.008,
-    ARR_ABSOLUTE_MIN        = 0.001,
-    JOY_DEADZONE_LEFT_RIGHT = 0.5,
-    JOY_DEADZONE_DOWN       = 0.5,
-    JOY_CACHE_POOL_SIZE     = 8,
-    SOFT_DROP_SPEED         = 0.001,
-    NORMAL_GRAVITY          = 0.8,
-    MAX_AUDIO_DT_SAFETY     = 0.1,
-    MAX_ARR_STEPS_PER_FRAME = 32
+-- Mapeo inmediato de índices fijos para evitar que LuaJIT altere el hash-map
+local common_keys = {
+    "left", "right", "up", "down",   -- Movimiento y Drop
+    "z", "x", "c",                   -- Rotación e inversión
+    "a", "s",                        -- Sockets de la forja / Habilidades
+    "r"                              -- Reinicio rápido / Halo nuclear
 }
+
+for i = 1, #common_keys do
+    local key = common_keys[i]
+    Input.keys_pressed[key] = false
+    Input.keys_down[key] = false
+end
 
 function Input.init(player_ref)
     Input.player = player_ref
 
     Input.joystick_pool = {}
-    for i = 1, INPUT_CONFIG.JOY_CACHE_POOL_SIZE do
-        Input.joystick_pool[i] = false
-    end
     Input.joystick_count = 0
-
-    Input.timers = { left = 0, right = 0 }
-    Input.das_active = { left = false, right = false }
-    Input.last_audio_time = 0.0
-    Input.drop_lock_frames = 0
-
-    Input._refreshJoystickCache()
-end
-
-function Input._refreshJoystickCache()
     local list = love.joystick.getJoysticks()
-    Input.joystick_count = 0
-    for i = 1, INPUT_CONFIG.JOY_CACHE_POOL_SIZE do
+    for i = 1, 8 do
         if i <= #list then
             Input.joystick_pool[i] = list[i]
             Input.joystick_count = Input.joystick_count + 1
@@ -51,6 +47,10 @@ function Input._refreshJoystickCache()
             Input.joystick_pool[i] = false
         end
     end
+
+    Input.timers = { left = 0, right = 0 }
+    Input.das_active = { left = false, right = false }
+    Input.drop_lock_frames = 0
 end
 
 local function _isGamepadDown(button_name)
@@ -82,11 +82,11 @@ function Input.getSoftDropFactor()
 
     if Input.player and Input.player.active_piece then
         local custom_down = SettingsManager.get("key_soft_drop") or "down"
-        local down_held = love.keyboard.isDown(custom_down) or
-                          _isGamepadDown("dpdown") or _isGamepadAxisDown("lefty", INPUT_CONFIG.JOY_DEADZONE_DOWN, true)
+        local down_held = Input.keys_down[custom_down] or love.keyboard.isDown(custom_down) or
+                          _isGamepadDown("dpdown") or _isGamepadAxisDown("lefty", 0.5, true)
 
         if down_held then
-            local sdf_mult = SettingsManager.get("sdf") or 40.0
+            local sdf_mult = SettingsManager.get("sdf") or Input.sdf_setting
             if sdf_mult >= 40.0 then return 0.001 end
             return 0.8 / math.max(1.0, sdf_mult)
         end
@@ -94,7 +94,14 @@ function Input.getSoftDropFactor()
     return 0.8
 end
 
+-- Ciclo de actualización de estados físicos
 function Input.update(dt)
+    -- Lectura directa mediante API nativa sin instanciar tablas booleanas intermedias
+    for i = 1, #common_keys do
+        local key = common_keys[i]
+        Input.keys_down[key] = love.keyboard.isDown(key)
+    end
+    
     if (Input.drop_lock_frames or 0) > 0 then
         Input.drop_lock_frames = Input.drop_lock_frames - 1
     end
@@ -104,13 +111,13 @@ function Input.update(dt)
     if p.locked then return end
 
     local t = dt
-    local das = (SettingsManager.get("das") or INPUT_CONFIG.FALLBACK_DAS) + HuntingForge.getDASOffset()
-    local arr = math.max(INPUT_CONFIG.ARR_ABSOLUTE_MIN, SettingsManager.get("arr") or INPUT_CONFIG.FALLBACK_ARR)
+    local das = (SettingsManager.get("das") or Input.das_setting) + HuntingForge.getDASOffset()
+    local arr = math.max(0.001, SettingsManager.get("arr") or Input.arr_setting)
 
     -- Mover Izquierda
     local custom_left = SettingsManager.get("key_left") or "left"
-    local move_left_held = love.keyboard.isDown(custom_left) or
-                           _isGamepadDown("dpleft") or _isGamepadAxisDown("leftx", -INPUT_CONFIG.JOY_DEADZONE_LEFT_RIGHT, false)
+    local move_left_held = Input.keys_down[custom_left] or love.keyboard.isDown(custom_left) or
+                           _isGamepadDown("dpleft") or _isGamepadAxisDown("leftx", -0.5, false)
     if move_left_held then
         if not Input.das_active.left then
             p:move(-1, 0)
@@ -132,8 +139,8 @@ function Input.update(dt)
 
     -- Mover Derecha
     local custom_right = SettingsManager.get("key_right") or "right"
-    local move_right_held = love.keyboard.isDown(custom_right) or
-                            _isGamepadDown("dpright") or _isGamepadAxisDown("leftx", INPUT_CONFIG.JOY_DEADZONE_LEFT_RIGHT, true)
+    local move_right_held = Input.keys_down[custom_right] or love.keyboard.isDown(custom_right) or
+                            _isGamepadDown("dpright") or _isGamepadAxisDown("leftx", 0.5, true)
     if move_right_held then
         if not Input.das_active.right then
             p:move(1, 0)
@@ -160,13 +167,8 @@ function Input.handleAction(action)
         return
     end
 
-    if action == "theme_next" then
-        ThemeManager.cycleNext()
-        return
-    elseif action == "theme_prev" then
-        ThemeManager.cyclePrev()
-        return
-    end
+    if action == "theme_next" then ThemeManager.cycleNext(); return end
+    if action == "theme_prev" then ThemeManager.cyclePrev(); return end
 
     if not Input.player or not Input.player.active_piece then return end
     local p = Input.player.active_piece
@@ -210,17 +212,24 @@ function Input.handleAction(action)
     end
 end
 
+-- Captura directa de flancos (Presión inicial). 
+-- Integrado en el framework existente para ser llamado desde scene_game.lua
 function Input.keypressed(key)
-    if key == "r" then 
-        Input.handleAction("restart")
-        return
-    elseif key == "f5" then 
-        Input.handleAction("theme_next")
-        return
-    elseif key == "f6" then 
-        Input.handleAction("theme_prev")
-        return
+    -- Ignoramos la repetición del sistema operativo de forma estática
+    if Input.keys_pressed[key] == true then return end 
+
+    if Input.keys_pressed[key] ~= nil then
+        Input.keys_pressed[key] = true
+    else
+        Input.keys_pressed[key] = true
     end
+
+    -- --- TELEMETRÍA ACTIVADA ---
+    BlackBox.record(BlackBox.TYPES.INPUT, 1.0, key)
+
+    if key == "r" then Input.handleAction("restart"); return end
+    if key == "f5" then Input.handleAction("theme_next"); return end
+    if key == "f6" then Input.handleAction("theme_prev"); return end
 
     local k_cw     = SettingsManager.get("key_rot_cw")
     local k_ccw    = SettingsManager.get("key_rot_ccw")
@@ -229,19 +238,22 @@ function Input.keypressed(key)
     local k_hd     = SettingsManager.get("key_hard_drop")
     local k_zone   = SettingsManager.get("key_zone")
 
-    if k_ccw and key == k_ccw then
-        Input.handleAction("rot_ccw")
-    elseif k_cw and key == k_cw then
-        Input.handleAction("rot_cw")
-    elseif k_180 and key == k_180 then
-        Input.handleAction("rot_180")
-    elseif k_hold and key == k_hold then
-        Input.handleAction("hold")
-    elseif k_hd and key == k_hd then
-        Input.handleAction("hard_drop")
-    elseif k_zone and key == k_zone then
-        Input.handleAction("zone")
+    if k_ccw and key == k_ccw then Input.handleAction("rot_ccw")
+    elseif k_cw and key == k_cw then Input.handleAction("rot_cw")
+    elseif k_180 and key == k_180 then Input.handleAction("rot_180")
+    elseif k_hold and key == k_hold then Input.handleAction("hold")
+    elseif k_hd and key == k_hd then Input.handleAction("hard_drop")
+    elseif k_zone and key == k_zone then Input.handleAction("zone")
     end
+end
+
+function Input.keyreleased(key)
+    if Input.keys_pressed[key] ~= nil then
+        Input.keys_pressed[key] = false
+    end
+
+    -- --- TELEMETRÍA ACTIVADA ---
+    BlackBox.record(BlackBox.TYPES.INPUT, 0.0, key)
 end
 
 function Input.gamepadpressed(joystick, button)

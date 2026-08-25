@@ -2,7 +2,10 @@
 -- FILE: settings_manager.lua
 -- ================================================================
 ---@diagnostic disable: undefined-global
-local SettingsManager = {}
+local SettingsManager = {
+    filepath = "settings.json",
+    tmp_filepath = "settings.json.tmp"
+}
 
 SettingsManager.defaults = {
     -- RULESET MAESTRO (FASE 21)
@@ -224,8 +227,39 @@ function SettingsManager.init()
     end
 end
 
-function SettingsManager.save()
-    love.filesystem.write("settings.json", serializeJSON(SettingsManager.settings))
+function SettingsManager.save(current_settings_table)
+    current_settings_table = current_settings_table or SettingsManager.settings
+    local lf = love.filesystem
+    if not lf then return false end
+    
+    local BlackBox = package.loaded["core.blackbox"]
+    
+    local success, json_string = pcall(serializeJSON, current_settings_table)
+    if not success or type(json_string) ~= "string" then
+        if BlackBox then BlackBox.record(BlackBox.TYPES.ERROR, 0.0, "JSON_ENCODE_FAIL") end
+        return false
+    end
+    
+    local write_success = lf.write(SettingsManager.tmp_filepath, json_string)
+    if not write_success then
+        if BlackBox then BlackBox.record(BlackBox.TYPES.ERROR, 0.0, "TMP_WRITE_FAIL") end
+        return false
+    end
+    
+    if lf.getInfo(SettingsManager.filepath) then
+        lf.remove(SettingsManager.filepath)
+    end
+    
+    local final_success = lf.write(SettingsManager.filepath, json_string)
+    lf.remove(SettingsManager.tmp_filepath)
+    
+    if final_success then
+        if BlackBox then BlackBox.record(BlackBox.TYPES.SYSTEM, 1.0, "SETTINGS_SAVED_OK") end
+    else
+        if BlackBox then BlackBox.record(BlackBox.TYPES.ERROR, 0.0, "FINAL_SETTINGS_FAIL") end
+    end
+    
+    return final_success
 end
 
 function SettingsManager.resetKey(key)

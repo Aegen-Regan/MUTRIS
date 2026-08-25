@@ -400,6 +400,12 @@ function SceneGame.keypressed(key)
     end
 end
 
+function SceneGame.keyreleased(key)
+    if Input and Input.keyreleased then
+        Input.keyreleased(key)
+    end
+end
+
 function SceneGame.gamepadpressed(joystick, button)
     if SceneGame.match_over then
         if button == "a" or button == "start" then

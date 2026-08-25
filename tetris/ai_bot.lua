@@ -6,7 +6,25 @@
 -- MUTRIS ENGINE: DDA HEURISTIC BOT ENGINE 3.0 (INSTANTIABLE)
 -- Fully decoupled for multi-bot duels and boss fights
 -- ============================================================================
-local AIBot = {}
+local ffi = require("ffi")
+local bit = require("bit")
+
+ffi.cdef[[
+    typedef struct {
+        int best_rotation;
+        int best_x;
+        double evaluation_score;
+    } ArchonResult;
+
+    // Recibe el tablero comprimido en dos bitboards de 64 bits y el ID de la pieza
+    ArchonResult evaluate_board_state(uint64_t board_low, uint64_t board_high, int piece_id);
+]]
+
+local AIBot = {
+    -- Caché estática persistente para almacenar las decisiones del bot (Zero-GC)
+    last_decision = { rotation = 0, target_x = 0, score = 0.0 },
+    is_processing = false
+}
 AIBot.__index = AIBot
 
 local SRS          = require "tetris.rotation_systems.srs"
@@ -58,6 +76,59 @@ function AIBot.saveGlobalProfile()
         love.filesystem.createDirectory("saves")
     end
     love.filesystem.write("saves/ai_profile.json", serializeJSON(_G.AI_ADAPTIVE_PROFILE))
+end
+
+-- Comprime la matriz del tablero en dos estructuras Bitboard fijas de 64 bits (Zero-GC)
+function AIBot.compress_board_to_bitboard(board_matrix)
+    local bit_low = ffi.cast("uint64_t", 0)
+    local bit_high = ffi.cast("uint64_t", 0)
+    
+    for y = 1, 40 do
+        local bit_row = 0
+        for x = 1, 10 do
+            if board_matrix[y] and board_matrix[y][x] and board_matrix[y][x] ~= 0 then
+                bit_row = bit.bor(bit_row, bit.lshift(1, x - 1))
+            end
+        end
+        
+        if y <= 20 then
+            local shift = (y - 1) * 3
+            bit_low = bit_low + ffi.cast("uint64_t", bit_row) * ffi.cast("uint64_t", 2LL ^ shift)
+        else
+            local shift = (y - 21) * 3
+            bit_high = bit_high + ffi.cast("uint64_t", bit_row) * ffi.cast("uint64_t", 2LL ^ shift)
+        end
+    end
+    
+    return bit_low, bit_high
+end
+
+-- Ejecuta la llamada predictiva a Rust (Archon AI) de forma segura
+function AIBot.request_tactical_move(board_matrix, current_piece_id)
+    if AIBot.is_processing then return nil end
+    
+    local b_low, b_high = AIBot.compress_board_to_bitboard(board_matrix)
+    AIBot.is_processing = true
+    
+    local success, result = pcall(ffi.C.evaluate_board_state, b_low, b_high, current_piece_id)
+    AIBot.is_processing = false
+    
+    if success then
+        AIBot.last_decision.rotation = result.best_rotation
+        AIBot.last_decision.target_x = result.best_x
+        AIBot.last_decision.score = result.evaluation_score
+        
+        if Blackbox then
+            Blackbox.record(Blackbox.TYPES.PHYSICS, result.evaluation_score, "ARCHON_SOLVED_OK")
+        end
+        
+        return AIBot.last_decision
+    else
+        if Blackbox then
+            Blackbox.record(Blackbox.TYPES.ERROR, 0.0, "RUST_DLL_CRASH")
+        end
+        return nil
+    end
 end
 
 function AIBot.new(board, profile_name)

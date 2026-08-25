@@ -23,6 +23,21 @@ AUDIO_CONFIG = {
     DANGER_GLITCH_CHANCE = 0.15,
 }
 
+-- Parámetros de conexión con el servidor scsynth
+AudioManager.sc_host = "127.0.0.1"
+AudioManager.sc_port = 57110
+AudioManager.bpm = 130
+AudioManager.crochet = 60 / 130
+
+-- Variables de estado estáticas (Zero-GC)
+AudioManager.song_position_samples = 0
+AudioManager.current_beat = 0
+AudioManager.beat_pulse_flag = false
+AudioManager.udp = nil
+AudioManager._osc_cache = {
+    ["kick_30hz"] = "/s_new\0\0,s\0\0kick_30hz\0\0\0" -- Raw OSC bytes cacheado para Zero-GC
+}
+
 AudioManager.beat_timer = 0
 AudioManager.base_bpm = 120
 AudioManager.current_bpm = 120
@@ -53,6 +68,62 @@ function AudioManager.init()
     AudioManager.glitch_timer = 0
     AudioManager.duck_intensity = 0.0
     AudioManager.loadVoiceFiles()
+    AudioManager.init_external_backends()
+end
+
+-- Inicialización del puente con SuperCollider y la IA en Rust
+function AudioManager.init_external_backends()
+    local socket_ok, socket = pcall(require, "socket")
+    if socket_ok and socket then
+        AudioManager.udp = socket.udp()
+        AudioManager.udp:setpeername(AudioManager.sc_host, AudioManager.sc_port)
+    end
+
+    if _G.RustArchon and _G.RustArchon.init_audio_bridge then
+        _G.RustArchon.init_audio_bridge(AudioManager.bpm)
+    end
+    
+    local BlackBox = package.loaded["core.blackbox"]
+    if BlackBox then 
+        BlackBox.record(BlackBox.TYPES.SYSTEM, AudioManager.sc_port * 1.0, "SUPERCOLLIDER_BRIDGE_OK") 
+    end
+end
+
+-- Función interna de bajo impacto para enviar comandos OSC a scsynth
+function AudioManager.trigger_sc_synth(synth_name, intensity)
+    if AudioManager.udp then
+        local payload = AudioManager._osc_cache[synth_name]
+        if payload then
+            AudioManager.udp:send(payload)
+        end
+    end
+end
+
+-- Actualización del reloj basada en el contador de muestras del servidor de audio
+function AudioManager.update_clock()
+    local sc_sample_time = 0
+    
+    if _G.RustArchon and _G.RustArchon.get_supercollider_samples then
+        sc_sample_time = _G.RustArchon.get_supercollider_samples()
+    end
+    
+    local sample_rate = 44100
+    local hardware_time = sc_sample_time / sample_rate
+    local next_beat = math.floor(hardware_time / AudioManager.crochet)
+    
+    if next_beat > AudioManager.current_beat then
+        AudioManager.current_beat = next_beat
+        AudioManager.beat_pulse_flag = true
+        
+        AudioManager.trigger_sc_synth("kick_30hz", 1.0)
+        
+        local BlackBox = package.loaded["core.blackbox"]
+        if BlackBox then
+            BlackBox.record(BlackBox.TYPES.AUDIO, next_beat * 1.0, "SC_BEAT_PULSE")
+        end
+    else
+        AudioManager.beat_pulse_flag = false
+    end
 end
 
 -- 📂 Escaneo y Carga de Voces Reales (.mp3 / .ogg / .wav)

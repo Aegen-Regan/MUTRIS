@@ -170,6 +170,16 @@ function SceneManager.keypressed(key)
     return false
 end
 
+function SceneManager.keyreleased(key)
+    if #stack > 0 then
+        local scene = stack[#stack].instance
+        if scene.keyreleased then
+            return scene.keyreleased(key)
+        end
+    end
+    return false
+end
+
 function SceneManager.mousepressed(x, y, button)
     if #stack > 0 then
         local scene = stack[#stack].instance

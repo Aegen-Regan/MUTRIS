@@ -35,6 +35,15 @@ local SceneManager       = require "core.scene_manager"
 local EventBus           = require "core.event_bus"
 local PluginManager      = require "core.plugin_manager"
 
+local static_labels = {
+    scene = "SCENE: ",
+    skin = " | SKIN: ",
+    fps = " | FPS: ",
+    ram = " | RAM: ",
+    mb = " MB"
+}
+local watermark_buffer = { "", "", "", "", "", "", "", "", "", "", "" }
+
 local view_scale, view_ox, view_oy = 1, 0, 0
 local engage_timer, engage_duration = 0, 0
 local screenshot_flash_timer = 0
@@ -153,13 +162,26 @@ function love.draw()
         state_str = "GAME [" .. scene_obj.layout_style:upper() .. "]"
     end
 
-    local cur_fps = love.timer.getFPS()
-    local cur_mem = collectgarbage("count") / 1024.0
+    local current_fps = tostring(love.timer.getFPS())
+    local current_ram = string.format("%.2f", collectgarbage("count") / 1024)
+    local skin_name = t.name or "DEFAULT"
+    local engine_ver = _G.ENGINE_VERSION or "MUTRIS v1.0"
+
+    watermark_buffer[1] = engine_ver
+    watermark_buffer[2] = " | "
+    watermark_buffer[3] = static_labels.scene
+    watermark_buffer[4] = state_str
+    watermark_buffer[5] = static_labels.skin
+    watermark_buffer[6] = skin_name
+    watermark_buffer[7] = static_labels.fps
+    watermark_buffer[8] = current_fps
+    watermark_buffer[9] = static_labels.ram
+    watermark_buffer[10] = current_ram
+    watermark_buffer[11] = static_labels.mb
 
     love.graphics.setFont(FontCache.get(9))
     love.graphics.setColor(t.primary[1], t.primary[2], t.primary[3], 0.92)
-    local watermark = string.format("%s  |  SCENE: %s  |  SKIN: %s  |  %3d FPS  |  RAM: %.1f MB", _G.ENGINE_VERSION, state_str, t.name or "DEFAULT", cur_fps, cur_mem)
-    love.graphics.print(watermark, 16, 698)
+    love.graphics.print(watermark_buffer, 16, 698)
     love.graphics.pop()
 
     if engage_timer > 0 then
@@ -205,6 +227,10 @@ function love.keypressed(key)
     end
 
     SceneManager.keypressed(key)
+end
+
+function love.keyreleased(key)
+    SceneManager.keyreleased(key)
 end
 
 function love.mousepressed(x, y, button)

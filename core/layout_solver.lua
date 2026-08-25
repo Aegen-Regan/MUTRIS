@@ -6,7 +6,48 @@
 -- MUTRIS ENGINE: ZERO-GC CONSTRAINT & ANCHOR LAYOUT SOLVER
 -- Parametric screen positioning, dynamic anchors & safe-zone calculations
 -- ============================================================================
-local LayoutSolver = {}
+local LayoutSolver = {
+    screen_width = 1280,
+    screen_height = 720,
+    safe_margin = 16,
+    boards = {}
+}
+
+for i = 1, 8 do
+    LayoutSolver.boards[i] = { x = 0, y = 0, width = 0, height = 0, active = false }
+end
+function LayoutSolver.solve_battlefield(total_players, board_width_px, board_height_px)
+    local total = math.min(math.max(total_players or 2, 1), 8)
+    local available_width = LayoutSolver.screen_width - (LayoutSolver.safe_margin * 2)
+    local section_width = available_width / total
+    
+    for i = 1, 8 do
+        local b = LayoutSolver.boards[i]
+        if i <= total then
+            local section_center_x = LayoutSolver.safe_margin + (section_width * (i - 0.5))
+            b.x = math.floor(section_center_x - (board_width_px / 2))
+            b.y = math.floor((LayoutSolver.screen_height / 2) - (board_height_px / 2))
+            b.width = board_width_px
+            b.height = board_height_px
+            b.active = true
+        else
+            b.active = false
+        end
+    end
+    
+    local BlackBox = package.loaded["core.blackbox"]
+    if BlackBox then 
+        BlackBox.record(BlackBox.TYPES.SYSTEM, total * 1.0, "LAYOUT_SOLVED_OK") 
+    end
+end
+
+function LayoutSolver.get_board_rect(index)
+    local b = LayoutSolver.boards[index]
+    if b and b.active then
+        return b.x, b.y, b.width, b.height
+    end
+    return 0, 0, 0, 0
+end
 
 function LayoutSolver.solve(layout_style, boards_config, sw, sh)
     local sw = sw or 1280

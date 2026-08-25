@@ -195,7 +195,6 @@ function Piece:lock()
     AudioManager.playImmediateSFX("drop", self.board.player_type == "bot", self.y)
 
     if self.board.is_boss then
-        _G.HitStopTimer = 0.20
         self.board:triggerShake(22, 0.60)
         AudioManager.playSubBassThud(4)
     end

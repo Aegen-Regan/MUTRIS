@@ -3,51 +3,81 @@
 -- ================================================================
 ---@diagnostic disable: undefined-global
 -- ============================================================================
--- MUTRIS ENGINE: FLIGHT RECORDER & SYSTEM TELEMETRY (ZERO-GC)
+-- MUTRIS - SUBSISTEMA: BLACKBOX CAJA NEGRA
+-- REGLA DE ORO: 100% ZERO-GC LOOP. PRE-ASIGNACIÓN TOTAL EN MEMORIA.
 -- ============================================================================
-local Blackbox = {}
+local Blackbox = {
+    buffer = {},          -- Búfer circular estático de 128 ranuras
+    max_records = 128,    -- Límite estricto de eventos en memoria
+    pointer = 1,          -- Índice de escritura actual
+    total_events = 0      -- Contador global histórico de eventos
+}
+
 local FontCache    = require "tetris.font_cache"
 local ThemeManager = require "tetris.theme_manager"
 
-local MAX_EVENTS = 128
-local event_buffer = {}
-for i = 1, MAX_EVENTS do
-    event_buffer[i] = {
-        time = 0.0,
-        type = "INIT",
-        msg  = "SYSTEM BOOT",
-        p1   = 0,
-        p2   = 0
+-- Pre-asignamos la memoria de las 128 ranuras al cargar el motor.
+-- Cada ranura tiene una estructura fija para que LuaJIT no altere el hash map.
+for i = 1, Blackbox.max_records do
+    Blackbox.buffer[i] = {
+        id = 0,
+        timestamp = 0.0,
+        frame = 0,
+        event_type = "NONE",
+        param_num = 0.0,
+        param_num2 = 0.0, -- Mantenido por retrocompatibilidad con logs existentes
+        param_str = "NONE"
     }
 end
-local head = 1
+
+-- Mapeo estático de tipos de eventos para evitar instanciar strings dinámicas en juego
+Blackbox.TYPES = {
+    SYSTEM = "SYS",
+    INPUT = "INP",
+    PHYSICS = "PHY",
+    AUDIO = "AUD",
+    ANOMALY = "ANM",
+    ERROR = "ERR"
+}
 
 function Blackbox.init()
-    head = 1
-    for i = 1, MAX_EVENTS do
-        event_buffer[i].time = 0.0
-        event_buffer[i].type = "INIT"
-        event_buffer[i].msg  = "SYSTEM BOOT"
-        event_buffer[i].p1   = 0
-        event_buffer[i].p2   = 0
+    Blackbox.pointer = 1
+    Blackbox.total_events = 0
+    for i = 1, Blackbox.max_records do
+        local e = Blackbox.buffer[i]
+        e.id = 0
+        e.timestamp = 0.0
+        e.frame = 0
+        e.event_type = "INIT"
+        e.param_str = "SYSTEM BOOT"
+        e.param_num = 0
+        e.param_num2 = 0
     end
-    Blackbox.log("BOOT", "MUTRIS BLACKBOX INITIALIZED", 0, 0)
+    Blackbox.log(Blackbox.TYPES.SYSTEM, "MUTRIS BLACKBOX INITIALIZED", 0, 0)
 end
 
 function Blackbox.log(evt_type, msg, p1, p2)
-    local e = event_buffer[head]
-    e.time = _G.RealMatchTimer or 0.0
-    e.type = evt_type or "EVENT"
-    e.msg  = msg or ""
-    e.p1   = p1 or 0
-    e.p2   = p2 or 0
+    local e = Blackbox.buffer[Blackbox.pointer]
+    Blackbox.total_events = Blackbox.total_events + 1
+    
+    e.id = Blackbox.total_events
+    e.timestamp = _G.RealMatchTimer or 0.0
+    e.frame = 0
+    e.event_type = evt_type or "EVENT"
+    e.param_str  = msg or ""
+    e.param_num  = p1 or 0
+    e.param_num2 = p2 or 0
 
-    head = (head % MAX_EVENTS) + 1
+    Blackbox.pointer = (Blackbox.pointer % Blackbox.max_records) + 1
+end
+
+function Blackbox.record(evt_type, param_num, param_str)
+    Blackbox.log(evt_type, param_str, param_num, 0)
 end
 
 function Blackbox.guardLoop(loop_name, max_iters, current_iter)
     if current_iter > max_iters then
-        Blackbox.log("GUARD", "INFINITE LOOP DETECTED: " .. tostring(loop_name), current_iter, 0)
+        Blackbox.log(Blackbox.TYPES.ERROR, "INFINITE LOOP DETECTED: " .. tostring(loop_name), current_iter, 0)
         return false
     end
     return true
@@ -72,13 +102,13 @@ function Blackbox.dumpToFile(path, extra_info)
     f:write("LAST 128 TELEMETRY EVENTS (MOST RECENT FIRST):\n")
     f:write("--------------------------------------------------------------------\n")
     
-    local idx = (head - 2 + MAX_EVENTS) % MAX_EVENTS + 1
-    for _ = 1, MAX_EVENTS do
-        local e = event_buffer[idx]
-        if e.time > 0 or e.type ~= "INIT" then
-            f:write(string.format("[%06.1fs] %-16s | %-28s | P1: %-4d | P2: %-4d\n", e.time, e.type, e.msg, e.p1, e.p2))
+    local idx = (Blackbox.pointer - 2 + Blackbox.max_records) % Blackbox.max_records + 1
+    for _ = 1, Blackbox.max_records do
+        local e = Blackbox.buffer[idx]
+        if e.timestamp > 0 or e.event_type ~= "INIT" then
+            f:write(string.format("[%06.1fs] %-16s | %-28s | P1: %-4d | P2: %-4d\n", e.timestamp, e.event_type, e.param_str, e.param_num, e.param_num2))
         end
-        idx = (idx - 2 + MAX_EVENTS) % MAX_EVENTS + 1
+        idx = (idx - 2 + Blackbox.max_records) % Blackbox.max_records + 1
     end
 
     f:write("====================================================================\n")
@@ -107,21 +137,21 @@ function Blackbox.drawPermanentHUD(p1, p2, center_x, is_boss_mode)
     love.graphics.setFont(FontCache.get(8))
     local line_y = py + 22
     local count = 0
-    local idx = (head - 2 + MAX_EVENTS) % MAX_EVENTS + 1
+    local idx = (Blackbox.pointer - 2 + Blackbox.max_records) % Blackbox.max_records + 1
 
     while count < 8 do
-        local e = event_buffer[idx]
-        if e.time > 0 or e.type ~= "INIT" then
+        local e = Blackbox.buffer[idx]
+        if e.timestamp > 0 or e.event_type ~= "INIT" then
             love.graphics.setColor(0, 0.95, 1.0, 0.90)
-            love.graphics.print(string.format("[%04.1fs] %s", e.time, e.type:sub(1, 10)), px + 8, line_y)
+            love.graphics.print(string.format("[%04.1fs] %s", e.timestamp, e.event_type:sub(1, 10)), px + 8, line_y)
 
             love.graphics.setColor(1, 1, 1, 0.70)
-            love.graphics.print("| " .. e.msg:sub(1, is_boss_mode and 14 or 18), px + (is_boss_mode and 95 or 105), line_y)
+            love.graphics.print("| " .. e.param_str:sub(1, is_boss_mode and 14 or 18), px + (is_boss_mode and 95 or 105), line_y)
 
             line_y = line_y + 13
             count = count + 1
         end
-        idx = (idx - 2 + MAX_EVENTS) % MAX_EVENTS + 1
+        idx = (idx - 2 + Blackbox.max_records) % Blackbox.max_records + 1
     end
 
     love.graphics.pop()
