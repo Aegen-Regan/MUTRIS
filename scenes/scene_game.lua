@@ -47,17 +47,15 @@ SceneGame.victory_flash = 0.0
 SceneGame.final_match_time = 0.0
 
 function SceneGame.init()
-    EventBus.on(EventBus.ON_PIECE_MOVE, function(id, dx, dy, p_id)
-        if p_id == 1 then SoundManager.play_move() end
-    end)
-    EventBus.on(EventBus.ON_PIECE_ROTATE, function(id, next_rot, p_id)
-        if p_id == 1 then SoundManager.play_rotate() end
-    end)
+    -- NOTE: play_move_column and play_rotate are now driven directly from input.lua
+    -- with real column position for pentatonic pitch mapping.
     EventBus.on(EventBus.ON_LINE_CLEAR, function(lines, is_tspin, p_id, combo)
         if p_id == 1 then
             if lines > 0 then
                 SoundManager.play_line_clear(lines, combo)
-                if lines == 4 then OscClient.send_tetris() end
+                if lines == 4 and OscClient.send_tetris then
+                    OscClient.send_tetris(SoundManager.bass_midi)
+                end
             end
             if is_tspin == 1 then
                 SoundManager.play_tspin()
@@ -161,11 +159,10 @@ function SceneGame.restartMatch()
     AudioManager.playImmediateSFX("rotate", false)
     
     local SoundManager = require("audio.sound_manager")
-    if cur_track and cur_track.id then
-        SoundManager.set_active_track(cur_track.id)
-    elseif SoundManager.reset then
-        SoundManager.reset()
-    end
+    -- Ironclad 'R' sync: detect the actual playing BGM and re-sync tonality + HUD watermark
+    local bgm_id = cur_track and (cur_track.id or cur_track.file) or nil
+    SoundManager.sync_with_current_bgm(bgm_id)
+    SoundManager.reset()
     
     SceneManager.setState("game", SceneGame.last_config)
 end
@@ -202,6 +199,15 @@ function SceneGame.update(dt)
 
             SoundManager.update(dt)
             OscClient.update(dt)
+
+            -- Continuous danger level: normalized stack height [0.0..1.0]
+            local p1_board = SceneGame.boards and SceneGame.boards[1]
+            if p1_board and p1_board.get_highest_block_y then
+                local highest_y   = p1_board:get_highest_block_y()
+                local visible_rows = p1_board.visible_rows or 20
+                local danger_level = 1.0 - (highest_y / visible_rows)
+                OscClient.send_danger(danger_level)
+            end
 
             -- Update all active matrices grids on screen
             for i = 1, #SceneGame.boards do

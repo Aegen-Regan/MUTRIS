@@ -20,6 +20,7 @@ local HuntingForge    = require "combat.hunting_forge"
 local BlackBox        = require "core.blackbox"
 local AnomalyManager  = require "tetris.anomaly_manager"
 local AudioManager    = require "audio_manager"
+local SoundManager    = require "audio.sound_manager"
 
 -- Mapeo inmediato de índices fijos para evitar que LuaJIT altere el hash-map
 local common_keys = {
@@ -124,7 +125,9 @@ function Input.update(dt)
                            _isGamepadDown("dpleft") or _isGamepadAxisDown("leftx", -0.5, false)
     if move_left_held then
         if not Input.das_active.left then
-            p:move(-1, 0)
+            if p:move(-1, 0) then
+                SoundManager.play_move_column(p.x)
+            end
             Input.das_active.left = true
             Input.timers.left = 0
         else
@@ -134,6 +137,7 @@ function Input.update(dt)
                     Input.timers.left = 0
                     break
                 end
+                SoundManager.play_move_column(p.x)
                 Input.timers.left = Input.timers.left - arr
             end
         end
@@ -149,7 +153,9 @@ function Input.update(dt)
                             _isGamepadDown("dpright") or _isGamepadAxisDown("leftx", 0.5, true)
     if move_right_held then
         if not Input.das_active.right then
-            p:move(1, 0)
+            if p:move(1, 0) then
+                SoundManager.play_move_column(p.x)
+            end
             Input.das_active.right = true
             Input.timers.right = 0
         else
@@ -159,6 +165,7 @@ function Input.update(dt)
                     Input.timers.right = 0
                     break
                 end
+                SoundManager.play_move_column(p.x)
                 Input.timers.right = Input.timers.right - arr
             end
         end
@@ -180,19 +187,23 @@ function Input.handleAction(action)
     local p = Input.player.active_piece
     if p.locked then return end
 
-    if action == "rot_cw" then 
+    if action == "rot_cw" then
         p:rotate(1)
-    elseif action == "rot_ccw" then 
+        SoundManager.play_rotate(p.x)
+    elseif action == "rot_ccw" then
         p:rotate(-1)
+        SoundManager.play_rotate(p.x)
     elseif action == "rot_180" then
         local srs_180 = SettingsManager.get("srs_180")
         if srs_180 == 1 or srs_180 == true or (type(srs_180) == "number" and srs_180 >= 0.5) then
             p:rotate(2)
+            SoundManager.play_rotate(p.x)
         end
     elseif action == "hold" then
         local can_hold = not RulesetManager.allowHold or RulesetManager.allowHold()
         if can_hold then
             Input.player:hold()
+            SoundManager.play_hold()
             Input.drop_lock_frames = 2
             if Input.player.active_piece then
                 Input.player.active_piece.gravity_timer = 0.0
