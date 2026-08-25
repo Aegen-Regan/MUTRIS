@@ -34,15 +34,22 @@ local ClipRecorder       = require "core.clip_recorder"
 local SceneManager       = require "core.scene_manager"
 local EventBus           = require "core.event_bus"
 local PluginManager      = require "core.plugin_manager"
+local AnomalyManager     = require "tetris.anomaly_manager"
+
+local socket = require("socket")
+local sc_rx_socket = nil
+local sc_connected_flag = "SC_NET: DISCONNECTED"
+local sc_audio_status = "AUDIO: SILENT"
+local sc_timer = 0.0
 
 local static_labels = {
     scene = "SCENE: ",
     skin = " | SKIN: ",
     fps = " | FPS: ",
     ram = " | RAM: ",
-    mb = " MB"
+    mb = " MB | "
 }
-local watermark_buffer = { "", "", "", "", "", "", "", "", "", "", "" }
+local watermark_buffer = { "", "", "", "", "", "", "", "", "", "", "", "", "", "" }
 
 local view_scale, view_ox, view_oy = 1, 0, 0
 local engage_timer, engage_duration = 0, 0
@@ -56,6 +63,12 @@ local function updateViewScaling()
 end
 
 function love.load()
+    sc_rx_socket = socket.udp()
+    if sc_rx_socket then
+        sc_rx_socket:setsockname("127.0.0.1", 12345)
+        sc_rx_socket:settimeout(0)
+    end
+
     love.graphics.setDefaultFilter("nearest", "nearest")
     updateViewScaling()
     Blackbox.init()
@@ -118,6 +131,27 @@ function love.resize(w, h)
 end
 
 function love.update(dt)
+    -- --- RUN THE Parametric ANOMALY TIMER EACH FRAME ---
+    if AnomalyManager and AnomalyManager.update then
+        AnomalyManager.update(dt)
+    end
+
+    if sc_rx_socket then
+        local data = sc_rx_socket:receive()
+        if data then
+            sc_connected_flag = "SC_NET: CONNECTED"
+            sc_audio_status = "AUDIO: ACTIVE"
+            sc_timer = 0.5
+        end
+    end
+    
+    if sc_timer > 0 then
+        sc_timer = sc_timer - dt
+        if sc_timer <= 0 then
+            sc_audio_status = "AUDIO: SILENT"
+        end
+    end
+
     if _G.HitStopTimer > 0 then
         _G.HitStopTimer = _G.HitStopTimer - dt
         return
@@ -178,6 +212,9 @@ function love.draw()
     watermark_buffer[9] = static_labels.ram
     watermark_buffer[10] = current_ram
     watermark_buffer[11] = static_labels.mb
+    watermark_buffer[12] = sc_connected_flag
+    watermark_buffer[13] = " | "
+    watermark_buffer[14] = sc_audio_status
 
     love.graphics.setFont(FontCache.get(9))
     love.graphics.setColor(t.primary[1], t.primary[2], t.primary[3], 0.92)

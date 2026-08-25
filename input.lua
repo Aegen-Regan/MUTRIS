@@ -18,6 +18,8 @@ local ThemeManager    = require "tetris.theme_manager"
 local RulesetManager  = require "core.ruleset_manager"
 local HuntingForge    = require "combat.hunting_forge"
 local BlackBox        = require "core.blackbox"
+local AnomalyManager  = require "tetris.anomaly_manager"
+local AudioManager    = require "audio_manager"
 
 -- Mapeo inmediato de índices fijos para evitar que LuaJIT altere el hash-map
 local common_keys = {
@@ -96,7 +98,7 @@ end
 
 -- Ciclo de actualización de estados físicos
 function Input.update(dt)
-    -- Lectura directa mediante API nativa sin instanciar tablas booleanas intermedias
+    -- Refresh baseline physical states dynamically
     for i = 1, #common_keys do
         local key = common_keys[i]
         Input.keys_down[key] = love.keyboard.isDown(key)
@@ -114,8 +116,10 @@ function Input.update(dt)
     local das = (SettingsManager.get("das") or Input.das_setting) + HuntingForge.getDASOffset()
     local arr = math.max(0.001, SettingsManager.get("arr") or Input.arr_setting)
 
-    -- Mover Izquierda
-    local custom_left = SettingsManager.get("key_left") or "left"
+    -- --- 1. LEFT MOVEMENT INTERCEPTION (PASSED THROUGH ANOMALY FILTER) ---
+    local raw_left = SettingsManager.get("key_left") or "left"
+    local custom_left = (AnomalyManager and AnomalyManager.filter_direction) and AnomalyManager.filter_direction(raw_left) or raw_left
+
     local move_left_held = Input.keys_down[custom_left] or love.keyboard.isDown(custom_left) or
                            _isGamepadDown("dpleft") or _isGamepadAxisDown("leftx", -0.5, false)
     if move_left_held then
@@ -137,8 +141,10 @@ function Input.update(dt)
         Input.das_active.left = false
     end
 
-    -- Mover Derecha
-    local custom_right = SettingsManager.get("key_right") or "right"
+    -- --- 2. RIGHT MOVEMENT INTERCEPTION (PASSED THROUGH ANOMALY FILTER) ---
+    local raw_right = SettingsManager.get("key_right") or "right"
+    local custom_right = (AnomalyManager and AnomalyManager.filter_direction) and AnomalyManager.filter_direction(raw_right) or raw_right
+
     local move_right_held = Input.keys_down[custom_right] or love.keyboard.isDown(custom_right) or
                             _isGamepadDown("dpright") or _isGamepadAxisDown("leftx", 0.5, true)
     if move_right_held then
@@ -215,21 +221,37 @@ end
 -- Captura directa de flancos (Presión inicial). 
 -- Integrado en el framework existente para ser llamado desde scene_game.lua
 function Input.keypressed(key)
-    -- Ignoramos la repetición del sistema operativo de forma estática
+    -- Cerrojo estático contra repeticiones del SO (Zero-GC)
     if Input.keys_pressed[key] == true then return end 
 
-    if Input.keys_pressed[key] ~= nil then
-        Input.keys_pressed[key] = true
-    else
-        Input.keys_pressed[key] = true
+    -- 1. Evaluamos de forma paramétrica si los controles están sufriendo una anomalía rítmica
+    local effective_key = key
+    if key == "left" or key == "right" then
+        if AnomalyManager and AnomalyManager.filter_direction then
+            effective_key = AnomalyManager.filter_direction(key)
+        end
     end
 
-    -- --- TELEMETRÍA ACTIVADA ---
-    BlackBox.record(BlackBox.TYPES.INPUT, 1.0, key)
+    -- 2. Modificación directa de la bandera física efectiva
+    Input.keys_pressed[effective_key] = true
 
-    if key == "r" then Input.handleAction("restart"); return end
-    if key == "f5" then Input.handleAction("theme_next"); return end
-    if key == "f6" then Input.handleAction("theme_prev"); return end
+    -- 3. --- TELEMETRÍA SONORA ACTIVADA ---
+    if effective_key ~= key then
+        if AudioManager and AudioManager.trigger_debug_ping then
+            AudioManager.trigger_debug_ping(1200.0, -0.5) -- Alerta de inversión de mando
+        end
+    else
+        if AudioManager and AudioManager.trigger_debug_ping then
+            AudioManager.trigger_debug_ping(600.0, 0.5)  -- Input normal verificado
+        end
+    end
+
+    -- --- TELEMETRÍA DE DATOS ACTIVADA ---
+    BlackBox.record(BlackBox.TYPES.INPUT, effective_key == key and 1.0 or -1.0, effective_key)
+
+    if effective_key == "r" then Input.handleAction("restart"); return end
+    if effective_key == "f5" then Input.handleAction("theme_next"); return end
+    if effective_key == "f6" then Input.handleAction("theme_prev"); return end
 
     local k_cw     = SettingsManager.get("key_rot_cw")
     local k_ccw    = SettingsManager.get("key_rot_ccw")
@@ -238,12 +260,12 @@ function Input.keypressed(key)
     local k_hd     = SettingsManager.get("key_hard_drop")
     local k_zone   = SettingsManager.get("key_zone")
 
-    if k_ccw and key == k_ccw then Input.handleAction("rot_ccw")
-    elseif k_cw and key == k_cw then Input.handleAction("rot_cw")
-    elseif k_180 and key == k_180 then Input.handleAction("rot_180")
-    elseif k_hold and key == k_hold then Input.handleAction("hold")
-    elseif k_hd and key == k_hd then Input.handleAction("hard_drop")
-    elseif k_zone and key == k_zone then Input.handleAction("zone")
+    if k_ccw and effective_key == k_ccw then Input.handleAction("rot_ccw")
+    elseif k_cw and effective_key == k_cw then Input.handleAction("rot_cw")
+    elseif k_180 and effective_key == k_180 then Input.handleAction("rot_180")
+    elseif k_hold and effective_key == k_hold then Input.handleAction("hold")
+    elseif k_hd and effective_key == k_hd then Input.handleAction("hard_drop")
+    elseif k_zone and effective_key == k_zone then Input.handleAction("zone")
     end
 end
 

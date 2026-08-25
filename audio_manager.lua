@@ -4,8 +4,13 @@
 ---@diagnostic disable: undefined-global
 local AudioManager = {}
 local ffi = require("ffi")
+local socket = require("socket")
+local BlackBox = require("core.blackbox")
 local SettingsManager = require "settings_manager"
 local EventBus = require "core.event_bus"
+
+-- Declaramos la referencia local para evitar accesos globales lentos o nulos
+local math = _G.math or math
 
 AUDIO_CONFIG = {
     SFX_DURATION_BASE_BOOST_MIN = 1.0,
@@ -27,178 +32,141 @@ AUDIO_CONFIG = {
 -- Parámetros de conexión con el servidor scsynth
 AudioManager.sc_host = "127.0.0.1"
 AudioManager.sc_port = 57110
+AudioManager.udp_socket = nil
+
 AudioManager.bpm = 130
 AudioManager.crochet = 60 / 130
-
--- Variables de estado estáticas (Zero-GC)
 AudioManager.song_position_samples = 0
 AudioManager.current_beat = 0
 AudioManager.beat_pulse_flag = false
-AudioManager.udp_socket = nil
-AudioManager._osc_cache = {
-    ["kick_30hz"] = "/s_new\0\0,s\0\0kick_30hz\0\0\0"
-}
-AudioManager._titan_osc_cache = ffi.new("char[64]", "/s_new\0\0,siiissff\0titan_thud\0\0\0\255\255\255\255\0\0\0\0\0\0\0\1pan\0\0\0\0\0weight\0\0\0\0\0\0")
-AudioManager._click_osc_cache = ffi.new("char[64]", "/s_new\0\0,siiissf\0\0glitch_click\0\0\0\255\255\255\255\0\0\0\0\0\0\0\1rate\0\0\0\0\0\0\0")
-AudioManager._chord_osc_cache = ffi.new("char[96]", "/s_new\0\0,siiisffff\0camelot_chord\0\0\255\255\255\255\0\0\0\0\0\0\0\1f1\0\0\0\0\0f2\0\0\0\0\0f3\0\0\0\0\0release\0\0\0\0")
 
-AudioManager.beat_timer = 0
-AudioManager.base_bpm = 120
-AudioManager.current_bpm = 120
-AudioManager.step = 0
-AudioManager.zone_active = false
-AudioManager.glitch_timer = 0
-_G.AudioBeatPulse = 0
-AudioManager.melody_step = 1
-_G.TrackEnergyPunch = 0
+-- --- RECTIFICACIÓN MAESTRA DE BYTES CON PADDING OSC ---
 
--- 🎚️ ENSORDECIMIENTO TOTAL POR VACÍO (MUTE CONTROLADO POR AJUSTES)
-AudioManager.duck_intensity = 0.0
-AudioManager.duck_duration = 0.60
+-- Búfer para titan_thud (64 bytes fijos)
+-- "titan_thud" = 10 bytes -> Agregamos dos ceros para llegar a 12 (múltiplo de 4)
+AudioManager._titan_buf = ffi.new("uint8_t[64]", {
+    47,115,95,110,101,119,0,0,                      -- "/s_new\0\0"
+    44,115,105,105,105,115,115,102,102,0,0,0,       -- ",siiissff\0\0\0"
+    116,105,116,97,110,95,116,104,117,100,0,0,      -- "titan_thud\0\0"
+    255,255,255,255, 0,0,0,0, 0,0,0,1,               -- Node -1, Action 0, Target 1
+    112,97,110,0, 0,0,0,0,                          -- "pan\0" + 4 bytes float (offset 44)
+    119,101,105,103,104,116,0,0,                    -- "weight\0\0" + 4 bytes float (offset 56)
+    0,0,0,0
+})
 
--- 🗣️ CACHÉ DE ARCHIVOS DE AUDIO DEL PRESENTADOR
-AudioManager.voice_cache = {}
+-- Búfer para glitch_click (64 bytes fijos)
+-- "glitch_click" = 12 bytes -> Agregamos cuatro ceros para llegar a 16 (múltiplo de 4)
+AudioManager._click_buf = ffi.new("uint8_t[64]", {
+    47,115,95,110,101,119,0,0,                      -- "/s_new\0\0"
+    44,115,105,105,105,115,102,0,                   -- ",siiissf\0"
+    103,108,105,116,99,104,95,99,108,105,99,107,0,0,0,0, -- "glitch_click\0\0\0\0"
+    255,255,255,255, 0,0,0,0, 0,0,0,1,               -- Node -1, Action 0, Target 1
+    114,97,116,101,0,0,0,0,                         -- "rate\0\0\0\0" + 4 bytes float (offset 48)
+    0,0,0,0, 0,0,0,0
+})
 
-local function tanh(x)
-    local e2x = math.exp(2 * x)
-    return (e2x - 1) / (e2x + 1)
-end
+-- Búfer para debug_ping (64 bytes fijos)
+-- "debug_ping" = 10 bytes -> Agregamos dos ceros para llegar a 12 (múltiplo de 4)
+AudioManager._debug_buf = ffi.new("uint8_t[64]", {
+    47,115,95,110,101,119,0,0,                      -- "/s_new\0\0"
+    44,115,105,105,105,115,102,0,                   -- ",siiissf\0"
+    100,101,98,117,103,95,112,105,110,103,0,0,      -- "debug_ping\0\0"
+    255,255,255,255, 0,0,0,0, 0,0,0,1,               -- Node -1, Action 0, Target 1
+    102,114,101,113,0,0,0,0,                        -- "freq\0\0\0\0" + 4 bytes float (offset 48)
+    0,0,0,0, 0,0,0,0
+})
 
-function AudioManager.init()
-    AudioManager.beat_timer = 0
-    AudioManager.step = 0
-    AudioManager.melody_step = 1
-    _G.TrackEnergyPunch = 0
-    AudioManager.glitch_timer = 0
-    AudioManager.duck_intensity = 0.0
-    AudioManager.loadVoiceFiles()
-    AudioManager.init_external_backends()
-end
-
--- Inicialización del puente con SuperCollider y la IA en Rust
 function AudioManager.init_external_backends()
-    local socket_ok, socket = pcall(require, "socket")
-    if socket_ok and socket then
-        AudioManager.udp_socket = socket.udp()
-        AudioManager.udp_socket:setpeername(AudioManager.sc_host, AudioManager.sc_port)
+    -- Open a decoupled, unconnected UDP socket to bypass local Windows API restrictions
+    AudioManager.udp_socket = socket.udp()
+    if AudioManager.udp_socket then
+        -- CRITICAL BYPASS: Do NOT call setpeername. Keep it open and flexible.
+        AudioManager.udp_socket:settimeout(0)
     end
-
+    
     if _G.RustArchon and _G.RustArchon.init_audio_bridge then
         _G.RustArchon.init_audio_bridge(AudioManager.bpm)
     end
     
     local BlackBox = package.loaded["core.blackbox"]
     if BlackBox then 
-        BlackBox.record(BlackBox.TYPES.SYSTEM, AudioManager.sc_port * 1.0, "SUPERCOLLIDER_BRIDGE_OK") 
+        BlackBox.record(BlackBox.TYPES.SYSTEM, AudioManager.sc_port * 1.0, "UDP_UNCONNECTED_OPEN") 
     end
 end
 
--- Función interna de bajo impacto para enviar comandos OSC a scsynth
-function AudioManager.trigger_sc_synth(synth_name, intensity)
-    if AudioManager.udp_socket then
-        local payload = AudioManager._osc_cache[synth_name]
-        if payload then
-            AudioManager.udp_socket:send(payload)
-        end
-    end
+-- Alias nativo requerido por el micro-núcleo de main.lua
+function AudioManager.init()
+    AudioManager.init_external_backends()
 end
 
--- Disparador espacial de subgraves para los impactos del Titán
-function AudioManager.trigger_titan_sism(grid_column, drop_height)
-    if not AudioManager.udp_socket then return end
-
-    -- Mapeo: Columna (1 a 10) -> Paneo Estéreo (-1.0 a 1.0)
-    local target_pan = ((grid_column - 1) / 9) * 2 - 1
-    -- El factor de peso escala según la altura del drop (máximo multiplicador x2.5)
-    local target_weight = 1.0 + (math.min(drop_height or 0, 20) / 20) * 1.5
-
-    -- Hack de punteros FFI: Inyección de floats en los offsets fijos de memoria (Zero-GC)
-    local raw_ptr = ffi.cast("char*", AudioManager._titan_osc_cache)
-    ffi.cast("float*", raw_ptr + 48)[0] = target_pan
-    ffi.cast("float*", raw_ptr + 60)[0] = target_weight
-
-    -- Envío instantáneo por la red local
-    AudioManager.udp_socket:send(ffi.string(AudioManager._titan_osc_cache, 64))
-
-    local BlackBox = package.loaded["core.blackbox"]
-    if BlackBox then
-        BlackBox.record(BlackBox.TYPES.AUDIO, target_pan, "TITAN_THUD_DISPATCHED")
-    end
+function AudioManager.set_track(source_object, track_bpm)
+    AudioManager.bpm = track_bpm or 130
+    AudioManager.crochet = 60 / AudioManager.bpm
+    AudioManager.current_beat = 0
+    AudioManager.beat_pulse_flag = false
 end
 
--- Disparador de transitorios de alta frecuencia para rotaciones del jugador
-function AudioManager.trigger_player_click()
-    if not AudioManager.udp_socket then return end
-
-    -- Extraemos las Piezas Por Segundo actuales del juego
-    local PPSCounter = package.loaded["tetris.pps_counter"] or _G.PPSCounter
-    local current_pps = (PPSCounter and PPSCounter.get_current_pps) and PPSCounter.get_current_pps() or 1.0
-    -- Escalamos el tono rítmico según la velocidad competitiva (min 1.0, max 2.5)
-    local target_rate = math.min(math.max(current_pps / 2.0, 1.0), 2.5)
-
-    -- Hack de punteros FFI: Modificamos el valor de 'rate' directo en los bytes estáticos
-    local raw_ptr = ffi.cast("char*", AudioManager._click_osc_cache)
-    ffi.cast("float*", raw_ptr + 52)[0] = target_rate
-
-    -- Escupimos el buffer mutado hacia el puerto 57110 de SuperCollider
-    AudioManager.udp_socket:send(ffi.string(AudioManager._click_osc_cache, 64))
-
-    local BlackBox = package.loaded["core.blackbox"]
-    if BlackBox then
-        BlackBox.record(BlackBox.TYPES.AUDIO, target_rate, "PLAYER_ASMR_DISPATCHED")
-    end
-end
-
-function AudioManager.trigger_line_clear_chord(lines_cleared)
-    if not AudioManager.udp_socket then return end
-    
-    local TrackManager = package.loaded["core.track_manager"] or _G.TrackManager
-    local base_freq = (TrackManager and TrackManager.get_current_key_freq) and TrackManager.get_current_key_freq() or 220.0
-    
-    local f1 = base_freq
-    local f2 = base_freq * 1.201  -- Tercera aproximada
-    local f3 = base_freq * 1.498  -- Quinta justa aproximada
-    
-    local target_release = 0.4 + (math.min(lines_cleared or 1, 4) * 0.2)
-    
-    local raw_ptr = ffi.cast("char*", AudioManager._chord_osc_cache)
-    ffi.cast("float*", raw_ptr + 52)[0] = f1
-    ffi.cast("float*", raw_ptr + 64)[0] = f2
-    ffi.cast("float*", raw_ptr + 76)[0] = f3
-    ffi.cast("float*", raw_ptr + 88)[0] = target_release
-    
-    AudioManager.udp_socket:send(ffi.string(AudioManager._chord_osc_cache, 96))
-    
-    local BlackBox = package.loaded["core.blackbox"]
-    if BlackBox then
-        BlackBox.record(BlackBox.TYPES.AUDIO, lines_cleared * 1.0, "CAMELOT_CHORD_DISPATCHED")
-    end
-end
-
--- Actualización del reloj basada en el contador de muestras del servidor de audio
 function AudioManager.update_clock()
     local sc_sample_time = 0
-    
     if _G.RustArchon and _G.RustArchon.get_supercollider_samples then
         sc_sample_time = _G.RustArchon.get_supercollider_samples()
     end
     
-    local sample_rate = 44100
+    local sample_rate = 48000
     local hardware_time = sc_sample_time / sample_rate
     local next_beat = math.floor(hardware_time / AudioManager.crochet)
     
     if next_beat > AudioManager.current_beat then
         AudioManager.current_beat = next_beat
         AudioManager.beat_pulse_flag = true
-        
-        AudioManager.trigger_sc_synth("kick_30hz", 1.0)
-        
-        local BlackBox = package.loaded["core.blackbox"]
-        if BlackBox then
-            BlackBox.record(BlackBox.TYPES.AUDIO, next_beat * 1.0, "SC_BEAT_PULSE")
-        end
     else
         AudioManager.beat_pulse_flag = false
+    end
+end
+
+function AudioManager.is_beat_frame()
+    return AudioManager.beat_pulse_flag
+end
+
+-- --- ZERO-GC TRANSMISSION EMITTERS UTILIZING EXPLICIT SENDTO ROUTINES ---
+
+function AudioManager.trigger_titan_sism(grid_column, drop_height)
+    if not AudioManager.udp_socket then return end
+    local target_pan = ((grid_column - 1) / 9) * 2 - 1
+    local target_weight = 1.0 + (math.min(drop_height or 0, 20) / 20) * 1.5
+
+    local casted_ptr = ffi.cast("uint8_t*", AudioManager._titan_buf)
+    ffi.cast("float*", casted_ptr + 44)[0] = target_pan
+    ffi.cast("float*", casted_ptr + 56)[0] = target_weight
+    
+    -- CRITICAL BYPASS: Direct explicit network dispatch via sendto
+    AudioManager.udp_socket:sendto(ffi.string(AudioManager._titan_buf, 64), AudioManager.sc_host, AudioManager.sc_port)
+end
+
+function AudioManager.trigger_player_click()
+    if not AudioManager.udp_socket then return end
+    local current_pps = (pps_counter and pps_counter.get_current_pps) and pps_counter.get_current_pps() or 1.0
+    local target_rate = math.min(math.max(current_pps / 2.0, 1.0), 2.5)
+
+    local casted_ptr = ffi.cast("uint8_t*", AudioManager._click_buf)
+    ffi.cast("float*", casted_ptr + 48)[0] = target_rate
+    
+    -- CRITICAL BYPASS: Direct explicit network dispatch via sendto
+    AudioManager.udp_socket:sendto(ffi.string(AudioManager._click_buf, 64), AudioManager.sc_host, AudioManager.sc_port)
+end
+
+function AudioManager.trigger_debug_ping(target_frequency, target_pan)
+    if not AudioManager.udp_socket then return end
+    local casted_ptr = ffi.cast("uint8_t*", AudioManager._debug_buf)
+    ffi.cast("float*", casted_ptr + 48)[0] = target_frequency or 880.0
+    
+    -- CRITICAL BYPASS: Direct explicit network dispatch via sendto
+    AudioManager.udp_socket:sendto(ffi.string(AudioManager._debug_buf, 64), AudioManager.sc_host, AudioManager.sc_port)
+end
+
+function AudioManager.trigger_line_clear_chord(lines_cleared)
+    if AudioManager.trigger_debug_ping then
+        AudioManager.trigger_debug_ping(660.0, 0.0)
     end
 end
 
@@ -232,13 +200,16 @@ function AudioManager.triggerSidechain(amount, duration)
         return
     end
 
-    local effective_amount = (amount or 1.0) * sidechain_setting
-    AudioManager.duck_intensity = math.max(AudioManager.duck_intensity, effective_amount)
+    local safe_amount = amount or 1.0
+    local effective_amount = safe_amount * sidechain_setting
+    AudioManager.duck_intensity = math.max(AudioManager.duck_intensity or 0.0, effective_amount)
     AudioManager.duck_duration = duration or 0.60
 end
 
 -- 🗣️ Reproducción de la Voz del Presentador
 function AudioManager.playVoiceAnnounce(voice_type)
+    if not AudioManager.voice_cache then return false end
+
     local sfx_vol = SettingsManager.getSFX()
     if sfx_vol <= 0.01 then return end
 
@@ -334,7 +305,7 @@ function AudioManager.playSubBassThud(power)
         local rumble = math.sin(2 * math.pi * (f * 0.5) * t) * (0.3 + tier * 0.1)
         local thud = (t < 0.008) and (math.random() * 2 - 1) * (1.0 - t / 0.008) * 0.4 or 0
 
-        local val = tanh((sub + rumble + thud) * (1.8 + tier * 0.4)) * math.exp(-5.0 * t)
+        local val = math.tanh((sub + rumble + thud) * (1.8 + tier * 0.4)) * math.exp(-5.0 * t)
         data:setSample(i, val * 0.98 * sfx_vol)
     end
 
@@ -365,7 +336,7 @@ function AudioManager.playMechanicalClear(lines_count, is_bot)
         local body = math.sin(2 * math.pi * (base_f * math.exp(-15 * t)) * t) * 0.7
         local deep = math.sin(2 * math.pi * 48 * t) * 0.45 * math.exp(-8 * t)
 
-        local val = tanh((snap + body + deep) * 2.0) * math.exp(-8.0 * t)
+        local val = math.tanh((snap + body + deep) * 2.0) * math.exp(-8.0 * t)
         data:setSample(i, val * 0.85 * sfx_vol)
     end
 
@@ -390,7 +361,7 @@ function AudioManager.playTone(freq, duration, volume, wave_type, is_kick, drive
         if wave_type == "triangle" then
             val = (2 / math.pi) * math.asin(math.max(-1, math.min(1, val)))
         end
-        if drive and drive > 0 then val = tanh(val * drive) end
+        if drive and drive > 0 then val = math.tanh(val * drive) end
         data:setSample(i, val * math.exp(-decay * t) * volume)
     end
 
@@ -463,9 +434,10 @@ function AudioManager.update(dt, stats)
         AudioManager.glitch_timer = AudioManager.glitch_timer - dt
     end
 
-    if AudioManager.duck_intensity > 0 then
-        local decay_rate = 1.0 / math.max(0.1, AudioManager.duck_duration or 0.60)
-        AudioManager.duck_intensity = math.max(0, AudioManager.duck_intensity - dt * decay_rate)
+    if (AudioManager.duck_intensity or 0.0) > 0 then
+        local safe_duration = AudioManager.duck_duration or 0.60
+        local decay_rate = 1.0 / math.max(0.1, safe_duration)
+        AudioManager.duck_intensity = math.max(0.0, (AudioManager.duck_intensity or 0.0) - dt * decay_rate)
     end
 
     local TrackManager = require "track_manager"

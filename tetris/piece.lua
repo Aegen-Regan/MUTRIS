@@ -53,18 +53,49 @@ function Piece:resetLock()
     end
 end
 
+local BossAudioGate = {
+    last_column = -1,
+    last_height = -1
+}
+
+function Piece:update_movement_audio(is_hard_dropping)
+    local current_column = self.x
+    local current_height = (self.board.rows + 1) - self.y
+
+    if current_column ~= BossAudioGate.last_column then
+        BossAudioGate.last_column = current_column
+        if AudioManager and AudioManager.trigger_titan_sism then
+            AudioManager.trigger_titan_sism(current_column, current_height)
+        end
+    end
+    
+    if is_hard_dropping and current_height ~= BossAudioGate.last_height then
+        BossAudioGate.last_height = current_height
+        if AudioManager and AudioManager.trigger_titan_sism then
+            AudioManager.trigger_titan_sism(current_column, current_height)
+        end
+    end
+end
+
 function Piece:move(dx, dy, is_gravity)
     if self.board:canMove(self.x + dx, self.y + dy, self.rotation) then
         self.x, self.y = self.x + dx, self.y + dy
         if not is_gravity then 
+            -- Mantenemos el audio heredado por compatibilidad
             AudioManager.playImmediateSFX("move", self.board.player_type == "bot") 
+            
+            -- --- NUEVO: TELEMETRÍA ASMR PROCEDURAL POR RED ---
+            if AudioManager and AudioManager.trigger_player_click then
+                AudioManager.trigger_player_click()
+            end
+            
             self:resetLock() 
             self.last_move_was_rotate = false
             EventBus.emit(EventBus.ON_PIECE_MOVE, self.id, dx, dy, self.board.player_type == "human" and 1 or 2)
             
             if self.board.is_boss then
                 self.board:triggerShake(6, 0.15)
-                AudioManager.playSubBassThud(1)
+                self:update_movement_audio(false)
             end
         end
         return true
@@ -82,14 +113,22 @@ function Piece:rotate(dir)
         for _, kick in ipairs(kicks) do
             if self.board:canMove(self.x + kick[1], self.y - kick[2], next_rot) then
                 self.x, self.y, self.rotation = self.x + kick[1], self.y - kick[2], next_rot
+                
+                -- Mantenemos el audio heredado por compatibilidad
                 AudioManager.playImmediateSFX("rotate", self.board.player_type == "bot")
+                
+                -- --- NUEVO: TELEMETRÍA ASMR PROCEDURAL POR RED ---
+                if AudioManager and AudioManager.trigger_player_click then
+                    AudioManager.trigger_player_click()
+                end
+                
                 self:resetLock()
                 self.last_move_was_rotate = true
                 EventBus.emit(EventBus.ON_PIECE_ROTATE, self.id, next_rot, self.board.player_type == "human" and 1 or 2)
                 
                 if self.board.is_boss then
                     self.board:triggerShake(8, 0.20)
-                    AudioManager.playSubBassThud(2)
+                    self:update_movement_audio(false)
                 end
                 
                 return true
@@ -196,7 +235,7 @@ function Piece:lock()
 
     if self.board.is_boss then
         self.board:triggerShake(22, 0.60)
-        AudioManager.playSubBassThud(4)
+        self:update_movement_audio(true)
     end
 
     Blackbox.log(

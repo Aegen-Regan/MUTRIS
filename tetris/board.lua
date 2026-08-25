@@ -511,9 +511,20 @@ function Board:update(dt)
         end
     end
 
+    -- --- CRITICAL REFACTORING: ANOMALY CONTROL INTERCEPTOR AT GRIDS LEVEL ---
     if not self.is_dying and self.active_piece then
         local Input = require "input"
+        local AnomalyManager = require "tetris.anomaly_manager"
+        
+        -- Securely fetch the baseline gravity speed modifier
         local gravity = (self.player_type == "human") and Input.getSoftDropFactor() or 0.8
+        
+        -- Apply dynamic parametric gravity anomaly alterations (Anomaly ID 2)
+        if AnomalyManager and AnomalyManager.active_anomaly_id == 2 and self.player_type == "human" then
+            gravity = gravity * (AnomalyManager.gravity_multiplier or 1.0)
+        end
+        
+        -- Execute the safe frame movement step update
         self.active_piece:update(dt, gravity)
     end
 end

@@ -151,14 +151,24 @@ end
 function SceneGame.update(dt)
     local ok, err = pcall(function()
         if not SceneGame.match_over then
+            -- --- CRITICAL REFACTOR: RUN THE PARAMETRIC TIMER DIRECTLY INSIDE THE SCENE GAME LOOP ---
+            local AnomalyManager = require "tetris.anomaly_manager"
+            if AnomalyManager and AnomalyManager.update then
+                AnomalyManager.update(dt)
+            end
+
+            -- Main core input pipeline integration
+            local Input = require "input"
             if Input and Input.update then
                 Input.update(dt)
             end
 
+            -- Update all active matrices grids on screen
             for i = 1, #SceneGame.boards do
                 SceneGame.boards[i]:update(dt)
             end
             
+            -- Update competitive Rust-driven IA simulation frames
             for i = 1, #SceneGame.bots do
                 SceneGame.bots[i]:update(dt)
             end
@@ -437,6 +447,35 @@ function SceneGame.exit()
     SceneGame.final_match_time = 0.0
     Blackbox.log("SCENE", "Game Scene exited", 0, 0)
     collectgarbage("collect")
+end
+
+function SceneGame.keypressed(key)
+    -- If a match overlay menu is active, handle immediate tactical scene controls
+    if SceneGame.match_over then
+        if key == "return" or key == "space" or key == "r" then
+            SceneGame.restartMatch()
+            return
+        elseif key == "escape" then
+            if SceneManager and SceneManager.setState then
+                SceneManager.setState(SceneGame.return_scene or "menu")
+            end
+            return
+        end
+    end
+
+    -- Explicit hardware link: Forward the raw input directly into the Zero-GC input pipeline
+    local Input = require "input"
+    if Input and Input.keypressed then
+        Input.keypressed(key)
+    end
+end
+
+function SceneGame.keyreleased(key)
+    -- Explicit hardware link: Forward the release event directly into the pipeline
+    local Input = require "input"
+    if Input and Input.keyreleased then
+        Input.keyreleased(key)
+    end
 end
 
 return SceneGame
