@@ -37,6 +37,9 @@ local PluginManager      = require "core.plugin_manager"
 local AnomalyManager     = require "tetris.anomaly_manager"
 _G.GifEncoder            = require "core.gif_encoder"
 
+local OscClient          = require "network.osc_client"
+local SoundManager       = require "audio.sound_manager"
+
 local socket = require("socket")
 local sc_rx_socket = nil
 local sc_connected_flag = "SC_NET: DISCONNECTED"
@@ -224,9 +227,9 @@ function love.draw()
     watermark_buffer[9] = static_labels.ram
     watermark_buffer[10] = current_ram
     watermark_buffer[11] = static_labels.mb
-    watermark_buffer[12] = sc_connected_flag
+    watermark_buffer[12] = OscClient.get_telemetry()
     watermark_buffer[13] = " | "
-    watermark_buffer[14] = sc_audio_status
+    watermark_buffer[14] = "KEY: " .. (SoundManager.current_key_name or "8A (Am)")
 
     love.graphics.setFont(FontCache.get(9))
     love.graphics.setColor(t.primary[1], t.primary[2], t.primary[3], 0.92)

@@ -214,6 +214,9 @@ function Input.handleAction(action)
                 Input.player:spawnTrail(p.x, startY, endY, p.id, p.shape[p.rotation])
             end
             p:lock()
+            
+            local EventBus = package.loaded["core.event_bus"] or require("core.event_bus")
+            EventBus.emit("on_hard_drop", Input.player.player_type == "human" and 1 or 2)
         end
     end
 end

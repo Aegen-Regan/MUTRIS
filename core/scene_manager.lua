@@ -26,7 +26,7 @@ function SceneManager.init()
     -- Base scenes dynamic loading (can be expanded easily)
     local base_scenes = {
         "menu", "campaign", "boss_hunt", "settings", "pause", 
-        "gameover", "forge", "sandbox", "trainer"
+        "gameover", "forge", "sandbox", "trainer", "soundtrack_lab"
     }
 
     for _, name in ipairs(base_scenes) do

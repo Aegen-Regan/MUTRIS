@@ -28,6 +28,8 @@ local SceneManager    = require "core.scene_manager"
 local PartBreaking    = require "combat.part_breaking"
 local BossProjectiles = require "combat.boss_projectiles"
 local LayoutSolver    = require "core.layout_solver"
+local SoundManager    = require "audio.sound_manager"
+local OscClient       = require "network.osc_client"
 
 SceneGame.boards = {}
 SceneGame.bots = {}
@@ -45,6 +47,30 @@ SceneGame.victory_flash = 0.0
 SceneGame.final_match_time = 0.0
 
 function SceneGame.init()
+    EventBus.on(EventBus.ON_PIECE_MOVE, function(id, dx, dy, p_id)
+        if p_id == 1 then SoundManager.play_move() end
+    end)
+    EventBus.on(EventBus.ON_PIECE_ROTATE, function(id, next_rot, p_id)
+        if p_id == 1 then SoundManager.play_rotate() end
+    end)
+    EventBus.on(EventBus.ON_LINE_CLEAR, function(lines, is_tspin, p_id, combo)
+        if p_id == 1 then
+            if lines > 0 then
+                SoundManager.play_line_clear(lines, combo)
+                if lines == 4 then OscClient.send_tetris() end
+            end
+            if is_tspin == 1 then
+                SoundManager.play_tspin()
+                OscClient.send_tspin()
+            end
+        end
+    end)
+    EventBus.on("on_hard_drop", function(p_id)
+        if p_id == 1 then
+            SoundManager.play_hard_drop()
+            OscClient.send_drop()
+        end
+    end)
 end
 
 function SceneGame.enter(data)
@@ -58,6 +84,9 @@ function SceneGame.enter(data)
         SceneGame.layout_style = data.layout_style or (data.mode == "boss_hunt" and "gigantic_boss" or (#(data.boards or {}) > 2 and "multibot" or "versus"))
         SceneGame.boards = {}
         SceneGame.bots = {}
+
+        SoundManager.init()
+        OscClient.init("127.0.0.1", 8000)
 
         _G.RealMatchTimer = 0.0
         SceneGame.final_match_time = 0.0
@@ -130,6 +159,14 @@ function SceneGame.restartMatch()
     end
 
     AudioManager.playImmediateSFX("rotate", false)
+    
+    local SoundManager = require("audio.sound_manager")
+    if cur_track and cur_track.id then
+        SoundManager.set_active_track(cur_track.id)
+    elseif SoundManager.reset then
+        SoundManager.reset()
+    end
+    
     SceneManager.setState("game", SceneGame.last_config)
 end
 
@@ -162,6 +199,8 @@ function SceneGame.update(dt)
             if Input and Input.update then
                 Input.update(dt)
             end
+
+            SoundManager.update(dt)
 
             -- Update all active matrices grids on screen
             for i = 1, #SceneGame.boards do

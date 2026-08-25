@@ -62,8 +62,7 @@ function SceneMenu.executeSelection(index)
     elseif index == 6 then
         SceneManager.setState("trainer")
     elseif index == 7 then
-        TrackEditor.active = true
-        SceneManager.setState("editor")
+        SceneManager.setState("soundtrack_lab")
     elseif index == 8 then
         SceneSettings.return_state = "menu"
         SceneSettings.active_tab_index = 1
