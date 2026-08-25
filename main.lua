@@ -62,8 +62,8 @@ local screenshot_flash_timer = 0
 local function updateViewScaling()
     local sw, sh = love.graphics.getDimensions()
     view_scale = math.min(sw / 1280, sh / 720)
-    view_ox = (sw - 1280 * view_scale) / 2
-    view_oy = (sh - 720 * view_scale) / 2
+    view_ox = math.floor((sw - 1280 * view_scale) * 0.5)
+    view_oy = math.floor((sh - 720 * view_scale) * 0.5)
 end
 
 function love.load()
@@ -86,6 +86,10 @@ function love.load()
     if TrackManager.init    then TrackManager.init() end
     if BloomShader.init     then BloomShader.init() end
     if FogLayer.init        then FogLayer.init() end
+    
+    -- Inicialización unificada de Audio & OSC al arrancar el motor
+    if SoundManager and SoundManager.init then SoundManager.init() end
+    if OscClient and OscClient.init then OscClient.init("127.0.0.1", 8000) end
     
     _G.TakeScreenshot = function()
         ScreenshotHelper.capture(function(success)
@@ -119,19 +123,28 @@ function love.load()
         _G.GifEncoder.init()
     end
     
+    -- Pre-registro explícito de todas las escenas para evitar lag y saltos de canvas
+    local SceneMenu = require "scenes.scene_menu"
+    SceneManager.register("menu", SceneMenu)
+
     local SceneGame = require "scenes.scene_game"
     SceneManager.register("game", SceneGame)
-    
+    SceneManager.register("versus", SceneGame)
+    SceneManager.register("boss_hunt", SceneGame)
+
     local SceneEditor = require "scenes.scene_editor"
     SceneManager.register("editor", SceneEditor)
 
-    SceneManager.register("versus", SceneGame)
-    SceneManager.register("boss_hunt", SceneGame)
+    local SceneSoundtrackLab = require "scenes.scene_soundtrack_lab"
+    SceneManager.register("soundtrack_lab", SceneSoundtrackLab)
 
     pcall(function() PluginManager.loadAllPlugins("plugins") end)
     pcall(function() PluginManager.initAllPlugins() end)
 
     MusicManager.start()
+    
+    -- Forzar cálculo de viewport final y arranque en Menú
+    updateViewScaling()
     SceneManager.setState("menu")
 end
 
@@ -141,7 +154,6 @@ end
 
 function love.update(dt)
     -- --- 1. RUN THE GIF HUD FLASH TIMER OVERFLOW PROTECTION ---
-    -- Dynamic HUD timer countdown update
     if _G.GifEncoder and _G.GifEncoder.update_hud then
         _G.GifEncoder.update_hud(dt)
     end
@@ -191,10 +203,17 @@ function love.update(dt)
 end
 
 function love.draw()
+    -- Reseteo estricto del estado de OpenGL antes de renderizar
+    love.graphics.origin()
+    love.graphics.setScissor()
+    love.graphics.setLineWidth(1)
     love.graphics.clear(0.01, 0.01, 0.02, 1.0)
+    
     BloomShader.beginDraw()
 
-    -- 1. Renderizado de Escena Activa
+    -- 1. Renderizado de Escena Activa (Dentro del Canvas 1280x720)
+    love.graphics.origin()
+    love.graphics.setScissor()
     SceneManager.draw()
 
     -- 2. Halo Neón de Reinicio (Tecla 'R')
@@ -240,6 +259,7 @@ function love.draw()
         ThemeManager.drawEngageTransition(engage_timer, engage_duration)
     end
 
+    -- Renderizar el canvas escalado y centrado a la pantalla
     BloomShader.endDraw(false, view_ox, view_oy, view_scale)
 
     if ClipRecorder.is_recording and BloomShader.canvas then
@@ -275,7 +295,6 @@ function love.draw()
 end
 
 function love.keypressed(key, scancode, isrepeat)
-    -- --- SYSTEM CAPTURE DISPATCHER (FORCED GLOBAL ROUTING) ---
     if key == "f12" then
         if _G.GifEncoder and _G.GifEncoder.compile_clip then
             _G.GifEncoder.compile_clip()

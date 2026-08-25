@@ -46,6 +46,13 @@ SceneGame.winner_name = ""
 SceneGame.victory_flash = 0.0
 SceneGame.final_match_time = 0.0
 
+-- Estado de Pausa (máquina de estados estática, Zero-GC)
+SceneGame.is_paused = false
+-- Strings cacheados: no se instancian en el hot loop
+local _PAUSE_TITLE = "  GAME PAUSED"
+local _PAUSE_SUB   = "[ESC] RESUMIR   |   [M] SALIR AL MENU"
+local _PAUSE_HINT  = "Las partidas pausadas mantienen el determinismo de frame exacto"
+
 function SceneGame.init()
     -- NOTE: play_move_column and play_rotate are now driven directly from input.lua
     -- with real column position for pentatonic pitch mapping.
@@ -75,11 +82,11 @@ function SceneGame.enter(data)
     local ok, err = pcall(function()
         data = data or {}
         SceneGame.last_config = data
-        SceneGame.mode = data.mode or "versus"
+        SceneGame.mode = data.mode or _G.CURRENT_GAME_MODE or "versus"
         _G.CURRENT_GAME_MODE = SceneGame.mode -- ⚡ SINCRONIZACIÓN GLOBAL CRÍTICA
 
         SceneGame.return_scene = data.return_scene or "menu"
-        SceneGame.layout_style = data.layout_style or (data.mode == "boss_hunt" and "gigantic_boss" or (#(data.boards or {}) > 2 and "multibot" or "versus"))
+        SceneGame.layout_style = data.layout_style or (SceneGame.mode == "boss_hunt" and "gigantic_boss" or (#(data.boards or {}) > 2 and "multibot" or "versus"))
         SceneGame.boards = {}
         SceneGame.bots = {}
 
@@ -183,6 +190,9 @@ function SceneGame.relinkOpponents()
 end
 
 function SceneGame.update(dt)
+    -- PAUSA: cortocircuito total — ni physics ni input se procesan
+    if SceneGame.is_paused then return end
+
     local ok, err = pcall(function()
         if not SceneGame.match_over then
             -- --- CRITICAL REFACTOR: RUN THE PARAMETRIC TIMER DIRECTLY INSIDE THE SCENE GAME LOOP ---
@@ -357,7 +367,52 @@ function SceneGame.draw()
             end
         end
 
-        -- 4. Modal de Victoria / Derrota
+        -- 4. Overlay de Pausa (Zero-GC: buffers pre-alocados, sin tablas en hot-loop)
+        if SceneGame.is_paused then
+            local lg = love.graphics
+            lg.push("all")
+            -- Capa de atenuación semitransparente
+            lg.setColor(0, 0, 0, 0.75)
+            lg.rectangle("fill", 0, 0, 1280, 720)
+
+            -- Panel central chaflanado
+            local px, py, pw, ph = 390, 280, 500, 160
+            lg.setColor(0.04, 0.06, 0.10, 0.97)
+            lg.rectangle("fill", px, py, pw, ph, 8)
+            lg.setColor(0.25, 0.90, 1.00, 0.90)
+            lg.setLineWidth(2)
+            lg.rectangle("line", px, py, pw, ph, 8)
+
+            -- Acento superior neón (3px)
+            lg.setColor(0.25, 0.90, 1.00, 1.0)
+            lg.rectangle("fill", px + 8, py + 2, pw - 16, 3, 1)
+
+            -- Texto título
+            lg.setFont(FontCache.get(20))
+            lg.setColor(1, 1, 1, 1)
+            lg.printf(_PAUSE_TITLE, px, py + 28, pw, "center")
+
+            -- Texto instrucciones
+            lg.setFont(FontCache.get(10))
+            lg.setColor(0.25, 0.90, 1.00, 0.90)
+            lg.printf(_PAUSE_SUB, px, py + 80, pw, "center")
+
+            -- Hint inferior tenue
+            lg.setFont(FontCache.get(8))
+            lg.setColor(0.40, 0.46, 0.55, 0.70)
+            lg.printf(_PAUSE_HINT, px, py + 118, pw, "center")
+
+            -- LED parpadeante (animación sin tabla: usa _G.RealMatchTimer como proxy de tiempo)
+            local blink = (math.floor((_G.RealMatchTimer or 0) * 2) % 2 == 0)
+            if blink then
+                lg.setColor(0.25, 0.90, 1.00, 1.0)
+                lg.circle("fill", px + 22, py + 38, 5)
+            end
+
+            lg.pop()
+        end
+
+        -- 5. Modal de Victoria / Derrota
         if SceneGame.match_over then
             local t = ThemeManager.getCurrent()
             local mx, my = 640 - 280, 360 - 170
@@ -428,8 +483,10 @@ function SceneGame.draw()
 end
 
 function SceneGame.keypressed(key)
+    -- ── PANTALLA DE FIN DE PARTIDA ──────────────────────────────────────
     if SceneGame.match_over then
         if key == "return" or key == "space" or key == "r" then
+            SceneGame.is_paused = false
             SceneGame.restartMatch()
             return true
         elseif key == "escape" then
@@ -440,9 +497,29 @@ function SceneGame.keypressed(key)
         return true
     end
 
+    -- ── ESTADO DE PAUSA ──────────────────────────────────────────────────
+    if SceneGame.is_paused then
+        if key == "escape" then
+            -- ESC mientras pausado → reanudar
+            SceneGame.is_paused = false
+            AudioManager.playImmediateSFX("rotate", false)
+            return true
+        elseif key == "m" then
+            -- M mientras pausado → salir al menú
+            SceneGame.is_paused = false
+            AudioManager.playMenuBack()
+            SceneManager.setState(SceneGame.return_scene or "menu")
+            return true
+        end
+        -- Cualquier otra tecla no pasa al pipeline de Input mientras pausado
+        return true
+    end
+
+    -- ── JUEGO ACTIVO ─────────────────────────────────────────────────────
     if key == "escape" then
-        SceneManager.setState(SceneGame.return_scene or "menu")
-        AudioManager.playMenuBack()
+        -- Primera pulsación de ESC en juego activo → pausar
+        SceneGame.is_paused = true
+        AudioManager.playImmediateSFX("hold", false)
         return true
     end
 

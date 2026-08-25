@@ -1,124 +1,424 @@
--- ================================================================
+-- ============================================================================
 -- FILE: scenes/scene_menu.lua
--- ================================================================
+-- MUTRIS ENGINE: CYBERPUNK MISSION SELECT & MODE MATRIX (1280x720 / Zero-GC)
+-- TARGET: Intel Pentium G3250 Haswell / Intel HD Graphics (Zero Allocation Draw)
+-- ============================================================================
 ---@diagnostic disable: undefined-global
--- ============================================================================
--- MUTRIS ENGINE: MAIN MENU SCENE
--- Dispatches to Versus, Boss Hunt, Forge, Benchmark, Trainer Lab, Gauntlet, DAW & Settings
--- ============================================================================
-local SceneMenu = {}
-local ThemeManager = require "tetris.theme_manager"
-local AudioManager = require "audio_manager"
-local MetaBalancer = require "core.meta_balancer"
 
-SceneMenu.selection = 1
-
-SceneMenu.items = {
-    "CAMPAÑA: EL DESCENSO",
-    "VS BOT DUEL",
-    "CYBER-BEAST HUNT",
-    "THE HUNTER'S FORGE",
-    "PILOT BENCHMARK",
-    "TRAINER LAB & FINESSE",
-    "SOUNDTRACK & FX LAB",
-    "SETTINGS & CALIBRATION",
-    "LOGICAL EDITOR"
-}
-
-SceneMenu.subtitles = {
-    "50-STAGE ROGUELIKE MAINFRAME VS T.U.N.E.R. AI",
-    "CLASSIC 1v1 DUEL VS ADAPTIVE DDA BOT",
-    "3-PHASE COLOSSUS ASSAULT & HUNTER'S FORGE",
-    "ARMOR JEWEL CRAFTING & CYBER-PALICO BAY",
-    "OFFICIAL 3-STAGE PILOT CALIBRATION TRIAL",
-    "HOLOGRAPHIC OPENING BOOK, TIME-TRAVEL & KPP COACH",
-    "DAW TIMELINE, CUE PLACEMENT & SFX AUDITION",
-    "MASTER CALIBRATION SUITE, DAS / ARR & PIPELINE",
-    "CUSTOMIZE MATRICES AND GAME RULES DYNAMICALLY"
-}
-
-function SceneMenu.draw()
-    ThemeManager.drawMenu(SceneMenu.items, SceneMenu.subtitles, SceneMenu.selection, MetaBalancer)
+local ok_sm, SceneManager = pcall(require, "core.scene_manager")
+if not ok_sm or not SceneManager then
+    local ok_sm2, SM2 = pcall(require, "scene_manager")
+    SceneManager = ok_sm2 and SM2 or _G.SceneManager
 end
 
-function SceneMenu.executeSelection(index)
-    local SceneManager = require "core.scene_manager"
-    local TrackEditor = require "track_editor"
-    local SceneSettings = require "scenes.scene_settings"
+local SoundManager = nil
+pcall(function() SoundManager = require("audio.sound_manager") end)
 
-    SceneMenu.selection = index
-    AudioManager.playMenuClick()
+local SoundtrackDB = nil
+pcall(function() SoundtrackDB = require("audio.soundtrack_db") end)
 
-    if index == 1 then
-        SceneManager.setState("game", { mode = "campaign" })
-    elseif index == 2 then
-        SceneManager.setState("game", { mode = "versus" })
-    elseif index == 3 then
-        SceneManager.setState("game", { mode = "boss_hunt" })
-    elseif index == 4 then
-        SceneManager.setState("forge")
-    elseif index == 5 then
-        SceneManager.setState("game", { mode = "benchmark" })
-    elseif index == 6 then
-        SceneManager.setState("trainer")
-    elseif index == 7 then
-        SceneManager.setState("soundtrack_lab")
-    elseif index == 8 then
-        SceneSettings.return_state = "menu"
-        SceneSettings.active_tab_index = 1
-        SceneSettings.active_item_index = 1
-        SceneManager.push("settings")
-    elseif index == 9 then
-        SceneManager.setState("editor")
+local ThemeManager = nil
+pcall(function() ThemeManager = require("tetris.theme_manager") end)
+
+local OscClient = nil
+pcall(function() OscClient = require("network.osc_client") end)
+
+local scene = {}
+
+local VW, VH = 1280, 720
+
+local COLOR = {
+    bg          = {0.020, 0.031, 0.063, 1.00}, -- #050810
+    panel       = {0.055, 0.065, 0.105, 0.95},
+    panel_hov   = {0.075, 0.090, 0.140, 0.98},
+    panel_feat  = {0.060, 0.095, 0.115, 0.98},
+    border_dim  = {0.20, 0.16, 0.34, 0.80},
+
+    cyan        = {0.25, 0.92, 1.00, 1.00},
+    cyan_dim    = {0.10, 0.30, 0.36, 1.00},
+    magenta     = {1.00, 0.32, 0.82, 1.00},
+    magenta_dim = {0.34, 0.11, 0.28, 1.00},
+    red         = {1.00, 0.28, 0.32, 1.00},
+    red_dim     = {0.32, 0.10, 0.12, 1.00},
+    gold        = {1.00, 0.82, 0.22, 1.00},
+    gold_dim    = {0.34, 0.27, 0.09, 1.00},
+    green       = {0.35, 1.00, 0.58, 1.00},
+    green_dim   = {0.10, 0.32, 0.20, 1.00},
+    purple      = {0.76, 0.48, 1.00, 1.00},
+    purple_dim  = {0.24, 0.15, 0.34, 1.00},
+    steel       = {0.55, 0.62, 0.72, 1.00},
+    steel_dim   = {0.20, 0.24, 0.32, 1.00},
+
+    text        = {0.88, 0.93, 0.97, 1.00},
+    text_dim    = {0.50, 0.56, 0.64, 1.00},
+    text_faint  = {0.30, 0.35, 0.42, 1.00},
+    black       = {0.00, 0.00, 0.00, 0.60},
+}
+
+local CHAMFER = 8
+
+-- STATIC MENU ITEMS DEFINITIONS
+local ITEMS = {
+    { title = "CAMPAÑA: EL DESCENSO",     sub = "50-STAGE ROGUELIKE MAINFRAME VS T.U.N.E.R. AI",
+      badge = "50-STAGE ROGUELIKE", color = COLOR.cyan,    dim = COLOR.cyan_dim,    featured = true,
+      mode_id = "campaign", target = "game" },
+    { title = "VS BOT DUEL",              sub = "CLASSIC 1v1 DUEL VS ADAPTIVE DDA BOT",
+      badge = "1v1 DDA",            color = COLOR.magenta, dim = COLOR.magenta_dim, featured = false,
+      mode_id = "versus",   target = "versus" },
+    { title = "CYBER-BEAST HUNT",         sub = "3-PHASE COLOSSUS ASSAULT & HUNTER'S FORGE",
+      badge = "BOSS RAID",          color = COLOR.red,     dim = COLOR.red_dim,     featured = false,
+      mode_id = "boss_hunt",target = "boss_hunt" },
+    { title = "THE HUNTER'S FORGE",       sub = "ARMOR JEWEL CRAFTING & CYBER-PALICO COMPANION BAY",
+      badge = "CRAFTING",           color = COLOR.gold,    dim = COLOR.gold_dim,    featured = false,
+      mode_id = "forge",    target = "forge" },
+    { title = "PILOT BENCHMARK",          sub = "OFFICIAL 3-STAGE PILOT CALIBRATION TRIAL",
+      badge = "CALIBRATION",        color = COLOR.green,   dim = COLOR.green_dim,   featured = false,
+      mode_id = "benchmark",target = "benchmark" },
+    { title = "TRAINER LAB & FINESSE",    sub = "HOLOGRAPHIC OPENING BOOK, TIME-TRAVEL & KPF COACH",
+      badge = "COACHING",           color = COLOR.purple,  dim = COLOR.purple_dim,  featured = false,
+      mode_id = "trainer",  target = "trainer" },
+    { title = "SOUNDTRACK & FX LAB",      sub = "DAW TIMELINE, CUE PLACEMENT & SFX AUDITION",
+      badge = "DAW TOOLS",          color = COLOR.cyan,    dim = COLOR.cyan_dim,    featured = false,
+      mode_id = "soundtrack",target = "soundtrack_lab" },
+    { title = "SETTINGS & CALIBRATION",   sub = "MASTER CALIBRATION SUITE, DAS / ARR & PIPELINE",
+      badge = "SYSTEM",             color = COLOR.steel,   dim = COLOR.steel_dim,   featured = false,
+      mode_id = "settings", target = "settings" },
+    { title = "LOGICAL EDITOR",           sub = "CUSTOMIZE MATRICES AND GAME RULES DYNAMICALLY",
+      badge = "RULES ENGINE",       color = COLOR.gold,    dim = COLOR.gold_dim,    featured = false,
+      mode_id = "editor",   target = "editor" },
+}
+local ITEM_COUNT = #ITEMS
+
+local SKIN_LIST = { "01 // NEON GRID", "02 // ARCTIC MONO", "03 // BLOOD IRON",
+                     "04 // SINESTESIA COSMICA", "05 // AMBER TERMINAL" }
+
+-- STATE
+scene.state = {
+    selected      = 1,
+    hover         = 0,
+    skin_index    = 4,
+    t             = 0.0,
+    rec_flash     = 0.0,
+}
+
+scene.led = {
+    glow = {0,0,0,0,0,0,0,0,0},
+}
+
+-- STRING CACHE (Zero-GC)
+scene.cache = {
+    skin_str   = "",
+    footer_str = "",
+}
+
+local function refreshSkinCache()
+    if ThemeManager and ThemeManager.getCurrent then
+        local cur = ThemeManager.getCurrent()
+        scene.cache.skin_str = cur and cur.name or SKIN_LIST[scene.state.skin_index]
+    else
+        scene.cache.skin_str = SKIN_LIST[scene.state.skin_index]
     end
 end
 
-function SceneMenu.keypressed(key)
-    if key == "up" then
-        SceneMenu.selection = (SceneMenu.selection == 1) and #SceneMenu.items or (SceneMenu.selection - 1)
-        AudioManager.playMenuHover()
-        return true
-    elseif key == "down" then
-        SceneMenu.selection = (SceneMenu.selection % #SceneMenu.items) + 1
-        AudioManager.playMenuHover()
-        return true
-    elseif key == "return" or key == "space" then
-        SceneMenu.executeSelection(SceneMenu.selection)
-        return true
-    elseif key == "escape" then
-        love.event.quit()
-        return true
-    end
-    return false
+-- LAYOUT
+local L = {}
+local function buildLayout()
+    L.title_y       = 26
+    L.subtitle_y    = 60
+    L.list_x        = 420
+    L.list_w        = 440
+    L.list_top      = 88
+    L.item_h_norm   = 40
+    L.item_h_feat   = 56
+    L.item_gap      = 10
+    L.legend_y      = VH - 108
+    L.footer_h      = 20
+    L.footer_y      = VH - L.footer_h
 end
 
-function SceneMenu.mousepressed(adj_x, adj_y, button)
-    if button ~= 1 then return false end
-    local start_y = (ThemeManager.current_theme == 1) and 115 or ((ThemeManager.current_theme == 3) and 95 or 125)
-    local spacing = (ThemeManager.current_theme == 1) and 80 or ((ThemeManager.current_theme == 3) and 88 or 74)
-    
-    for i = 1, #SceneMenu.items do
-        local by = start_y + (i - 1) * spacing
-        if adj_y >= by and adj_y <= by + 70 and adj_x >= 80 and adj_x <= 750 then
-            SceneMenu.executeSelection(i)
-            return true
+local CHAMFER_BUF = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0}
+local DIAMOND_BUF = {0,0,0,0,0,0,0,0}
+
+local function fillChamferBuf(x, y, w, h, c)
+    local p = CHAMFER_BUF
+    p[1]=x+c;   p[2]=y
+    p[3]=x+w-c; p[4]=y
+    p[5]=x+w;   p[6]=y+c
+    p[7]=x+w;   p[8]=y+h-c
+    p[9]=x+w-c; p[10]=y+h
+    p[11]=x+c;  p[12]=y+h
+    p[13]=x;    p[14]=y+h-c
+    p[15]=x;    p[16]=y+c
+    return p
+end
+
+local function setColor(c) love.graphics.setColor(c[1], c[2], c[3], c[4]) end
+
+local function drawChamferedPanel(x, y, w, h, fillColor, borderColor, lineWidth)
+    local pts = fillChamferBuf(x, y, w, h, CHAMFER)
+    if fillColor then
+        setColor(fillColor)
+        love.graphics.polygon("fill", pts)
+    end
+    setColor(borderColor)
+    love.graphics.setLineWidth(lineWidth or 1.5)
+    love.graphics.polygon("line", pts)
+end
+
+local function drawDiamond(cx, cy, r, color, alpha)
+    local p = DIAMOND_BUF
+    p[1]=cx;   p[2]=cy-r
+    p[3]=cx+r; p[4]=cy
+    p[5]=cx;   p[6]=cy+r
+    p[7]=cx-r; p[8]=cy
+    love.graphics.setColor(color[1], color[2], color[3], alpha or color[4])
+    love.graphics.polygon("fill", p)
+end
+
+--================================================================
+-- LIFECYCLE
+--================================================================
+function scene.enter()
+    love.graphics.origin()
+    love.graphics.setShader()
+    love.graphics.setBlendMode("alpha")
+    love.graphics.setLineWidth(1)
+    love.graphics.setColor(1, 1, 1, 1)
+
+    buildLayout()
+    refreshSkinCache()
+
+    if SoundManager and SoundManager.set_active_track then
+        SoundManager.set_active_track("base_fondo")
+    end
+end
+
+function scene.load()
+    scene.enter()
+end
+
+function scene.update(dt)
+    local s = scene.state
+    s.t = s.t + dt
+
+    if SoundManager and SoundManager.update then SoundManager.update(dt) end
+    if OscClient and OscClient.update then OscClient.update(dt) end
+
+    local glow = scene.led.glow
+    for i = 1, ITEM_COUNT do
+        local target = (s.selected == i) and 1.0 or 0.0
+        if glow[i] < target then
+            glow[i] = math.min(target, glow[i] + dt * 6)
+        elseif glow[i] > target then
+            glow[i] = math.max(target, glow[i] - dt * 4)
         end
     end
-    return false
-end
 
-function SceneMenu.gamepadpressed(joystick, button)
-    if button == "dpup" then
-        SceneMenu.selection = (SceneMenu.selection == 1) and #SceneMenu.items or (SceneMenu.selection - 1)
-        AudioManager.playMenuHover()
-    elseif button == "dpdown" then
-        SceneMenu.selection = (SceneMenu.selection % #SceneMenu.items) + 1
-        AudioManager.playMenuHover()
-    elseif button == "a" or button == "start" then
-        SceneMenu.executeSelection(SceneMenu.selection)
-    elseif button == "b" or button == "back" then
-        love.event.quit()
+    if s.rec_flash > 0 then
+        s.rec_flash = math.max(0, s.rec_flash - dt * 2)
     end
 end
 
-return SceneMenu
+--================================================================
+-- ACTIONS
+--================================================================
+local function moveSelection(dir)
+    local s = scene.state
+    s.selected = ((s.selected - 1 + dir) % ITEM_COUNT) + 1
+    if SoundManager and SoundManager.play_move_column then
+        SoundManager.play_move_column(s.selected)
+    end
+end
+
+local function confirmSelection()
+    local item = ITEMS[scene.state.selected]
+    if not item then return end
+
+    if SoundManager and SoundManager.play_hard_drop then
+        SoundManager.play_hard_drop()
+    end
+
+    _G.CURRENT_GAME_MODE = item.mode_id or "versus"
+
+    if SceneManager and SceneManager.setState then
+        SceneManager.setState(item.target)
+    elseif SceneManager and SceneManager.switch then
+        SceneManager.switch(item.target)
+    end
+end
+
+local function cycleSkin(dir)
+    if ThemeManager and ThemeManager.cycleNext then
+        if dir > 0 then ThemeManager.cycleNext() else ThemeManager.cyclePrev() end
+    end
+    refreshSkinCache()
+end
+
+--================================================================
+-- INPUT
+--================================================================
+function scene.keypressed(key)
+    if key == "up" then
+        moveSelection(-1)
+    elseif key == "down" then
+        moveSelection(1)
+    elseif key == "return" or key == "kpenter" or key == "space" then
+        confirmSelection()
+    elseif key == "f5" then
+        cycleSkin(-1)
+    elseif key == "f6" then
+        cycleSkin(1)
+    elseif key == "f9" then
+        scene.state.rec_flash = 1.0
+        if _G.ToggleRecording then _G.ToggleRecording() end
+    elseif key == "f12" or key == "printscreen" then
+        if _G.TakeScreenshot then _G.TakeScreenshot() end
+    elseif key == "escape" then
+        if love and love.event then love.event.quit() end
+    end
+end
+
+local function itemRectY(i)
+    local y = L.list_top
+    for idx = 1, i - 1 do
+        y = y + (ITEMS[idx].featured and L.item_h_feat or L.item_h_norm) + L.item_gap
+    end
+    return y
+end
+
+function scene.mousemoved(x, y)
+    local s = scene.state
+    s.hover = 0
+    if x < L.list_x or x > L.list_x + L.list_w then return end
+    for i = 1, ITEM_COUNT do
+        local iy = itemRectY(i)
+        local ih = ITEMS[i].featured and L.item_h_feat or L.item_h_norm
+        if y >= iy and y <= iy + ih then
+            s.hover = i
+            return
+        end
+    end
+end
+
+function scene.mousepressed(x, y, button)
+    if button ~= 1 then return end
+    local s = scene.state
+    if s.hover > 0 then
+        s.selected = s.hover
+        confirmSelection()
+    end
+end
+
+--================================================================
+-- DRAW
+--================================================================
+local function drawTitle()
+    local lg = love.graphics
+    lg.setFont(love.graphics.newFont(28))
+    setColor(COLOR.text)
+    lg.printf("MUTRIS", 0, L.title_y, VW, "center")
+
+    lg.setFont(love.graphics.newFont(11))
+    setColor(COLOR.cyan)
+    drawDiamond(VW / 2 - 110, L.subtitle_y + 6, 4, COLOR.gold, 1)
+    lg.printf(scene.cache.skin_str, 0, L.subtitle_y, VW, "center")
+    drawDiamond(VW / 2 + 110, L.subtitle_y + 6, 4, COLOR.gold, 1)
+end
+
+local function drawItem(i)
+    local lg = love.graphics
+    local item = ITEMS[i]
+    local s = scene.state
+    local glow = scene.led.glow[i]
+    local selected = (s.selected == i)
+    local hovered  = (s.hover == i)
+
+    local h = item.featured and L.item_h_feat or L.item_h_norm
+    local y = itemRectY(i)
+    local x, w = L.list_x, L.list_w
+
+    local fill = item.featured and COLOR.panel_feat or (hovered and COLOR.panel_hov or COLOR.panel)
+    local borderW = 1.5 + glow * 1.5
+    drawChamferedPanel(x, y, w, h, fill, item.dim, borderW)
+
+    if glow > 0.02 then
+        lg.setColor(item.color[1], item.color[2], item.color[3], 0.65 * glow)
+        lg.setLineWidth(2.5)
+        lg.polygon("line", fillChamferBuf(x, y, w, h, CHAMFER))
+    end
+
+    -- 3px Neon Accent Bar
+    setColor(item.color)
+    lg.rectangle("fill", x, y + 4, 3, h - 8)
+
+    -- Featured Diamonds (Campaign)
+    if item.featured then
+        local pulse = 0.6 + 0.4 * math.sin(s.t * 3)
+        drawDiamond(x + 14, y + h / 2, 5, COLOR.gold, pulse)
+        drawDiamond(x + w - 14, y + h / 2, 5, COLOR.gold, pulse)
+    end
+
+    -- Activity LED
+    local ledx = item.featured and x + 30 or x + 14
+    lg.setColor(item.color[1], item.color[2], item.color[3], selected and 1 or 0.35)
+    lg.circle("fill", ledx, y + h / 2, 3)
+
+    -- Title
+    lg.setFont(love.graphics.newFont(13))
+    setColor(selected and COLOR.text or COLOR.text_dim)
+    lg.printf(item.title, x, y + (item.featured and 10 or 7), w, "center")
+
+    -- Subtitle
+    lg.setFont(love.graphics.newFont(9))
+    setColor(item.color)
+    lg.printf(item.sub, x, y + (item.featured and 30 or 22), w, "center")
+
+    -- Tactical Badge Pill
+    local badge_w = 14 + #item.badge * 5
+    local bx, by = x + w - badge_w - 10, y + 5
+    setColor(item.dim)
+    lg.rectangle("fill", bx, by, badge_w, 12, 2, 2)
+    setColor(item.color)
+    lg.rectangle("line", bx, by, badge_w, 12, 2, 2)
+    lg.print(item.badge, bx + 7, by + 1)
+end
+
+local function drawLegend()
+    local lg = love.graphics
+    lg.setFont(love.graphics.newFont(9))
+    setColor(COLOR.text_faint)
+    lg.printf(
+        "[ ARRIBA / ABAJO ] NAVEGAR  |  [ ENTER ] SELECCIONAR  |  [ F5 / F6 ] CAMBIAR SKIN  |  [ F9 ] REC  |  [ F12 ] CAPTURA",
+        0, L.legend_y, VW, "center"
+    )
+
+    if scene.state.rec_flash > 0 then
+        lg.setColor(COLOR.red[1], COLOR.red[2], COLOR.red[3], scene.state.rec_flash)
+        lg.circle("fill", VW - 24, L.footer_y - 10, 5)
+    end
+end
+
+function scene.draw()
+    local lg = love.graphics
+
+    -- Reset de pipeline para evitar fugas de OpenGL
+    lg.origin()
+    lg.setShader()
+    lg.setBlendMode("alpha")
+    lg.setLineWidth(1)
+    lg.setColor(1, 1, 1, 1)
+
+    setColor(COLOR.bg)
+    lg.rectangle("fill", 0, 0, VW, VH)
+
+    drawTitle()
+    for i = 1, ITEM_COUNT do drawItem(i) end
+    drawLegend()
+
+    lg.setColor(1, 1, 1, 1)
+end
+
+scene.mousemoved_drag = function(_) end
+scene.mousereleased   = function(_, _, _) end
+
+return scene
