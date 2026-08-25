@@ -4,7 +4,7 @@
 ---@diagnostic disable: undefined-global
 -- ============================================================================
 -- MUTRIS ENGINE: THE MATRIX GRID BOARD (10x40)
--- Zero-GC / Status Blights Integration / Boss Dynamics / Palico Drone
+-- Zero-GC / Multi-Ruleset / Boss Part Breaking / Cyber-Palico Support
 -- ============================================================================
 local Board = {}
 Board.__index = Board
@@ -19,14 +19,11 @@ local FontCache        = require "tetris.font_cache"
 local AudioManager     = require "audio_manager"
 local BloomShader      = require "tetris.bloom_shader"
 local BeatLock         = require "tetris.beat_lock"
-local CombatStances    = require "combat.combat_stances"
 local KineticParry     = require "combat.kinetic_parry"
 local ThemeManager     = require "tetris.theme_manager"
-local PoiseSystem      = require "combat.poise_system"
 local PartBreaking     = require "combat.part_breaking"
 local BenchmarkManager = require "core.benchmark_manager"
 local HuntingForge     = require "combat.hunting_forge"
-local StatusBlights    = require "combat.status_blights"
 local Blackbox         = require "core.blackbox"
 local EventBus         = require "core.event_bus"
 
@@ -112,9 +109,7 @@ function Board.new(x, y, player_type, cols, rows, block_size)
     ParticleSystem.init(self)
     PPSCounter.init(self)
     BeatLock.initBoardState(self)
-    CombatStances.initBoardState(self)
     KineticParry.initBoardState(self)
-    StatusBlights.initBoardState(self)
 
     self:spawnPiece()
     return self
@@ -125,7 +120,6 @@ function Board:spawnPiece()
     local next_id = self.bag:next()
     self.active_piece = Piece.new(next_id, self)
 
-    -- 🪝 HOOK ZERO-GC: Spawn de Pieza
     EventBus.emit(EventBus.ON_PIECE_SPAWN, next_id, self.player_type == "human" and 1 or 2)
 
     if not self:canMove(self.active_piece.x, self.active_piece.y, self.active_piece.rotation) then
@@ -140,12 +134,6 @@ end
 
 function Board:hold()
     if not self.can_hold or self.is_dying or not self.active_piece then return end
-
-    local BossPhases = require "combat.boss_phases"
-    if BossPhases.isHoldLocked() and self.player_type == "human" then
-        AudioManager.playImmediateSFX("death", false)
-        return
-    end
 
     local cur_id = self.active_piece.id
     if not self.hold_piece then
@@ -167,13 +155,13 @@ function Board:enterZone()
     self.zone_timer = self.zone_max_time * self.zone_meter
     self.zone_lines_cleared = 0
 
-    StatusBlights.cleanse(self)
     EventBus.emit(EventBus.ON_ZONE_ENTER, self.player_type == "human" and 1 or 2, self.zone_tier)
 
+    local bs = self.block_size or 24
     if self.zone_tier == 2 then
         AudioManager.playImmediateSFX("zone_enter_hyper", self.player_type == "bot")
         ParticleSystem.spawnSupernova(self, {1.0, 0.85, 0.2})
-        BloomShader.triggerShockwave(self.x + (self.cols * 12), self.y + (self.visible_rows * 12))
+        BloomShader.triggerShockwave(self.x + (self.cols * bs * 0.5), self.y + (self.visible_rows * bs * 0.5))
     else
         AudioManager.playImmediateSFX("zone_enter", self.player_type == "bot")
         ParticleSystem.spawnSupernova(self, {0.0, 0.9, 1.0})
@@ -191,7 +179,7 @@ function Board:exitZone()
     self:setPopup(msg, clr, true, "BURST DETONATION")
 
     if _G.CURRENT_GAME_MODE == "boss_hunt" and self.player_type == "human" then
-        PoiseSystem.dealDamage(attack * 90, true)
+        PartBreaking.registerLineClear(self, attack, true)
     elseif self.opponent and attack > 0 then
         GarbageManager.sendGarbage(self, self.opponent, attack)
     end
@@ -284,10 +272,7 @@ function Board:checkLines(is_tspin)
         if self.player_type == "human" and _G.CURRENT_GAME_MODE == "benchmark" then
             BenchmarkManager.registerPlayerLineClear(cleared, is_tspin)
         end
-
-        StatusBlights.onPlayerLineClear(self, cleared, is_tspin)
         
-        -- 🪝 HOOK ZERO-GC: Limpieza de Líneas
         EventBus.emit(EventBus.ON_LINE_CLEAR, cleared, is_tspin and 1 or 0, self.player_type == "human" and 1 or 2, self.combo_count)
 
         if self.is_zone_active then
@@ -299,7 +284,7 @@ function Board:checkLines(is_tspin)
             if _G.CURRENT_GAME_MODE == "boss_hunt" and self.player_type == "human" then
                 PartBreaking.registerLineClear(self, cleared, is_tspin)
             elseif _G.CURRENT_GAME_MODE ~= "benchmark" or BenchmarkManager.state == BenchmarkManager.STAGE_2_PLAY then
-                local attack = GarbageManager.calculateAttack(cleared, is_tspin, false, self.combo_count, self.b2b_count, self)
+                local attack = GarbageManager.calculateAttack(cleared, is_tspin, false, self.combo_count, self.b2b_count)
                 if self.opponent and attack > 0 then
                     if _G.CURRENT_GAME_MODE == "boss_hunt" and self.player_type == "bot" and PartBreaking.parts.tail.broken then
                         attack = math.max(1, math.floor(attack * 0.5))
@@ -436,59 +421,15 @@ end
 function Board:triggerDeath()
     if self.is_dying then return end
 
-    if _G.CURRENT_GAME_MODE == "boss_hunt" and self.player_type == "bot" then
-        local BossPhases = require "combat.boss_phases"
-        if BossPhases.current_phase < 3 then
-            BossPhases.triggerPhaseAdvance(self.opponent, self)
-            return
-        end
-    end
-
-    if self.player_type == "bot" then
-        local has_garbage = false
-        for r = self.rows, 1, -1 do
-            for c = 1, self.cols do
-                if self.grid[r][c] == 8 then
-                    has_garbage = true
-                    break
-                end
-            end
-            if has_garbage then break end
-        end
-
-        if not has_garbage then
-            local clear_count = 0
-            local r = 1
-            while r <= self.rows and clear_count < 4 do
-                local row_has_blocks = false
-                for c = 1, self.cols do
-                    if self.grid[r][c] ~= 0 then row_has_blocks = true break end
-                end
-                
-                if row_has_blocks then
-                    local removed = table.remove(self.grid, r)
-                    for c = 1, self.cols do removed[c] = 0 end
-                    table.insert(self.grid, 1, removed)
-                    clear_count = clear_count + 1
-                end
-                r = r + 1
-            end
-            
-            local Blackbox = require "core.blackbox"
-            Blackbox.log("BOT_RESCUE", "[AUTO_RESCUE] MATRIX CLEARED", 0, 0)
-            self:triggerShake(12, 0.4)
-            return
-        end
-    end
-
     self.is_dying = true
     self.death_timer = 1.5
     _G.HitStopTimer = 0.25
     AudioManager.playImmediateSFX("death", self.player_type == "bot")
-    BloomShader.triggerShockwave(self.x + (self.cols * (self.block_size / 2)), self.y + (self.visible_rows * (self.block_size / 2)))
+    
+    local bs = self.block_size or 24
+    BloomShader.triggerShockwave(self.x + (self.cols * bs * 0.5), self.y + (self.visible_rows * bs * 0.5))
     self:triggerShake(16, 0.6)
 
-    -- 🪝 HOOK ZERO-GC: Muerte del Tablero
     EventBus.emit(EventBus.ON_BOARD_DEATH, self.player_type == "human" and 1 or 2)
 end
 
@@ -523,9 +464,7 @@ function Board:update(dt)
     ParticleSystem.update(self, dt)
     PPSCounter.update(self)
     BeatLock.update(self, dt)
-    CombatStances.update(self, dt)
     KineticParry.update(self, dt)
-    StatusBlights.update(self, dt)
 
     if self.player_type == "human" then
         HuntingForge.updatePalico(dt, self)
@@ -569,11 +508,9 @@ function Board:update(dt)
     end
 
     if not self.is_dying and self.active_piece then
-        if not (_G.CURRENT_GAME_MODE == "boss_hunt" and self.player_type == "bot" and PoiseSystem.is_stunned) then
-            local Input = require "input"
-            local gravity = (self.player_type == "human") and Input.getSoftDropFactor() or 0.8
-            self.active_piece:update(dt, gravity)
-        end
+        local Input = require "input"
+        local gravity = (self.player_type == "human") and Input.getSoftDropFactor() or 0.8
+        self.active_piece:update(dt, gravity)
     end
 end
 
@@ -641,11 +578,8 @@ function Board:draw()
 
     ParticleSystem.draw(self)
     BeatLock.drawFeedback(self)
-    CombatStances.drawAura(self)
     KineticParry.draw(self)
     ThemeManager.drawGarbageBar(self)
-
-    StatusBlights.drawAura(self)
 
     if self.player_type == "human" then
         HuntingForge.drawPalico(self)
@@ -715,14 +649,12 @@ function Board:pushToGrid(line_count)
     local count = math.min(20, line_count)
     local hole_col = math.random(1, self.cols)
 
-    -- Desplazar filas hacia arriba (filas 1 a 39 copian de r+1)
     for _ = 1, count do
         for r = 1, self.rows - 1 do
             for c = 1, self.cols do
                 self.grid[r][c] = self.grid[r + 1][c]
             end
         end
-        -- Inyectar la nueva fila de basura en la base (fila 40)
         for c = 1, self.cols do
             self.grid[self.rows][c] = (c == hole_col) and 0 or 8
         end
@@ -733,19 +665,13 @@ function Board:pushToGrid(line_count)
     end
 end
 
--- ALIASES DEFENSIVOS CRUZADOS
 function Board:receiveGarbage(line_count)
     if not line_count or line_count <= 0 then return end
     self.garbage_received = self.garbage_received + line_count
     self:pushToGrid(line_count)
 end
-Board.injectGarbage  = Board.receiveGarbage
+Board.injectGarbage = Board.receiveGarbage
 
--- Vincular cálculo de daño defensivo
 Board.calculateAttack = GarbageManager.calculateAttack
-
-function Board:calculateAttack(lines_cleared, is_tspin, is_b2b, combo)
-    return GarbageManager.calculateAttack(lines_cleared, is_tspin, is_b2b, combo)
-end
 
 return Board

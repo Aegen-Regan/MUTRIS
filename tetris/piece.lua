@@ -12,12 +12,10 @@ local AudioManager    = require "audio_manager"
 local SettingsManager = require "settings_manager"
 local PPSCounter      = require "tetris.pps_counter"
 local BeatLock        = require "tetris.beat_lock"
-local CombatStances   = require "combat.combat_stances"
 local KineticParry    = require "combat.kinetic_parry"
 local BloomShader     = require "tetris.bloom_shader"
 local ThemeManager    = require "tetris.theme_manager"
 local RulesetManager  = require "core.ruleset_manager"
-local StatusBlights   = require "combat.status_blights"
 local Blackbox        = require "core.blackbox"
 local EventBus        = require "core.event_bus"
 
@@ -32,16 +30,12 @@ function Piece.new(id, board)
     self.y = board and (board.visible_rows + 1) or 21
     self.locked, self.gravity_timer, self.lock_timer = false, 0, 0
 
-    self.lock_delay = RulesetManager.getLockDelay()
+    self.lock_delay = RulesetManager.getLockDelay() or 0.50
     self.move_count = 0
     self.max_resets = RulesetManager.getCurrent().max_lock_resets
 
     self.spawn_timer = 0.2
     self.last_move_was_rotate = false
-
-    if self.board then
-        CombatStances.applyPieceModifiers(self.board, self)
-    end
 
     if RulesetManager.is20G() then
         while self:move(0, 1, true) do end
@@ -95,15 +89,24 @@ function Piece:rotate(dir)
 end
 
 function Piece:checkTSpin()
-    if self.id ~= 6 or not self.last_move_was_rotate then return false end
+    if self.id ~= 6 or not self.last_move_was_rotate or not self.board then return false end
+    
     local occupied = 0
-    local corners = {{x=0,y=0}, {x=2,y=0}, {x=0,y=2}, {x=2,y=2}}
-    for _, c in ipairs(corners) do
-        local tx, ty = self.x + c.x, self.y + c.y
-        if tx < 1 or tx > self.board.cols or ty > self.board.rows or (ty >= 1 and self.board.grid[ty][tx] ~= 0) then
-            occupied = occupied + 1
-        end
-    end
+    local b = self.board
+    local g = b.grid
+    local cols, rows = b.cols, b.rows
+    local px, py = self.x, self.y
+
+    local x1, y1 = px, py
+    local x2, y2 = px + 2, py
+    local x3, y3 = px, py + 2
+    local x4, y4 = px + 2, py + 2
+
+    if x1 < 1 or x1 > cols or y1 > rows or (y1 >= 1 and g[y1][x1] ~= 0) then occupied = occupied + 1 end
+    if x2 < 1 or x2 > cols or y2 > rows or (y2 >= 1 and g[y2][x2] ~= 0) then occupied = occupied + 1 end
+    if x3 < 1 or x3 > cols or y3 > rows or (y3 >= 1 and g[y3][x3] ~= 0) then occupied = occupied + 1 end
+    if x4 < 1 or x4 > cols or y4 > rows or (y4 >= 1 and g[y4][x4] ~= 0) then occupied = occupied + 1 end
+
     return occupied >= 3
 end
 
@@ -115,9 +118,7 @@ function Piece:update(dt, gravity_speed)
     if self.locked then return end
     if self.spawn_timer > 0 then self.spawn_timer = self.spawn_timer - dt end
 
-    CombatStances.applyPieceModifiers(self.board, self)
-    local effective_gravity = CombatStances.getGravitySpeed(self.board, gravity_speed)
-
+    local effective_gravity = gravity_speed or 0.8
     if RulesetManager.is20G() then
         effective_gravity = 0.001
     end
@@ -152,8 +153,7 @@ function Piece:lock()
 
     KineticParry.openWindow(self.board)
 
-    local is_resonance = (self.board.current_stance == 3)
-    local groove_hit, bonus_lines = BeatLock.evaluate(self.board, is_resonance)
+    local groove_hit, bonus_lines = BeatLock.evaluate(self.board)
     self.board.pending_groove_bonus = bonus_lines
 
     local is_tspin = self:checkTSpin()
@@ -190,13 +190,13 @@ function Piece:lock()
         self.y
     )
 
-    -- 🪝 HOOK ZERO-GC CON COORDENADAS PRECISAS (id, x, y, rot, player_id)
     EventBus.emit(EventBus.ON_PIECE_LOCK, self.id, lock_x, lock_y, lock_rot, self.board.player_type == "human" and 1 or 2)
 
     if is_tspin then
         self.board.tspin_flash = 1.0
         self.board:triggerShake(10, 0.35)
-        BloomShader.triggerShockwave(self.board.x + 120, self.board.y + 240)
+        local bs = self.board.block_size or 24
+        BloomShader.triggerShockwave(self.board.x + (self.board.cols * bs * 0.5), self.board.y + (self.board.visible_rows * bs * 0.5))
         AudioManager.playSubBassThud(3)
         AudioManager.playVoiceAnnounce("tspin")
     end

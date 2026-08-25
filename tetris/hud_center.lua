@@ -4,25 +4,25 @@
 ---@diagnostic disable: undefined-global
 -- ============================================================================
 -- MUTRIS ENGINE: CENTER VS BADGE & PPS COMPARATOR (1280x720 WIDESCREEN)
--- 4 Estilos: CRT Mini-Oscilloscope / Arcade Versus / Esports Board / Mandala
+-- Zero-GC / Parametric Horizontal Translation (cx) / 4 Skin Styles
 -- ============================================================================
 local HUDCenter = {}
 local FontCache    = require "tetris.font_cache"
 local ThemeManager = require "tetris.theme_manager"
 
-function HUDCenter.draw(player, bot)
+function HUDCenter.draw(player, bot, center_x)
     local t = ThemeManager.getCurrent()
     local theme_idx = ThemeManager.current_theme
     local pulse = _G.AudioBeatPulse or 0
-    local energy = _G.TrackEnergyPunch or 0
     local time = love.timer.getTime()
+    local cx = center_x or 640
 
     local p1_val = (player and player.current_pps_display) or 0.0
     local bot_val = (bot and bot.current_pps_display) or 0.0
     local p1_better = p1_val >= bot_val
 
     love.graphics.push("all")
-    love.graphics.translate(640, 145)
+    love.graphics.translate(cx, 145)
 
     -- ────────────────────────────────────────────────────────────────────────
     -- SKIN 1: CYBER-DAW (Mini-Monitor CRT con Onda de Audio Activa)
@@ -34,7 +34,6 @@ function HUDCenter.draw(player, bot)
         love.graphics.setColor(0, 1.0, 0.55, 0.5 + pulse * 0.3)
         love.graphics.rectangle("line", -65, -24, 130, 48, 2)
 
-        -- Mini traza senoidal central
         love.graphics.setBlendMode("add")
         love.graphics.setColor(0, 1.0, 0.55, 0.3 + pulse * 0.4)
         for x = -20, 20, 4 do
@@ -108,7 +107,7 @@ function HUDCenter.draw(player, bot)
     -- ────────────────────────────────────────────────────────────────────────
     elseif theme_idx == 4 then
         love.graphics.setBlendMode("add")
-        local mandala_rad = 36 + pulse * 14
+        local mandala_rad = 34 + pulse * 12
         love.graphics.setColor(0.6, 0.35, 1.0, 0.25 + pulse * 0.25)
         love.graphics.circle("line", 0, 0, mandala_rad)
         love.graphics.setColor(0.1, 0.9, 1.0, 0.20)

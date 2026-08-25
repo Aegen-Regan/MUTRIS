@@ -1,5 +1,5 @@
 -- ================================================================
--- FILE: main.lua (V2 REFACTOR)
+-- FILE: main.lua (RESTART HALO & ENHANCED WATERMARK PIPELINE)
 -- ================================================================
 ---@diagnostic disable: undefined-global
 -- ============================================================================
@@ -88,24 +88,19 @@ function love.load()
     PluginManager.init()
     SceneManager.init()
     
-    -- Register our newly encapsulated generic game scene
     local SceneGame = require "scenes.scene_game"
     SceneManager.register("game", SceneGame)
     
     local SceneEditor = require "scenes.scene_editor"
     SceneManager.register("editor", SceneEditor)
 
-    -- Map old match modes to the generic game scene 
     SceneManager.register("versus", SceneGame)
     SceneManager.register("boss_hunt", SceneGame)
 
-    -- Force reload plugins if needed
     pcall(function() PluginManager.loadAllPlugins("plugins") end)
     pcall(function() PluginManager.initAllPlugins() end)
 
     MusicManager.start()
-
-    -- Start in the menu
     SceneManager.setState("menu")
 end
 
@@ -134,7 +129,6 @@ function love.update(dt)
     if FogLayer.update     then FogLayer.update(dt) end
     if ThemeManager.update then ThemeManager.update(dt) end
 
-    -- Delegate entirely to the SceneManager stack
     SceneManager.update(dt)
 end
 
@@ -142,15 +136,29 @@ function love.draw()
     love.graphics.clear(0.01, 0.01, 0.02, 1.0)
     BloomShader.beginDraw()
 
-    -- Render the active scenes via SceneManager
+    -- 1. Renderizado de Escena Activa
     SceneManager.draw()
 
-    -- Global permanent UI elements
+    -- 2. Halo Neón de Reinicio (Tecla 'R')
+    if ThemeManager.drawRestartHalo then
+        ThemeManager.drawRestartHalo()
+    end
+
+    -- 3. Marca de Agua Enriquecida Permanente (x=16, y=698)
     love.graphics.push("all")
     local t = ThemeManager.getCurrent() or { primary = {1, 1, 1} }
-    love.graphics.setFont(FontCache.get(10))
-    love.graphics.setColor(t.primary[1], t.primary[2], t.primary[3], 0.90)
-    local watermark = string.format("%s  |  SKIN: %s", _G.ENGINE_VERSION, t.name or "DEFAULT")
+    local state_str = SceneManager.getState():upper()
+    local scene_obj = SceneManager.getScene(SceneManager.getState())
+    if state_str == "GAME" and scene_obj and scene_obj.layout_style then
+        state_str = "GAME [" .. scene_obj.layout_style:upper() .. "]"
+    end
+
+    local cur_fps = love.timer.getFPS()
+    local cur_mem = collectgarbage("count") / 1024.0
+
+    love.graphics.setFont(FontCache.get(9))
+    love.graphics.setColor(t.primary[1], t.primary[2], t.primary[3], 0.92)
+    local watermark = string.format("%s  |  SCENE: %s  |  SKIN: %s  |  %3d FPS  |  RAM: %.1f MB", _G.ENGINE_VERSION, state_str, t.name or "DEFAULT", cur_fps, cur_mem)
     love.graphics.print(watermark, 16, 698)
     love.graphics.pop()
 
@@ -196,17 +204,6 @@ function love.keypressed(key)
         return
     end
 
-    local st = SceneManager.getState()
-
-    if key == "escape" and (st == "game" or st == "versus" or st == "boss_hunt") then
-        -- Instead of directly switching, we can now PUSH the pause scene
-        SceneManager.push("pause")
-        MusicManager.pause()
-        AudioManager.playMenuBack()
-        return
-    end
-
-    -- Delegate to the active scene
     SceneManager.keypressed(key)
 end
 
@@ -219,17 +216,6 @@ function love.mousepressed(x, y, button)
 end
 
 function love.gamepadpressed(joystick, button)
-    local st = SceneManager.getState()
-    
-    if st == "game" or st == "versus" or st == "boss_hunt" then
-        if button == "start" then
-            SceneManager.push("pause")
-            MusicManager.pause()
-            AudioManager.playMenuBack()
-            return
-        end
-    end
-
     SceneManager.gamepadpressed(joystick, button)
 end
 

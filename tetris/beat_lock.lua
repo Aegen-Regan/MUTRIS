@@ -21,7 +21,7 @@ function BeatLock.initBoardState(board)
     board.last_lock_timing_delta = 0.0
 end
 
-function BeatLock.evaluate(board, is_resonance_stance)
+function BeatLock.evaluate(board)
     local song_time = MusicManager.getTime()
     if song_time <= 0.001 then
         song_time = _G.RealMatchTimer or 0.0
@@ -35,9 +35,7 @@ function BeatLock.evaluate(board, is_resonance_stance)
     local dist_to_nearest_beat = math.min(fraction, 1.0 - fraction) * beat_duration
     board.last_lock_timing_delta = dist_to_nearest_beat
 
-    local window = is_resonance_stance 
-        and (MetaBalancer.get("resonance_window_ms") or 0.045)
-        or (MetaBalancer.get("beat_window_ms") or 0.035)
+    local window = MetaBalancer.get("beat_window_ms") or 0.035
 
     if dist_to_nearest_beat <= window then
         board.beat_lock_hit = true

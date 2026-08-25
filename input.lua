@@ -5,11 +5,9 @@
 local Input = {}
 
 local SettingsManager = require "settings_manager"
-local CombatStances   = require "combat.combat_stances"
 local ThemeManager    = require "tetris.theme_manager"
 local RulesetManager  = require "core.ruleset_manager"
 local HuntingForge    = require "combat.hunting_forge"
-local StatusBlights   = require "combat.status_blights"
 
 INPUT_CONFIG = {
     TIMEBASE_MODE           = "gpu",
@@ -106,15 +104,8 @@ function Input.update(dt)
     if p.locked then return end
 
     local t = dt
-    local frost_das = StatusBlights.getDASOffset(Input.player)
-    local frost_arr = StatusBlights.getARROffset(Input.player)
-
-    local das = (SettingsManager.get("das") or INPUT_CONFIG.FALLBACK_DAS) + HuntingForge.getDASOffset() + frost_das
-    local arr = math.max(INPUT_CONFIG.ARR_ABSOLUTE_MIN, (SettingsManager.get("arr") or INPUT_CONFIG.FALLBACK_ARR) + frost_arr)
-
-    if Input.player.current_stance == 1 then
-        arr = INPUT_CONFIG.ARR_ABSOLUTE_MIN
-    end
+    local das = (SettingsManager.get("das") or INPUT_CONFIG.FALLBACK_DAS) + HuntingForge.getDASOffset()
+    local arr = math.max(INPUT_CONFIG.ARR_ABSOLUTE_MIN, SettingsManager.get("arr") or INPUT_CONFIG.FALLBACK_ARR)
 
     -- Mover Izquierda
     local custom_left = SettingsManager.get("key_left") or "left"
@@ -177,14 +168,7 @@ function Input.handleAction(action)
         return
     end
 
-    if not Input.player then return end
-
-    if action == "stance_switch" then
-        CombatStances.cycleStance(Input.player)
-        return
-    end
-
-    if not Input.player.active_piece then return end
+    if not Input.player or not Input.player.active_piece then return end
     local p = Input.player.active_piece
     if p.locked then return end
 
@@ -212,7 +196,7 @@ function Input.handleAction(action)
     elseif action == "hard_drop" then
         local can_hd = not RulesetManager.allowHardDrop or RulesetManager.allowHardDrop()
         if can_hd and (Input.drop_lock_frames or 0) == 0 then
-            Input.drop_lock_frames = 2 -- Prevent double drops
+            Input.drop_lock_frames = 2
             local startY = p.y
             while p:canMove(p.x, p.y + 1, p.rotation) do
                 p.y = p.y + 1
@@ -227,7 +211,6 @@ function Input.handleAction(action)
 end
 
 function Input.keypressed(key)
-    -- 1. Atajos de Sistema / Metagame
     if key == "r" then 
         Input.handleAction("restart")
         return
@@ -239,14 +222,12 @@ function Input.keypressed(key)
         return
     end
 
-    -- 2. Mapeos Personalizados de SettingsManager (TOTAL AUTHORITY)
     local k_cw     = SettingsManager.get("key_rot_cw")
     local k_ccw    = SettingsManager.get("key_rot_ccw")
     local k_180    = SettingsManager.get("key_rot_180")
     local k_hold   = SettingsManager.get("key_hold")
     local k_hd     = SettingsManager.get("key_hard_drop")
     local k_zone   = SettingsManager.get("key_zone")
-    local k_stance = SettingsManager.get("key_stance")
 
     if k_ccw and key == k_ccw then
         Input.handleAction("rot_ccw")
@@ -260,14 +241,11 @@ function Input.keypressed(key)
         Input.handleAction("hard_drop")
     elseif k_zone and key == k_zone then
         Input.handleAction("zone")
-    elseif k_stance and key == k_stance then
-        Input.handleAction("stance_switch")
     end
 end
 
 function Input.gamepadpressed(joystick, button)
     if button == "start" then Input.handleAction("restart")
-    elseif button == "back" or button == "leftstick" or button == "rightstick" then Input.handleAction("stance_switch")
     elseif button == "a" or button == "b" then Input.handleAction("rot_cw")
     elseif button == "x" or button == "y" then Input.handleAction("rot_ccw")
     elseif button == "dpup" then Input.handleAction("rot_180")

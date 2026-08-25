@@ -1,5 +1,5 @@
 -- ================================================================
--- FILE: tetris/theme_manager.lua
+-- FILE: tetris/theme_manager.lua (NUCLEAR WHITE SWEEP HALO)
 -- ================================================================
 ---@diagnostic disable: undefined-global
 -- ============================================================================
@@ -9,14 +9,14 @@
 local ThemeManager = {}
 local FontCache = require "tetris.font_cache"
 
-ThemeManager.current_theme = 4 -- 1: DAW, 2: Strike, 3: Glass, 4: Cosmic
+ThemeManager.current_theme = 4
 
 ThemeManager.THEMES = {
     [1] = {
         id = 1,
         name = "01 // CYBER-DAW RACK",
-        primary   = {1.0, 0.60, 0.10}, -- Ámbar Analógico
-        secondary = {0.2, 0.90, 1.00}, -- Vúmetro Cyan
+        primary   = {1.0, 0.60, 0.10},
+        secondary = {0.2, 0.90, 1.00},
         accent    = {1.0, 0.20, 0.30},
         border    = {0.4, 0.25, 0.10, 0.8},
         bg_color  = {0.02, 0.015, 0.01, 1.0}
@@ -24,8 +24,8 @@ ThemeManager.THEMES = {
     [2] = {
         id = 2,
         name = "02 // NEO-KINETIC STRIKE",
-        primary   = {1.0, 0.15, 0.25}, -- Carmesí Persona 5
-        secondary = {1.0, 0.95, 0.10}, -- Amarillo Impacto
+        primary   = {1.0, 0.15, 0.25},
+        secondary = {1.0, 0.95, 0.10},
         accent    = {0.1, 1.00, 0.50},
         border    = {0.8, 0.10, 0.20, 0.9},
         bg_color  = {0.03, 0.01, 0.015, 1.0}
@@ -33,8 +33,8 @@ ThemeManager.THEMES = {
     [3] = {
         id = 3,
         name = "03 // HYPER-CLEAN GLASS",
-        primary   = {0.15, 0.85, 1.00}, -- Esports Cyan
-        secondary = {0.90, 0.95, 1.00}, -- Blanco Glaciar
+        primary   = {0.15, 0.85, 1.00},
+        secondary = {0.90, 0.95, 1.00},
         accent    = {0.40, 0.60, 1.00},
         border    = {0.20, 0.50, 0.80, 0.6},
         bg_color  = {0.01, 0.02, 0.04, 1.0}
@@ -42,15 +42,14 @@ ThemeManager.THEMES = {
     [4] = {
         id = 4,
         name = "04 // SINESTESIA COSMICA",
-        primary   = {0.70, 0.30, 1.00}, -- Violeta Astral
-        secondary = {0.10, 0.95, 0.90}, -- Cyan Nebular
-        accent    = {1.00, 0.80, 0.20}, -- Dorado Sagrado
+        primary   = {0.70, 0.30, 1.00},
+        secondary = {0.10, 0.95, 0.90},
+        accent    = {1.00, 0.80, 0.20},
         border    = {0.45, 0.20, 0.70, 0.75},
         bg_color  = {0.01, 0.005, 0.02, 1.0}
     }
 }
 
--- Búfer de Estrellas Zero-GC para Sinestesia Cósmica
 local STARS_COUNT = 90
 local stars = {}
 for i = 1, STARS_COUNT do
@@ -63,13 +62,12 @@ for i = 1, STARS_COUNT do
     }
 end
 
--- Halos y Notificaciones Pre-alocadas
 local restart_halo_timer = 0.0
+local restart_halo_duration = 0.32
 local toast_text = ""
 local toast_timer = 0.0
 local toast_color = {1, 1, 1}
 
--- Función auxiliar para dibujar diamantes procedimentales nítidos (sin cajas ▯)
 local function drawDiamond(cx, cy, size, is_filled)
     local s = size or 5
     if is_filled then
@@ -112,7 +110,11 @@ function ThemeManager.cyclePrev()
 end
 
 function ThemeManager.triggerRestartHalo()
-    restart_halo_timer = 0.28
+    restart_halo_timer = restart_halo_duration
+    local BloomShader = require "tetris.bloom_shader"
+    if BloomShader and BloomShader.triggerShockwave then
+        BloomShader.triggerShockwave(640, 360)
+    end
 end
 
 function ThemeManager.showToast(text, color)
@@ -207,42 +209,14 @@ function ThemeManager.drawPanel(x, y, w, h, title, is_selected)
     end
 end
 
--- ================================================================
--- AURA DE COMBATE Y POSTURAS (RUSH, BASTION, RESONANCE)
--- ================================================================
-function ThemeManager.drawStanceAura(board, stance_id)
-    if not board or not stance_id or stance_id <= 0 then return end
-
-    local colors = {
-        [1] = {1.0, 0.15, 0.25}, -- 1: RUSH (Carmesí)
-        [2] = {0.1, 0.85, 1.00}, -- 2: BASTION (Cyan)
-        [3] = {0.8, 0.40, 1.00}, -- 3: RESONANCE (Violeta)
-    }
-
-    local clr = colors[stance_id] or {1, 1, 1}
-    local pulse = 0.25 + math.sin(love.timer.getTime() * 4.0) * 0.10
-
-    love.graphics.push("all")
-    love.graphics.setBlendMode("add")
-    love.graphics.setLineWidth(2.5)
-    love.graphics.setColor(clr[1], clr[2], clr[3], pulse)
-    love.graphics.rectangle("line", board.x - 3, board.y - 3, 246, 486, 6)
-    love.graphics.pop()
-end
-
--- ================================================================
--- MENÚ PRINCIPAL: DIBUJADO DINÁMICO SIN GLIFOS ROTOS
--- ================================================================
 function ThemeManager.drawMenu(menuItems, menuSubtitles, menuSelection, MetaBalancer)
     ThemeManager.drawBackground()
     local t = ThemeManager.getCurrent()
 
-    -- Título Central
     love.graphics.setFont(FontCache.get(34))
     love.graphics.setColor(1.0, 1.0, 1.0, 0.98)
     love.graphics.printf("MUTRIS", 0, 22, 1280, "center")
 
-    -- Subtítulo con diamantes procedimentales
     local sub_text = t.name
     local tw = FontCache.get(11):getWidth(sub_text)
     love.graphics.setFont(FontCache.get(11))
@@ -256,7 +230,6 @@ function ThemeManager.drawMenu(menuItems, menuSubtitles, menuSelection, MetaBala
     local total_items = #menuItems
     local btn_w = 440
 
-    -- Geometría Dinámica: 8 botones perfectamente proporcionados
     local menu_start_y = 90
     local available_h = 480
     local menu_spacing = math.min(64, math.floor(available_h / total_items))
@@ -270,7 +243,6 @@ function ThemeManager.drawMenu(menuItems, menuSubtitles, menuSelection, MetaBala
         ThemeManager.drawPanel(bx, by, btn_w, btn_h, "", is_sel)
 
         if is_sel then
-            -- Diamantes laterales procedurales
             love.graphics.setColor(t.accent[1], t.accent[2], t.accent[3], 0.98)
             drawDiamond(bx + 18, by + math.floor(btn_h / 2), 5, true)
             drawDiamond(bx + btn_w - 18, by + math.floor(btn_h / 2), 5, true)
@@ -293,7 +265,6 @@ function ThemeManager.drawMenu(menuItems, menuSubtitles, menuSelection, MetaBala
         end
     end
 
-    -- Barra de Atajos
     local footer_y = 595
     love.graphics.setFont(FontCache.get(9))
     love.graphics.setColor(0.45, 0.55, 0.65, 0.75)
@@ -358,19 +329,47 @@ function ThemeManager.drawGhostPiece(piece, bx, by, shape, gy, alpha)
     end
 end
 
+-- ============================================================================
+-- 💥 BARRIDO BLANCO NUCLEAR EXPANSIVO & FLASH ARCADE (TECLA 'R')
+-- ============================================================================
 function ThemeManager.drawRestartHalo()
     if restart_halo_timer <= 0 then return end
-    local progress = restart_halo_timer / 0.28
-    local alpha = progress * 0.75
-    local radius = (1.0 - progress) * 640
+
+    local progress = restart_halo_timer / restart_halo_duration -- 1.0 -> 0.0
+    local expand = 1.0 - progress -- 0.0 -> 1.0
+    local radius = expand * 950.0 -- Barre más allá de las esquinas (734px)
+    local sweep_alpha = math.sin(progress * math.pi * 0.5) -- Mantiene alto brillo durante el viaje
+    local t = ThemeManager.getCurrent() or { primary = {0.1, 0.9, 1.0}, secondary = {1.0, 0.85, 0.2} }
 
     love.graphics.push("all")
     love.graphics.setBlendMode("add")
-    love.graphics.setColor(1.0, 1.0, 1.0, alpha * 0.4)
-    love.graphics.circle("fill", 640, 360, radius * 0.4)
-    love.graphics.setLineWidth(4.0)
-    love.graphics.setColor(0.2, 0.9, 1.0, alpha)
+
+    -- 1. Flashazo Blanco Nuclear Inicial (Limpia toda la pantalla en t < 0.10s)
+    if progress > 0.65 then
+        local flash_p = (progress - 0.65) / 0.35
+        love.graphics.setColor(1.0, 1.0, 1.0, flash_p * 0.65)
+        love.graphics.rectangle("fill", 0, 0, 1280, 720)
+    end
+
+    -- 2. Disco Expansivo de Luz Central
+    love.graphics.setColor(1.0, 1.0, 1.0, (1.0 - expand) * 0.35)
+    love.graphics.circle("fill", 640, 360, radius * 0.30)
+
+    -- 3. EL GRAN HAZ BLANCO LÁSER EXPANSIVO (Grosor 18px -> 8px)
+    love.graphics.setLineWidth(18.0 * (1.0 - expand * 0.55))
+    love.graphics.setColor(1.0, 1.0, 1.0, sweep_alpha * 0.98)
     love.graphics.circle("line", 640, 360, radius)
+
+    -- 4. Estela de Aura Neón Primaria Pegada al Anillo
+    love.graphics.setLineWidth(6.0)
+    love.graphics.setColor(t.primary[1], t.primary[2], t.primary[3], sweep_alpha * 0.85)
+    love.graphics.circle("line", 640, 360, math.max(0, radius - 8))
+
+    -- 5. Estela de Aura Neón Secundaria Exterior
+    love.graphics.setLineWidth(3.0)
+    love.graphics.setColor(t.secondary[1], t.secondary[2], t.secondary[3], sweep_alpha * 0.65)
+    love.graphics.circle("line", 640, 360, radius + 8)
+
     love.graphics.pop()
 end
 
