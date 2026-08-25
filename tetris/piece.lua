@@ -61,6 +61,11 @@ function Piece:move(dx, dy, is_gravity)
             self:resetLock() 
             self.last_move_was_rotate = false
             EventBus.emit(EventBus.ON_PIECE_MOVE, self.id, dx, dy, self.board.player_type == "human" and 1 or 2)
+            
+            if self.board.is_boss then
+                self.board:triggerShake(6, 0.15)
+                AudioManager.playSubBassThud(1)
+            end
         end
         return true
     end
@@ -81,6 +86,12 @@ function Piece:rotate(dir)
                 self:resetLock()
                 self.last_move_was_rotate = true
                 EventBus.emit(EventBus.ON_PIECE_ROTATE, self.id, next_rot, self.board.player_type == "human" and 1 or 2)
+                
+                if self.board.is_boss then
+                    self.board:triggerShake(8, 0.20)
+                    AudioManager.playSubBassThud(2)
+                end
+                
                 return true
             end
         end
@@ -182,6 +193,12 @@ function Piece:lock()
     self.board.pieces_placed = self.board.pieces_placed + 1
     PPSCounter.register(self.board)
     AudioManager.playImmediateSFX("drop", self.board.player_type == "bot", self.y)
+
+    if self.board.is_boss then
+        _G.HitStopTimer = 0.20
+        self.board:triggerShake(22, 0.60)
+        AudioManager.playSubBassThud(4)
+    end
 
     Blackbox.log(
         (self.board.player_type == "human") and "P1_LOCK" or "BOT_LOCK",

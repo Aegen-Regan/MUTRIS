@@ -259,6 +259,11 @@ function AIBot:update(dt)
     end
 
     local step_interval = 1.0 / math.max(0.5, self.pps * 4.0)
+    
+    if self.board.is_boss then
+        step_interval = step_interval * 1.85 -- Slower, deliberate steps
+    end
+
     self.step_timer = self.step_timer + dt
 
     while self.step_timer >= step_interval do

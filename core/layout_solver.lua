@@ -41,15 +41,17 @@ function LayoutSolver.solve(layout_style, boards_config, sw, sh)
             draw_hold = true
         }
 
-        -- Boss Titán: Coloso Descomunal (18x20 visible -> 450x500px)
-        local boss_bs = 25
-        local boss_w = (boards_config[2].cols or 18) * boss_bs
-        local boss_h = math.floor((boards_config[2].rows or 40) / 2) * boss_bs
+        -- Boss Titán: Coloso Descomunal (10x24 (12 visibles) -> 450x540px)
+        local boss_bs = 45
+        local boss_cols = 10
+        local boss_rows = 24
+        local boss_w = boss_cols * boss_bs
+        local boss_h = math.floor(boss_rows / 2) * boss_bs
         local boss_x = 700
         local boss_y = math.floor((sh - boss_h) / 2) + 15
 
         result.boards[2] = {
-            x = boss_x, y = boss_y, block_size = boss_bs, cols = boards_config[2].cols or 18, rows = boards_config[2].rows or 40,
+            x = boss_x, y = boss_y, block_size = boss_bs, cols = boss_cols, rows = boss_rows,
             type = boards_config[2].type or "bot", ai_profile = boards_config[2].ai_profile or "boss",
             panel_hold_x = boss_x + boss_w + 10,
             panel_next_x = boss_x - 56 - 8,
