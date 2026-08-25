@@ -35,6 +35,7 @@ local SceneManager       = require "core.scene_manager"
 local EventBus           = require "core.event_bus"
 local PluginManager      = require "core.plugin_manager"
 local AnomalyManager     = require "tetris.anomaly_manager"
+_G.GifEncoder            = require "core.gif_encoder"
 
 local socket = require("socket")
 local sc_rx_socket = nil
@@ -110,6 +111,11 @@ function love.load()
     PluginManager.init()
     SceneManager.init()
     
+    -- Forced global hardware loop boot
+    if _G.GifEncoder and _G.GifEncoder.init then
+        _G.GifEncoder.init()
+    end
+    
     local SceneGame = require "scenes.scene_game"
     SceneManager.register("game", SceneGame)
     
@@ -131,6 +137,12 @@ function love.resize(w, h)
 end
 
 function love.update(dt)
+    -- --- 1. RUN THE GIF HUD FLASH TIMER OVERFLOW PROTECTION ---
+    -- Dynamic HUD timer countdown update
+    if _G.GifEncoder and _G.GifEncoder.update_hud then
+        _G.GifEncoder.update_hud(dt)
+    end
+
     -- --- RUN THE Parametric ANOMALY TIMER EACH FRAME ---
     if AnomalyManager and AnomalyManager.update then
         AnomalyManager.update(dt)
@@ -247,11 +259,29 @@ function love.draw()
     end
 
     if ThemeManager.drawToast then ThemeManager.drawToast() end
+
+    -- --- CRITICAL RE-ALINEATION: EXPLICIT SCREENSHOT SNAP FROM FRONT BUFFER ---
+    if _G.GifEncoder and _G.GifEncoder.capture_frame then
+        _G.GifEncoder.capture_frame()
+    end
+
+    -- --- DRAW INDESTRUCTIBLE PARADIGM NOTIFICATION OVER HUD GRAPHICS ---
+    if _G.GifEncoder and _G.GifEncoder.draw_hud_indicator then
+        _G.GifEncoder.draw_hud_indicator()
+    end
 end
 
-function love.keypressed(key)
+function love.keypressed(key, scancode, isrepeat)
+    -- --- SYSTEM CAPTURE DISPATCHER (FORCED GLOBAL ROUTING) ---
+    if key == "f12" then
+        if _G.GifEncoder and _G.GifEncoder.compile_clip then
+            _G.GifEncoder.compile_clip()
+        end
+        return
+    end
+
     if key == "f9" then _G.ToggleRecording(); return end
-    if key == "f12" or key == "f2" or key == "printscreen" or key == "sysrq" then _G.TakeScreenshot(); return end
+    if key == "f2" or key == "printscreen" or key == "sysrq" then _G.TakeScreenshot(); return end
     if key == "f5" then ThemeManager.cycleNext(); AudioManager.playSliderTick(); return end
     if key == "f6" then ThemeManager.cyclePrev(); AudioManager.playSliderTick(); return end
     if key == "f7" then 
