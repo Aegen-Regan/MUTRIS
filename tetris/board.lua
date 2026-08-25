@@ -1,5 +1,5 @@
 -- ================================================================
--- FILE: tetris/board.lua
+-- FILE: tetris/board.lua (METEORIC BOSS OVERHAUL ACTIVATED)
 -- ================================================================
 ---@diagnostic disable: undefined-global
 -- ============================================================================
@@ -24,6 +24,7 @@ local ThemeManager     = require "tetris.theme_manager"
 local PartBreaking     = require "combat.part_breaking"
 local BenchmarkManager = require "core.benchmark_manager"
 local HuntingForge     = require "combat.hunting_forge"
+local BossProjectiles  = require "combat.boss_projectiles"
 local Blackbox         = require "core.blackbox"
 local EventBus         = require "core.event_bus"
 
@@ -47,6 +48,7 @@ function Board.new(x, y, player_type, cols, rows, block_size)
     self.block_size = block_size or 24
     self.visible_rows = math.floor(self.rows / 2)
     self.opponent = nil
+    self.is_boss = false
 
     self.grid = {}
     for r = 1, self.rows do
@@ -178,7 +180,7 @@ function Board:exitZone()
     self.zone_meter = 0.0
     self:setPopup(msg, clr, true, "BURST DETONATION")
 
-    if _G.CURRENT_GAME_MODE == "boss_hunt" and self.player_type == "human" then
+    if (_G.CURRENT_GAME_MODE == "boss_hunt" or self.is_boss) and self.player_type == "human" then
         PartBreaking.registerLineClear(self, attack, true)
     elseif self.opponent and attack > 0 then
         GarbageManager.sendGarbage(self, self.opponent, attack)
@@ -281,14 +283,16 @@ function Board:checkLines(is_tspin)
             self.lines_cleared = self.lines_cleared + cleared
             self.max_combo = math.max(self.max_combo, self.combo_count)
             
-            if _G.CURRENT_GAME_MODE == "boss_hunt" and self.player_type == "human" then
+            local is_boss_mode = (_G.CURRENT_GAME_MODE == "boss_hunt" or self.is_boss or (self.opponent and self.opponent.is_boss))
+
+            -- ☄️ BOMBARDEO DE METEORITOS EN MODO BOSS HUNT (CERO BASURA GRIS PLANA)
+            if is_boss_mode and self.player_type == "bot" and self.opponent then
+                BossProjectiles.spawnBarrage(self, self.opponent, cleared)
+            elseif is_boss_mode and self.player_type == "human" then
                 PartBreaking.registerLineClear(self, cleared, is_tspin)
             elseif _G.CURRENT_GAME_MODE ~= "benchmark" or BenchmarkManager.state == BenchmarkManager.STAGE_2_PLAY then
                 local attack = GarbageManager.calculateAttack(cleared, is_tspin, false, self.combo_count, self.b2b_count)
                 if self.opponent and attack > 0 then
-                    if _G.CURRENT_GAME_MODE == "boss_hunt" and self.player_type == "bot" and PartBreaking.parts.tail.broken then
-                        attack = math.max(1, math.floor(attack * 0.5))
-                    end
                     GarbageManager.sendGarbage(self, self.opponent, attack)
                     self.garbage_sent = self.garbage_sent + attack
                 end
@@ -585,7 +589,7 @@ function Board:draw()
         HuntingForge.drawPalico(self)
     end
 
-    if self.player_type == "bot" and _G.CURRENT_GAME_MODE == "boss_hunt" then
+    if self.player_type == "bot" and (_G.CURRENT_GAME_MODE == "boss_hunt" or self.is_boss) then
         PartBreaking.drawIndicators(self)
     end
 
@@ -640,9 +644,6 @@ function Board:draw()
     love.graphics.pop()
 end
 
--- ================================================================
--- GARBAGE INJECTION & ROW-SHIFTING (ZERO-GC)
--- ================================================================
 function Board:pushToGrid(line_count)
     if not line_count or line_count <= 0 then return end
 

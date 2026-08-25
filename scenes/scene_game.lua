@@ -4,29 +4,30 @@
 ---@diagnostic disable: undefined-global
 -- ============================================================================
 -- MUTRIS ENGINE: DYNAMIC GAMEPLAY SCENE & BATTLE ROYALE MULTI-LAYOUT
--- Clean 240Hz, LayoutSolver Integration, Track Rotation on 'R' Restart
+-- Clean 240Hz, LayoutSolver Integration, Meteor Projectile Orchestration
 -- ============================================================================
 local SceneGame = {}
 
-local Board          = require "tetris.board"
-local AIBot          = require "tetris.ai_bot"
-local Input          = require "input"
-local EventBus       = require "core.event_bus"
-local ThemeManager   = require "tetris.theme_manager"
-local FogLayer       = require "tetris.fog_layer"
-local HUDPanels      = require "tetris.hud_panels"
-local HUDCenter      = require "tetris.hud_center"
-local AnomalyManager = require "tetris.anomaly_manager"
-local Telemetry      = require "tetris.telemetry"
-local Blackbox       = require "core.blackbox"
-local FontCache      = require "tetris.font_cache"
-local AudioManager   = require "audio_manager"
-local MusicManager   = require "music_manager"
-local TrackManager   = require "track_manager"
-local MetaBalancer   = require "core.meta_balancer"
-local SceneManager   = require "core.scene_manager"
-local PartBreaking   = require "combat.part_breaking"
-local LayoutSolver   = require "core.layout_solver"
+local Board           = require "tetris.board"
+local AIBot           = require "tetris.ai_bot"
+local Input           = require "input"
+local EventBus        = require "core.event_bus"
+local ThemeManager    = require "tetris.theme_manager"
+local FogLayer        = require "tetris.fog_layer"
+local HUDPanels       = require "tetris.hud_panels"
+local HUDCenter       = require "tetris.hud_center"
+local AnomalyManager  = require "tetris.anomaly_manager"
+local Telemetry       = require "tetris.telemetry"
+local Blackbox        = require "core.blackbox"
+local FontCache       = require "tetris.font_cache"
+local AudioManager    = require "audio_manager"
+local MusicManager    = require "music_manager"
+local TrackManager    = require "track_manager"
+local MetaBalancer    = require "core.meta_balancer"
+local SceneManager    = require "core.scene_manager"
+local PartBreaking    = require "combat.part_breaking"
+local BossProjectiles = require "combat.boss_projectiles"
+local LayoutSolver    = require "core.layout_solver"
 
 SceneGame.boards = {}
 SceneGame.bots = {}
@@ -51,6 +52,8 @@ function SceneGame.enter(data)
         data = data or {}
         SceneGame.last_config = data
         SceneGame.mode = data.mode or "versus"
+        _G.CURRENT_GAME_MODE = SceneGame.mode -- ⚡ SINCRONIZACIÓN GLOBAL CRÍTICA
+
         SceneGame.return_scene = data.return_scene or "menu"
         SceneGame.layout_style = data.layout_style or (data.mode == "boss_hunt" and "gigantic_boss" or (#(data.boards or {}) > 2 and "multibot" or "versus"))
         SceneGame.boards = {}
@@ -76,6 +79,7 @@ function SceneGame.enter(data)
         for i, b_info in ipairs(layout.boards) do
             local b = Board.new(b_info.x, b_info.y, b_info.type, b_info.cols, b_info.rows, b_info.block_size)
             b.layout_info = b_info
+            b.is_boss = (b_info.type == "bot" and (SceneGame.mode == "boss_hunt" or b_info.ai_profile == "boss"))
             table.insert(SceneGame.boards, b)
 
             if b_info.type == "human" then
@@ -89,8 +93,9 @@ function SceneGame.enter(data)
 
         SceneGame.relinkOpponents()
 
-        if SceneGame.mode == "boss_hunt" then
+        if SceneGame.mode == "boss_hunt" or SceneGame.layout_style == "gigantic_boss" then
             PartBreaking.init()
+            BossProjectiles.init()
         end
         
         EventBus.emit("on_match_restart")
@@ -107,11 +112,7 @@ function SceneGame.enter(data)
     end
 end
 
--- ============================================================================
--- 🔄 REINICIO DINÁMICO CON ROTACIÓN DE MÚSICA & HALO VISUAL (TECLA 'R')
--- ============================================================================
 function SceneGame.restartMatch()
-    -- 1. Rotar pista musical
     if TrackManager and TrackManager.nextTrack then
         TrackManager.nextTrack()
     end
@@ -119,12 +120,10 @@ function SceneGame.restartMatch()
         MusicManager.start()
     end
 
-    -- 2. Disparar halo de impacto visual de reinicio
     if ThemeManager and ThemeManager.triggerRestartHalo then
         ThemeManager.triggerRestartHalo()
     end
 
-    -- 3. Notificación de nueva pista en pantalla
     local cur_track = TrackManager and TrackManager.getCurrentTrack()
     if cur_track and ThemeManager and ThemeManager.showToast then
         ThemeManager.showToast("TRACK: " .. (cur_track.name or "DEFAULT THEME"), {0.1, 0.95, 1.0})
@@ -164,11 +163,11 @@ function SceneGame.update(dt)
                 SceneGame.bots[i]:update(dt)
             end
 
-            if SceneGame.mode == "boss_hunt" then
+            if SceneGame.mode == "boss_hunt" or SceneGame.layout_style == "gigantic_boss" then
                 PartBreaking.update(dt)
+                BossProjectiles.update(dt)
             end
 
-            -- Vigilante Battle Royale / Last Man Standing
             local total_boards = #SceneGame.boards
             local alive_count = 0
             local human_alive = false
@@ -216,7 +215,6 @@ function SceneGame.update(dt)
                     end
                 end
             else
-                -- Multi-Bot Battle Royale (3+ Tableros)
                 if not human_alive then
                     local p1 = SceneGame.boards[1]
                     if p1 and p1.is_dying and p1.death_timer <= 0.35 then
@@ -276,7 +274,7 @@ function SceneGame.draw()
         local layout = SceneGame.layout_data or {}
         local num_b = #SceneGame.boards
         local is_multibot = layout.is_multibot or (num_b > 2)
-        local is_boss = layout.is_boss or false
+        local is_boss = layout.is_boss or (SceneGame.mode == "boss_hunt")
         local cx = layout.center_hud_x or 640
 
         -- 1. Renderizado de Tableros y Paneles
@@ -286,7 +284,10 @@ function SceneGame.draw()
             if HUDPanels.draw then HUDPanels.draw(b, is_multibot, is_boss) end
         end
 
-        -- 2. HUD Central: En 1v1 y Gigantic Boss se dibuja en cx paramétrico sin solapamiento
+        -- 2. Meteoritos Balísticos
+        BossProjectiles.draw()
+
+        -- 3. HUD Central
         if num_b == 2 and not is_multibot then
             local p1 = SceneGame.boards[1]
             local p2 = SceneGame.boards[2]
@@ -300,7 +301,7 @@ function SceneGame.draw()
             end
         end
 
-        -- 3. Modal de Victoria / Derrota
+        -- 4. Modal de Victoria / Derrota
         if SceneGame.match_over then
             local t = ThemeManager.getCurrent()
             local mx, my = 640 - 280, 360 - 170
@@ -412,10 +413,7 @@ function SceneGame.gamepadpressed(joystick, button)
         return true
     end
 
-    if button == "start" then
-        SceneGame.restartMatch()
-        return true
-    elseif button == "back" then
+    if button == "back" then
         SceneManager.setState(SceneGame.return_scene or "menu")
         AudioManager.playMenuBack()
         return true
