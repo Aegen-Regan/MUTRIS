@@ -201,6 +201,7 @@ function SceneGame.update(dt)
             end
 
             SoundManager.update(dt)
+            OscClient.update(dt)
 
             -- Update all active matrices grids on screen
             for i = 1, #SceneGame.boards do
