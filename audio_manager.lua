@@ -3,6 +3,7 @@
 -- ================================================================
 ---@diagnostic disable: undefined-global
 local AudioManager = {}
+local ffi = require("ffi")
 local SettingsManager = require "settings_manager"
 local EventBus = require "core.event_bus"
 
@@ -33,10 +34,13 @@ AudioManager.crochet = 60 / 130
 AudioManager.song_position_samples = 0
 AudioManager.current_beat = 0
 AudioManager.beat_pulse_flag = false
-AudioManager.udp = nil
+AudioManager.udp_socket = nil
 AudioManager._osc_cache = {
-    ["kick_30hz"] = "/s_new\0\0,s\0\0kick_30hz\0\0\0" -- Raw OSC bytes cacheado para Zero-GC
+    ["kick_30hz"] = "/s_new\0\0,s\0\0kick_30hz\0\0\0"
 }
+AudioManager._titan_osc_cache = ffi.new("char[64]", "/s_new\0\0,siiissff\0titan_thud\0\0\0\255\255\255\255\0\0\0\0\0\0\0\1pan\0\0\0\0\0weight\0\0\0\0\0\0")
+AudioManager._click_osc_cache = ffi.new("char[64]", "/s_new\0\0,siiissf\0\0glitch_click\0\0\0\255\255\255\255\0\0\0\0\0\0\0\1rate\0\0\0\0\0\0\0")
+AudioManager._chord_osc_cache = ffi.new("char[96]", "/s_new\0\0,siiisffff\0camelot_chord\0\0\255\255\255\255\0\0\0\0\0\0\0\1f1\0\0\0\0\0f2\0\0\0\0\0f3\0\0\0\0\0release\0\0\0\0")
 
 AudioManager.beat_timer = 0
 AudioManager.base_bpm = 120
@@ -75,8 +79,8 @@ end
 function AudioManager.init_external_backends()
     local socket_ok, socket = pcall(require, "socket")
     if socket_ok and socket then
-        AudioManager.udp = socket.udp()
-        AudioManager.udp:setpeername(AudioManager.sc_host, AudioManager.sc_port)
+        AudioManager.udp_socket = socket.udp()
+        AudioManager.udp_socket:setpeername(AudioManager.sc_host, AudioManager.sc_port)
     end
 
     if _G.RustArchon and _G.RustArchon.init_audio_bridge then
@@ -91,11 +95,83 @@ end
 
 -- Función interna de bajo impacto para enviar comandos OSC a scsynth
 function AudioManager.trigger_sc_synth(synth_name, intensity)
-    if AudioManager.udp then
+    if AudioManager.udp_socket then
         local payload = AudioManager._osc_cache[synth_name]
         if payload then
-            AudioManager.udp:send(payload)
+            AudioManager.udp_socket:send(payload)
         end
+    end
+end
+
+-- Disparador espacial de subgraves para los impactos del Titán
+function AudioManager.trigger_titan_sism(grid_column, drop_height)
+    if not AudioManager.udp_socket then return end
+
+    -- Mapeo: Columna (1 a 10) -> Paneo Estéreo (-1.0 a 1.0)
+    local target_pan = ((grid_column - 1) / 9) * 2 - 1
+    -- El factor de peso escala según la altura del drop (máximo multiplicador x2.5)
+    local target_weight = 1.0 + (math.min(drop_height or 0, 20) / 20) * 1.5
+
+    -- Hack de punteros FFI: Inyección de floats en los offsets fijos de memoria (Zero-GC)
+    local raw_ptr = ffi.cast("char*", AudioManager._titan_osc_cache)
+    ffi.cast("float*", raw_ptr + 48)[0] = target_pan
+    ffi.cast("float*", raw_ptr + 60)[0] = target_weight
+
+    -- Envío instantáneo por la red local
+    AudioManager.udp_socket:send(ffi.string(AudioManager._titan_osc_cache, 64))
+
+    local BlackBox = package.loaded["core.blackbox"]
+    if BlackBox then
+        BlackBox.record(BlackBox.TYPES.AUDIO, target_pan, "TITAN_THUD_DISPATCHED")
+    end
+end
+
+-- Disparador de transitorios de alta frecuencia para rotaciones del jugador
+function AudioManager.trigger_player_click()
+    if not AudioManager.udp_socket then return end
+
+    -- Extraemos las Piezas Por Segundo actuales del juego
+    local PPSCounter = package.loaded["tetris.pps_counter"] or _G.PPSCounter
+    local current_pps = (PPSCounter and PPSCounter.get_current_pps) and PPSCounter.get_current_pps() or 1.0
+    -- Escalamos el tono rítmico según la velocidad competitiva (min 1.0, max 2.5)
+    local target_rate = math.min(math.max(current_pps / 2.0, 1.0), 2.5)
+
+    -- Hack de punteros FFI: Modificamos el valor de 'rate' directo en los bytes estáticos
+    local raw_ptr = ffi.cast("char*", AudioManager._click_osc_cache)
+    ffi.cast("float*", raw_ptr + 52)[0] = target_rate
+
+    -- Escupimos el buffer mutado hacia el puerto 57110 de SuperCollider
+    AudioManager.udp_socket:send(ffi.string(AudioManager._click_osc_cache, 64))
+
+    local BlackBox = package.loaded["core.blackbox"]
+    if BlackBox then
+        BlackBox.record(BlackBox.TYPES.AUDIO, target_rate, "PLAYER_ASMR_DISPATCHED")
+    end
+end
+
+function AudioManager.trigger_line_clear_chord(lines_cleared)
+    if not AudioManager.udp_socket then return end
+    
+    local TrackManager = package.loaded["core.track_manager"] or _G.TrackManager
+    local base_freq = (TrackManager and TrackManager.get_current_key_freq) and TrackManager.get_current_key_freq() or 220.0
+    
+    local f1 = base_freq
+    local f2 = base_freq * 1.201  -- Tercera aproximada
+    local f3 = base_freq * 1.498  -- Quinta justa aproximada
+    
+    local target_release = 0.4 + (math.min(lines_cleared or 1, 4) * 0.2)
+    
+    local raw_ptr = ffi.cast("char*", AudioManager._chord_osc_cache)
+    ffi.cast("float*", raw_ptr + 52)[0] = f1
+    ffi.cast("float*", raw_ptr + 64)[0] = f2
+    ffi.cast("float*", raw_ptr + 76)[0] = f3
+    ffi.cast("float*", raw_ptr + 88)[0] = target_release
+    
+    AudioManager.udp_socket:send(ffi.string(AudioManager._chord_osc_cache, 96))
+    
+    local BlackBox = package.loaded["core.blackbox"]
+    if BlackBox then
+        BlackBox.record(BlackBox.TYPES.AUDIO, lines_cleared * 1.0, "CAMELOT_CHORD_DISPATCHED")
     end
 end
 
