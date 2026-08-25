@@ -87,7 +87,6 @@ function love.load()
     if BloomShader.init     then BloomShader.init() end
     if FogLayer.init        then FogLayer.init() end
     
-    -- Inicialización unificada de Audio & OSC al arrancar el motor
     if SoundManager and SoundManager.init then SoundManager.init() end
     if OscClient and OscClient.init then OscClient.init("127.0.0.1", 8000) end
     
@@ -118,12 +117,10 @@ function love.load()
     PluginManager.init()
     SceneManager.init()
     
-    -- Forced global hardware loop boot
     if _G.GifEncoder and _G.GifEncoder.init then
         _G.GifEncoder.init()
     end
     
-    -- Pre-registro explícito de todas las escenas para evitar lag y saltos de canvas
     local SceneMenu = require "scenes.scene_menu"
     SceneManager.register("menu", SceneMenu)
 
@@ -142,8 +139,6 @@ function love.load()
     pcall(function() PluginManager.initAllPlugins() end)
 
     MusicManager.start()
-    
-    -- Forzar cálculo de viewport final y arranque en Menú
     updateViewScaling()
     SceneManager.setState("menu")
 end
@@ -151,40 +146,51 @@ end
 function love.resize(w, h)
     updateViewScaling()
 end
-
 function love.update(dt)
     -- --- 1. RUN THE GIF HUD FLASH TIMER OVERFLOW PROTECTION ---
     if _G.GifEncoder and _G.GifEncoder.update_hud then
         _G.GifEncoder.update_hud(dt)
     end
 
+    -- Recuperación segura de la escena activa real a través del SceneManager
+    local current_scene = SceneManager.getScene(SceneManager.getState())
+    local is_paused = current_scene and current_scene.is_paused
+
     -- --- RUN THE Parametric ANOMALY TIMER EACH FRAME ---
-    if AnomalyManager and AnomalyManager.update then
-        AnomalyManager.update(dt)
-    end
+    do
+        -- Si la escena reporta pausa, congelamos las físicas y anomalías,
+        -- pero permitimos que los eventos de teclado y menús sigan respirando.
+        if not is_paused then
+            if AnomalyManager and AnomalyManager.update then
+                AnomalyManager.update(dt)
+            end
 
-    if sc_rx_socket then
-        local data = sc_rx_socket:receive()
-        if data then
-            sc_connected_flag = "SC_NET: CONNECTED"
-            sc_audio_status = "AUDIO: ACTIVE"
-            sc_timer = 0.5
+            -- Si el HitStop está activo, congela el gameplay ordinario
+            if _G.HitStopTimer > 0 then
+                _G.HitStopTimer = _G.HitStopTimer - dt
+                return
+            end
+
+            _G.RealMatchTimer = _G.RealMatchTimer + dt
+        end
+
+        -- Telemetría de red SuperCollider corre de forma asíncrona
+        if sc_rx_socket then
+            local data = sc_rx_socket:receive()
+            if data then
+                sc_connected_flag = "SC_NET: CONNECTED"
+                sc_audio_status = "AUDIO: ACTIVE"
+                sc_timer = 0.5
+            end
+        end
+        
+        if sc_timer > 0 then
+            sc_timer = sc_timer - dt
+            if sc_timer <= 0 then
+                sc_audio_status = "AUDIO: SILENT"
+            end
         end
     end
-    
-    if sc_timer > 0 then
-        sc_timer = sc_timer - dt
-        if sc_timer <= 0 then
-            sc_audio_status = "AUDIO: SILENT"
-        end
-    end
-
-    if _G.HitStopTimer > 0 then
-        _G.HitStopTimer = _G.HitStopTimer - dt
-        return
-    end
-
-    _G.RealMatchTimer = _G.RealMatchTimer + dt
 
     if screenshot_flash_timer > 0 then
         screenshot_flash_timer = math.max(0, screenshot_flash_timer - dt)
@@ -199,11 +205,12 @@ function love.update(dt)
     if FogLayer.update     then FogLayer.update(dt) end
     if ThemeManager.update then ThemeManager.update(dt) end
 
+    -- SceneManager DEBE actualizarse siempre para procesar el refresco gráfico de la pausa
     SceneManager.update(dt)
 end
 
+
 function love.draw()
-    -- Reseteo estricto del estado de OpenGL antes de renderizar
     love.graphics.origin()
     love.graphics.setScissor()
     love.graphics.setLineWidth(1)
@@ -211,17 +218,14 @@ function love.draw()
     
     BloomShader.beginDraw()
 
-    -- 1. Renderizado de Escena Activa (Dentro del Canvas 1280x720)
     love.graphics.origin()
     love.graphics.setScissor()
     SceneManager.draw()
 
-    -- 2. Halo Neón de Reinicio (Tecla 'R')
     if ThemeManager.drawRestartHalo then
         ThemeManager.drawRestartHalo()
     end
 
-    -- 3. Marca de Agua Enriquecida Permanente (x=16, y=698)
     love.graphics.push("all")
     local t = ThemeManager.getCurrent() or { primary = {1, 1, 1} }
     local state_str = SceneManager.getState():upper()
@@ -259,7 +263,6 @@ function love.draw()
         ThemeManager.drawEngageTransition(engage_timer, engage_duration)
     end
 
-    -- Renderizar el canvas escalado y centrado a la pantalla
     BloomShader.endDraw(false, view_ox, view_oy, view_scale)
 
     if ClipRecorder.is_recording and BloomShader.canvas then
@@ -283,18 +286,31 @@ function love.draw()
 
     if ThemeManager.drawToast then ThemeManager.drawToast() end
 
-    -- --- CRITICAL RE-ALINEATION: EXPLICIT SCREENSHOT SNAP FROM FRONT BUFFER ---
     if _G.GifEncoder and _G.GifEncoder.capture_frame then
         _G.GifEncoder.capture_frame()
     end
 
-    -- --- DRAW INDESTRUCTIBLE PARADIGM NOTIFICATION OVER HUD GRAPHICS ---
     if _G.GifEncoder and _G.GifEncoder.draw_hud_indicator then
         _G.GifEncoder.draw_hud_indicator()
     end
 end
 
 function love.keypressed(key, scancode, isrepeat)
+    -- BYPASS DEFINITIVO: Extraemos la escena real acoplada al stack dinámico
+    local current_scene = SceneManager.getScene(SceneManager.getState())
+    
+    if current_scene and current_scene.is_paused then
+        -- Filtro estricto de captura de periféricos para el panel de ingeniería cian
+        if key == "up" or key == "down" or key == "left" or key == "right" or key == "m" or key == "return" or key == "escape" or key == "space" or key == "kpenter" then
+            if current_scene.keypressed then
+                current_scene.keypressed(key)
+            end
+            return -- Cortocircuito de hardware absoluto: Silencia el gameplay de fondo
+        end
+        return -- Bloquea cualquier otra tecla de juego (como A o D) mientras esté pausado
+    end
+
+    -- F-key interceptors (sistema / global hotkeys)
     if key == "f12" then
         if _G.GifEncoder and _G.GifEncoder.compile_clip then
             _G.GifEncoder.compile_clip()
@@ -306,15 +322,16 @@ function love.keypressed(key, scancode, isrepeat)
     if key == "f2" or key == "printscreen" or key == "sysrq" then _G.TakeScreenshot(); return end
     if key == "f5" then ThemeManager.cycleNext(); AudioManager.playSliderTick(); return end
     if key == "f6" then ThemeManager.cyclePrev(); AudioManager.playSliderTick(); return end
-    if key == "f7" then 
+    if key == "f7" then
         PluginManager.reloadAll()
-        return 
+        return
     end
     if key == "f11" or (key == "return" and (love.keyboard.isDown("lalt") or love.keyboard.isDown("ralt"))) then
         _G.ToggleFullscreen()
         return
     end
 
+    -- Despacho estándar si el juego está en marcha
     SceneManager.keypressed(key)
 end
 
@@ -326,7 +343,6 @@ function love.mousepressed(x, y, button)
     if button ~= 1 then return end
     local adj_x = (x - view_ox) / view_scale
     local adj_y = (y - view_oy) / view_scale
-
     SceneManager.mousepressed(adj_x, adj_y, button)
 end
 

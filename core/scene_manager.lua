@@ -3,7 +3,7 @@
 -- ================================================================
 ---@diagnostic disable: undefined-global
 -- ============================================================================
--- MUTRIS ENGINE: MASTER SCENE & STATE ORCHESTRATOR (V2)
+-- MUTRIS ENGINE: MASTER SCENE & STATE ORCHESTRATOR (V2 - BUGFIXED ZERO-GC)
 -- Stack-based architecture for nested sub-scenes & dynamic registration
 -- ============================================================================
 local SceneManager = {}
@@ -23,7 +23,7 @@ local function safeRequireScene(mod_name)
 end
 
 function SceneManager.init()
-    -- Base scenes dynamic loading (can be expanded easily)
+    -- Base scenes dynamic loading
     local base_scenes = {
         "menu", "campaign", "boss_hunt", "settings", "pause", 
         "gameover", "forge", "sandbox", "trainer", "soundtrack_lab"
@@ -65,9 +65,7 @@ function SceneManager.register(name, scene_obj)
     Blackbox.log("SCENE", "Registered scene: " .. name, 0, 0)
 end
 
--- Completely replaces the stack with a single new scene
 function SceneManager.setState(new_state, data)
-    -- Exit all currently active scenes from top to bottom
     for i = #stack, 1, -1 do
         local s = stack[i].instance
         if s.onExit then s.onExit() end
@@ -86,7 +84,6 @@ function SceneManager.setState(new_state, data)
     end
 end
 
--- Pushes a sub-scene on top of the current one
 function SceneManager.push(new_state, data)
     local next_scene = scenes[new_state]
     if next_scene then
@@ -98,8 +95,6 @@ function SceneManager.push(new_state, data)
         Blackbox.log("ERROR", "Attempted to push unknown sub-scene: " .. tostring(new_state), 0, 0)
     end
 end
-
--- Pops the top sub-scene, returning focus to the previous one
 function SceneManager.pop()
     if #stack <= 1 then return end -- Don't pop the base scene
     local top = table.remove(stack)
@@ -107,7 +102,6 @@ function SceneManager.pop()
     if top.instance.exit then top.instance.exit() end
     Blackbox.log("STATE", "SCENE POPPED: " .. tostring(top.id), 0, 0)
     
-    -- Notify the newly exposed top scene that it has resumed (optional hook)
     if #stack > 0 then
         local current = stack[#stack].instance
         if current.resume then current.resume() end
@@ -127,7 +121,6 @@ function SceneManager.getCurrentName()
     return SceneManager.getState()
 end
 
--- Helper to get the previous state name for legacy support
 function SceneManager.getPreviousState()
     if #stack > 1 then
         return stack[#stack - 1].id
@@ -140,8 +133,6 @@ function SceneManager.getScene(name)
 end
 
 function SceneManager.update(dt)
-    -- Typically only the top scene updates, but you could iterate if needed.
-    -- For now, update ONLY the top scene to pause background logic.
     if #stack > 0 then
         local scene = stack[#stack].instance
         if scene.update then
@@ -151,7 +142,6 @@ function SceneManager.update(dt)
 end
 
 function SceneManager.draw()
-    -- Draw all scenes in the stack from bottom to top (backgrounds first)
     for i = 1, #stack do
         local scene = stack[i].instance
         if scene.draw then
@@ -164,7 +154,15 @@ function SceneManager.keypressed(key)
     if #stack > 0 then
         local scene = stack[#stack].instance
         if scene.keypressed then
-            return scene.keypressed(key)
+            -- PARCHE CRÍTICO: pcall devuelve (success, real_return_value)
+            local ok, result = pcall(scene.keypressed, key)
+            if not ok then
+                _G.KEYPRESSED_ERROR = tostring(result)
+                Blackbox.log("ERROR", "keypressed ERROR: " .. tostring(result), 0, 0)
+                return false
+            end
+            -- Retornamos el valor de la ejecución para que main.lua valide el bypass
+            return result
         end
     end
     return false
