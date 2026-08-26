@@ -35,6 +35,7 @@ local SceneManager       = require "core.scene_manager"
 local EventBus           = require "core.event_bus"
 local PluginManager      = require "core.plugin_manager"
 local AnomalyManager     = require "tetris.anomaly_manager"
+local Sentinel           = require "core.sentinel"
 _G.GifEncoder            = require "core.gif_encoder"
 
 local OscClient          = require "network.osc_client"
@@ -141,6 +142,7 @@ function love.load()
     MusicManager.start()
     updateViewScaling()
     SceneManager.setState("menu")
+    Sentinel.init()
 end
 
 function love.resize(w, h)
@@ -205,8 +207,12 @@ function love.update(dt)
     if FogLayer.update     then FogLayer.update(dt) end
     if ThemeManager.update then ThemeManager.update(dt) end
 
-    -- SceneManager DEBE actualizarse siempre para procesar el refresco gráfico de la pausa
+    -- SceneManager DEBE actualizarse siempre para procesar el refresco grafico de la pausa
     SceneManager.update(dt)
+
+    -- SENTINEL: Auditoria de rendimiento al final del frame (Silent on Success)
+    -- current_scene ya esta resuelto arriba: cero penalizacion de lookup adicional
+    Sentinel.auditFrame(dt, current_scene)
 end
 
 
@@ -264,6 +270,10 @@ function love.draw()
     end
 
     BloomShader.endDraw(false, view_ox, view_oy, view_scale)
+
+    -- SENTINEL OVERLAY: Dibujado post-bloom para ser inmune al blur.
+    -- El banner se estampa directamente en el framebuffer final.
+    Sentinel.drawOverlay()
 
     if ClipRecorder.is_recording and BloomShader.canvas then
         ClipRecorder.captureFrame(BloomShader.canvas)

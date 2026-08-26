@@ -23,6 +23,9 @@ pcall(function() ThemeManager = require("tetris.theme_manager") end)
 local OscClient = nil
 pcall(function() OscClient = require("network.osc_client") end)
 
+-- Vinculación dura y obligatoria al FontCache para evitar fugas silenciosas por fallback inline
+local FontCache = require "tetris.font_cache"
+
 local scene = {}
 
 local VW, VH = 1280, 720
@@ -123,6 +126,7 @@ end
 -- LAYOUT
 local L = {}
 local function buildLayout()
+    -- El setup inicial es estático y limpio. El desplazamiento dinámico se computa por hardware en el draw frame.
     L.title_y       = 26
     L.subtitle_y    = 60
     L.list_x        = 420
@@ -218,7 +222,6 @@ function scene.update(dt)
         s.rec_flash = math.max(0, s.rec_flash - dt * 2)
     end
 end
-
 --================================================================
 -- ACTIONS
 --================================================================
@@ -288,12 +291,18 @@ end
 
 function scene.mousemoved(x, y)
     local s = scene.state
+    
+    -- Ajuste dinámico de las hitboxes físicas del mouse: resta el desfase si la pantalla bajó por alerta
+    local Sentinel = package.loaded["core.sentinel"]
+    local shift = Sentinel and Sentinel.getLayoutShift() or 0
+    local adjusted_y = y - shift
+
     s.hover = 0
     if x < L.list_x or x > L.list_x + L.list_w then return end
     for i = 1, ITEM_COUNT do
         local iy = itemRectY(i)
         local ih = ITEMS[i].featured and L.item_h_feat or L.item_h_norm
-        if y >= iy and y <= iy + ih then
+        if adjusted_y >= iy and adjusted_y <= iy + ih then
             s.hover = i
             return
         end
@@ -310,15 +319,15 @@ function scene.mousepressed(x, y, button)
 end
 
 --================================================================
--- DRAW
+-- DRAW SUB-ROUTINES
 --================================================================
 local function drawTitle()
     local lg = love.graphics
-    lg.setFont(love.graphics.newFont(28))
+    lg.setFont(FontCache.get(28)) -- Lookup puro sin allocations
     setColor(COLOR.text)
     lg.printf("MUTRIS", 0, L.title_y, VW, "center")
 
-    lg.setFont(love.graphics.newFont(11))
+    lg.setFont(FontCache.get(11)) -- Lookup puro sin allocations
     setColor(COLOR.cyan)
     drawDiamond(VW / 2 - 110, L.subtitle_y + 6, 4, COLOR.gold, 1)
     lg.printf(scene.cache.skin_str, 0, L.subtitle_y, VW, "center")
@@ -364,12 +373,12 @@ local function drawItem(i)
     lg.circle("fill", ledx, y + h / 2, 3)
 
     -- Title
-    lg.setFont(love.graphics.newFont(13))
+    lg.setFont(FontCache.get(13)) -- Lookup puro sin allocations
     setColor(selected and COLOR.text or COLOR.text_dim)
     lg.printf(item.title, x, y + (item.featured and 10 or 7), w, "center")
 
     -- Subtitle
-    lg.setFont(love.graphics.newFont(9))
+    lg.setFont(FontCache.get(9)) -- Lookup puro sin allocations
     setColor(item.color)
     lg.printf(item.sub, x, y + (item.featured and 30 or 22), w, "center")
 
@@ -385,7 +394,7 @@ end
 
 local function drawLegend()
     local lg = love.graphics
-    lg.setFont(love.graphics.newFont(9))
+    lg.setFont(FontCache.get(9)) -- Lookup puro sin allocations
     setColor(COLOR.text_faint)
     lg.printf(
         "[ ARRIBA / ABAJO ] NAVEGAR  |  [ ENTER ] SELECCIONAR  |  [ F5 / F6 ] CAMBIAR SKIN  |  [ F9 ] REC  |  [ F12 ] CAPTURA",
@@ -398,10 +407,13 @@ local function drawLegend()
     end
 end
 
+--================================================================
+-- MAIN MASTER DRAW PIPELINE
+--================================================================
 function scene.draw()
     local lg = love.graphics
 
-    -- Reset de pipeline para evitar fugas de OpenGL
+    -- Reset de pipeline para evitar fugas de estados OpenGL
     lg.origin()
     lg.setShader()
     lg.setBlendMode("alpha")
@@ -411,9 +423,57 @@ function scene.draw()
     setColor(COLOR.bg)
     lg.rectangle("fill", 0, 0, VW, VH)
 
+    -- Inversión de Control de Hardware via Sentinel Exposer
+    local Sentinel = package.loaded["core.sentinel"]
+    local active_leak = Sentinel and Sentinel.is_breach_active
+    local shift = Sentinel and Sentinel.getLayoutShift() or 0
+
+    -- Si hay alerta de telemetría activa en menú, empujamos el render un bloque entero abajo
+    if active_leak and shift > 0 then
+        lg.push()
+        lg.translate(0, shift)
+    end
+
+    -- Los componentes se renderizan protegidos dentro de la traslación de la matriz gráfica
     drawTitle()
     for i = 1, ITEM_COUNT do drawItem(i) end
     drawLegend()
+
+    -- Cierre de la traslación y renderizado directo del banner de alto contraste invertido
+    if active_leak and shift > 0 then
+        lg.pop() -- Restauramos coordenadas absolutas de pantalla (0,0)
+
+        -- Geometría calibrada milimétricamente para el canal negro libre debajo de MUTRIS
+        local bx, by, bw, bh = 360, 92, 560, 60
+
+        -- Asignación de bloque sólido opaco (alpha = 1.0) para legibilidad quirúrgica aeroespacial
+        if Sentinel.current_type == "PERF" then
+            lg.setColor(1.0, 0.45, 0.0, 1.0) -- Naranja sólido
+        elseif Sentinel.current_type == "LEAK" then
+            lg.setColor(1.0, 0.82, 0.22, 1.0) -- Ámbar/Dorado sólido
+        else
+            lg.setColor(1.0, 0.15, 0.15, 1.0) -- Rojo crítico sólido
+        end
+
+        -- Renderizar el contenedor sólido
+        lg.rectangle("fill", bx, by, bw, bh, 4)
+
+        -- Borde fino charcoal anti-empaste
+        lg.setLineWidth(1.5)
+        lg.setColor(0.02, 0.03, 0.06, 1.0)
+        lg.rectangle("line", bx, by, bw, bh, 4)
+
+        -- Strobe a 8Hz sin allocations operando sobre la tipografía negra invertida
+        local strobe = math.floor((_G.RealMatchTimer or love.timer.getTime()) * 8) % 2 == 0
+        if strobe then
+            lg.setFont(FontCache.get(14))
+            lg.setColor(0.02, 0.03, 0.06, 1.0) -- TEXTO NEGRO PURO SOBRE COLOR SÓLIDO (Contraste Máximo)
+            lg.printf("[ SYSTEM EXCEPTION / METRIC BREACH ]", bx, by + 8, bw, "center")
+
+            lg.setFont(FontCache.get(12))
+            lg.printf(Sentinel.current_msg or "", bx + 8, by + 30, bw - 16, "center")
+        end
+    end
 
     lg.setColor(1, 1, 1, 1)
 end

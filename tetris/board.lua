@@ -27,6 +27,7 @@ local HuntingForge     = require "combat.hunting_forge"
 local BossProjectiles  = require "combat.boss_projectiles"
 local Blackbox         = require "core.blackbox"
 local EventBus         = require "core.event_bus"
+local RulesetManager   = require "core.ruleset_manager"
 
 Board.colors = {
     [1] = {0.0, 0.9, 1.0},
@@ -218,7 +219,7 @@ function Board:clearCompletedLinesInZone()
 end
 
 function Board:canMove(px, py, pr)
-    local RulesetManager = require "core.ruleset_manager"
+    -- RulesetManager é um upvalue de módulo: sem require inline, sem quebra de trace JIT
     local shapes = RulesetManager.getShapes(self.active_piece.id)
     local shape = shapes and shapes[pr] or {{{1}}}
     for r = 1, #shape do
@@ -305,10 +306,13 @@ function Board:checkLines(is_tspin)
         if not self.is_zone_active then
             local lines_to_push = 0
             if self.garbage_queue then
-                for _, g in ipairs(self.garbage_queue) do
+                local gq = self.garbage_queue
+                for i = 1, #gq do
+                    local g = gq[i]
                     lines_to_push = lines_to_push + (type(g) == "table" and g.lines or g)
                 end
-                self.garbage_queue = {}
+                -- Wipe in-place (Zero-GC): nil backwards, preserva la alocación del buffer
+                for i = #gq, 1, -1 do gq[i] = nil end
             end
             if lines_to_push > 0 then
                 self:pushToGrid(lines_to_push)
@@ -403,17 +407,14 @@ function Board:shiftColumnsGlobal(other, dir)
 end
 
 function Board:setPopup(text, color, is_high_tier, subtext)
-    local raw_t = tostring(text or "")
-    local raw_s = tostring(subtext or "")
-    local clean_t = raw_t:gsub("[^\32-\126]", ""):gsub("^%s*(.-)%s*$", "%1")
-    local clean_s = raw_s:gsub("[^\32-\126]", ""):gsub("^%s*(.-)%s*$", "%1")
-
-    self.popup_text = clean_t
-    self.popup_sub = clean_s
-    self.popup_color = color or {1, 1, 1}
-    self.popup_timer = 1.2
+    -- Zero-GC: strings pre-sanitizados por los módulos emisores.
+    -- Se eliminan los gsub de runtime que generaban fragmentos de string en el heap.
+    self.popup_text     = tostring(text    or "")
+    self.popup_sub      = tostring(subtext or "")
+    self.popup_color    = color or {1, 1, 1}
+    self.popup_timer    = 1.2
     self.popup_max_time = 1.2
-    self.popup_scale = is_high_tier and 1.65 or 1.35
+    self.popup_scale    = is_high_tier and 1.65 or 1.35
     self.popup_is_high_tier = is_high_tier or false
 end
 

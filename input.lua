@@ -85,7 +85,8 @@ function Input.getSoftDropFactor()
 
     if Input.player and Input.player.active_piece then
         local custom_down = SettingsManager.get("key_soft_drop") or "down"
-        local down_held = Input.keys_down[custom_down] or love.keyboard.isDown(custom_down) or
+        -- Input.keys_down é populado uma vez por frame em update(): sem cruzar FFI novamente
+        local down_held = Input.keys_down[custom_down] or
                           _isGamepadDown("dpdown") or _isGamepadAxisDown("lefty", 0.5, true)
 
         if down_held then
@@ -99,12 +100,31 @@ end
 
 -- Ciclo de actualización de estados físicos
 function Input.update(dt)
-    -- Refresh baseline physical states dynamically
+    -- ── FASE 1: Resolver rebinds activos desde SettingsManager ───────────────
+    -- Esto se hace ANTES del loop estático para garantizar que incluso keys
+    -- personalizadas (ej: "a", "j") queden pobladas en el cache este frame.
+    local k_left  = SettingsManager.get("key_left")      or "left"
+    local k_right = SettingsManager.get("key_right")     or "right"
+    local k_down  = SettingsManager.get("key_soft_drop") or "down"
+
+    -- Filtro de anomalía sobre los rebinds de dirección
+    if AnomalyManager and AnomalyManager.filter_direction then
+        k_left  = AnomalyManager.filter_direction(k_left)  or k_left
+        k_right = AnomalyManager.filter_direction(k_right) or k_right
+    end
+
+    -- ── FASE 2: Bloque FFI único — cada key física consultada exactamente 1x ─
+    -- Keys de movimiento (custom/rebindeadas) — pobladas primero
+    Input.keys_down[k_left]  = love.keyboard.isDown(k_left)
+    Input.keys_down[k_right] = love.keyboard.isDown(k_right)
+    Input.keys_down[k_down]  = love.keyboard.isDown(k_down)
+
+    -- Keys estáticas (rotación, hold, zone, restart) — loop sobre common_keys
     for i = 1, #common_keys do
         local key = common_keys[i]
         Input.keys_down[key] = love.keyboard.isDown(key)
     end
-    
+
     if (Input.drop_lock_frames or 0) > 0 then
         Input.drop_lock_frames = Input.drop_lock_frames - 1
     end
@@ -113,16 +133,14 @@ function Input.update(dt)
     local p = Input.player.active_piece
     if p.locked then return end
 
-    local t = dt
+    local t   = dt
     local das = (SettingsManager.get("das") or Input.das_setting) + HuntingForge.getDASOffset()
     local arr = math.max(0.001, SettingsManager.get("arr") or Input.arr_setting)
 
-    -- --- 1. LEFT MOVEMENT INTERCEPTION (PASSED THROUGH ANOMALY FILTER) ---
-    local raw_left = SettingsManager.get("key_left") or "left"
-    local custom_left = (AnomalyManager and AnomalyManager.filter_direction) and AnomalyManager.filter_direction(raw_left) or raw_left
-
-    local move_left_held = Input.keys_down[custom_left] or love.keyboard.isDown(custom_left) or
+    -- --- 1. LEFT MOVEMENT (k_left ya resuelta y cacheada arriba) ---
+    local move_left_held = Input.keys_down[k_left] or
                            _isGamepadDown("dpleft") or _isGamepadAxisDown("leftx", -0.5, false)
+
     if move_left_held then
         if not Input.das_active.left then
             if p:move(-1, 0) then
@@ -145,11 +163,8 @@ function Input.update(dt)
         Input.das_active.left = false
     end
 
-    -- --- 2. RIGHT MOVEMENT INTERCEPTION (PASSED THROUGH ANOMALY FILTER) ---
-    local raw_right = SettingsManager.get("key_right") or "right"
-    local custom_right = (AnomalyManager and AnomalyManager.filter_direction) and AnomalyManager.filter_direction(raw_right) or raw_right
-
-    local move_right_held = Input.keys_down[custom_right] or love.keyboard.isDown(custom_right) or
+    -- --- 2. RIGHT MOVEMENT (k_right ya resuelta y cacheada arriba) ---
+    local move_right_held = Input.keys_down[k_right] or
                             _isGamepadDown("dpright") or _isGamepadAxisDown("leftx", 0.5, true)
     if move_right_held then
         if not Input.das_active.right then

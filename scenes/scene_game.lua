@@ -505,8 +505,7 @@ function SceneGame.draw()
             -- Separador
             lg.setColor(0.25, 0.90, 1.00, 0.28)
             lg.rectangle("fill", px + 16, py + 46, pw - 32, 1)
-
-            -- Opciones
+            -- Opciones del menú de pausa
             for i = 1, pcount do
                 local opt     = pmenu[i]
                 local is_sel  = (sel == i)
@@ -575,13 +574,11 @@ function SceneGame.draw()
             -- ── TELEMETRÍA DE PAUSA (debug on-screen permanente) ──────────
             local ty = py + ph + 24
             lg.setFont(FontCache.get(8))
-            -- Fondo del strip
             lg.setColor(0.02, 0.04, 0.06, 0.90)
             lg.rectangle("fill", px, ty, pw, 36, 4)
             lg.setColor(0.20, 0.70, 0.30, 0.60)
             lg.setLineWidth(1)
             lg.rectangle("line", px, ty, pw, 36, 4)
-            -- Línea 1: estado del sistema de pausa
             lg.setColor(0.20, 0.90, 0.40, 0.95)
             lg.printf(
                 string.format("PAUSE DBG | is_paused=%-5s  selected=%d/%d  state=%s",
@@ -592,7 +589,6 @@ function SceneGame.draw()
                 ),
                 px + 6, ty + 4, pw - 12, "left"
             )
-            -- Línea 2: última tecla recibida + match_over
             lg.setColor(0.60, 0.95, 0.60, 0.85)
             lg.printf(
                 string.format("LAST_KEY=%-10s  match_over=%-5s  count=%d",
@@ -602,11 +598,8 @@ function SceneGame.draw()
                 ),
                 px + 6, ty + 18, pw - 12, "left"
             )
-            -- ─────────────────────────────────────────────────────────────
-
             lg.pop()
         end
-
         -- 5. Modal de Victoria / Derrota
         if SceneGame.match_over then
             local t = ThemeManager.getCurrent()
@@ -664,6 +657,49 @@ function SceneGame.draw()
 
             love.graphics.pop()
         end
+
+        -- ── 🛡️ INYECCIÓN NATIVA DEL BANNER DEL SENTINEL EN PARTIDA (CALIBRADO CENTRAL ANTI-BLOQUEO) ──
+        local Sentinel = package.loaded["core.sentinel"]
+                if Sentinel and Sentinel.is_breach_active and not SceneGame.is_paused then
+            -- Calibración horizontal expandida anti-wrap (Ancho = 420px, Alto = 52px)
+            local bx, by, bw, bh = 430, 620, 420, 52
+
+            love.graphics.push("all")
+
+            -- Asignación de bloque sólido opaco (alpha = 1.0) para contraste militar puro
+            if Sentinel.current_type == "PERF" then
+                love.graphics.setColor(1.0, 0.45, 0.0, 1.0)  -- Naranja sólido brillante
+            elseif Sentinel.current_type == "LEAK" then
+                love.graphics.setColor(1.0, 0.82, 0.22, 1.0) -- Dorado/Ámbar sólido brillante
+            else
+                love.graphics.setColor(1.0, 0.15, 0.15, 1.0)  -- Rojo crítico sólido
+            end
+
+            -- Renderizar el contenedor sólido de la alerta
+            love.graphics.rectangle("fill", bx, by, bw, bh, 4)
+
+            -- Contorno fino de terminación oscuro anti-empaste
+            love.graphics.setLineWidth(1.5)
+            love.graphics.setColor(0.02, 0.03, 0.06, 1.0)
+            love.graphics.rectangle("line", bx, by, bw, bh, 4)
+
+            -- Strobe a 8Hz sin allocations operando en tipografía invertida MASIVA e inmune a variables locales
+            local strobe = math.floor((_G.RealMatchTimer or love.timer.getTime()) * 8) % 2 == 0
+            if strobe then
+                -- ENCABEZADO MASIVO EN NEGRO (Font 14)
+                love.graphics.setFont(FontCache.get(14))
+                love.graphics.setColor(0.02, 0.03, 0.06, 1.0)
+                love.graphics.printf("[ SYSTEM EXCEPTION ]", bx, by + 6, bw, "center")
+
+                -- TELEMETRÍA DETALLADA EN UNA SOLA LÍNEA (Font 12) - Espacio de sobra horizontal
+                love.graphics.setFont(FontCache.get(12))
+                love.graphics.setColor(0.02, 0.03, 0.06, 1.0)
+                love.graphics.printf(Sentinel.current_msg or "", bx + 10, by + 28, bw - 20, "center")
+            end
+
+            love.graphics.pop()
+        end
+        -- ─────────────────────────────────────────────────────────────────────────────
     end)
     
     if not ok then
@@ -676,6 +712,8 @@ function SceneGame.draw()
         love.graphics.print("RENDER ERROR: " .. tostring(err), 10, 10)
     end
 end
+
+
 
 function SceneGame.keypressed(key)
     -- Telemetría: registra la última tecla recibida (visible en el overlay de pausa)
