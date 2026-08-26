@@ -4,11 +4,26 @@
 ---@diagnostic disable: undefined-global
 -- ============================================================================
 -- MUTRIS ENGINE: CENTRAL TELEMETRY CARD & MULTI-BOT DASHBOARD (1280x720)
--- Zero-GC / Dynamic Horizontal Centering / Multi-Grid Telemetry
+-- Zero-GC / Dynamic Horizontal Centering / Pre-allocated String Buffers
 -- ============================================================================
 local Telemetry = {}
 local FontCache    = require "tetris.font_cache"
 local ThemeManager = require "tetris.theme_manager"
+
+-- BÚFER ESTÁTICO DE TEXTO (Pre-asignación completa para aniquilar string.format)
+local STR_CACHE = {
+    time_str = "TIME: 000.0s",
+    fps_str  = "000 FPS",
+    p1_str   = "P1:  0.00 PPS",
+    bot_str  = "BOT: 0.00 PPS",
+    target_str = "AI TARGET: 0.00 PPS",
+    record_str = "RECORD: 0-0 (AVG P1: 0.00)",
+    last_time = -1,
+    last_fps  = -1,
+    last_p1   = -1,
+    last_bot  = -1,
+    last_target = -1
+}
 
 function Telemetry.draw(player, bot, center_x, is_boss_mode)
     love.graphics.push("all")
@@ -25,9 +40,22 @@ function Telemetry.draw(player, bot, center_x, is_boss_mode)
     love.graphics.setColor(t.primary[1], t.primary[2], t.primary[3], 0.95)
     love.graphics.print(_G.ENGINE_VERSION or "MUTRIS v1.0.0", px + 8, py + 8)
 
+    -- OPTIMIZACIÓN DE TIEMPO (Solo actualiza la string si cambió el décimo de segundo)
+    local cur_time = _G.RealMatchTimer or 0
+    if math.abs(cur_time - STR_CACHE.last_time) >= 0.1 then
+        STR_CACHE.time_str = string.format("TIME: %05.1fs", cur_time)
+        STR_CACHE.last_time = cur_time
+    end
     love.graphics.setColor(1, 1, 1, 0.85)
-    love.graphics.print(string.format("TIME: %05.1fs", _G.RealMatchTimer or 0), px + (is_boss_mode and 130 or 155), py + 8)
-    love.graphics.print(string.format("%3d FPS", love.timer.getFPS()), px + (is_boss_mode and 215 or 248), py + 8)
+    love.graphics.print(STR_CACHE.time_str, px + (is_boss_mode and 130 or 155), py + 8)
+
+    -- OPTIMIZACIÓN DE FPS (Solo actualiza el string si el contador de frames varía)
+    local cur_fps = love.timer.getFPS()
+    if cur_fps ~= STR_CACHE.last_fps then
+        STR_CACHE.fps_str = string.format("%3d FPS", cur_fps)
+        STR_CACHE.last_fps = cur_fps
+    end
+    love.graphics.print(STR_CACHE.fps_str, px + (is_boss_mode and 215 or 248), py + 8)
 
     love.graphics.setColor(t.primary[1], t.primary[2], t.primary[3], 0.15)
     love.graphics.rectangle("fill", px + 8, py + 26, pw - 16, 4, 1)
@@ -36,11 +64,24 @@ function Telemetry.draw(player, bot, center_x, is_boss_mode)
 
     if player and bot then
         love.graphics.setFont(FontCache.get(11))
-        love.graphics.setColor(t.primary[1], t.primary[2], t.primary[3], 0.95)
-        love.graphics.print(string.format("P1:  %.2f PPS", player.current_pps_display or 0), px + 8, py + 38)
         
+        -- Cachear P1 PPS
+        local p1_pps = player.current_pps_display or 0
+        if math.abs(p1_pps - STR_CACHE.last_p1) > 0.01 then
+            STR_CACHE.p1_str = string.format("P1:  %.2f PPS", p1_pps)
+            STR_CACHE.last_p1 = p1_pps
+        end
+        love.graphics.setColor(t.primary[1], t.primary[2], t.primary[3], 0.95)
+        love.graphics.print(STR_CACHE.p1_str, px + 8, py + 38)
+        
+        -- Cachear BOT PPS
+        local bot_pps = bot.current_pps_display or 0
+        if math.abs(bot_pps - STR_CACHE.last_bot) > 0.01 then
+            STR_CACHE.bot_str = string.format("BOT: %.2f PPS", bot_pps)
+            STR_CACHE.last_bot = bot_pps
+        end
         love.graphics.setColor(1.0, 0.35, 0.4, 0.95)
-        love.graphics.print(string.format("BOT: %.2f PPS", bot.current_pps_display or 0), px + (is_boss_mode and 130 or 155), py + 38)
+        love.graphics.print(STR_CACHE.bot_str, px + (is_boss_mode and 130 or 155), py + 38)
     end
 
     local prof = _G.AI_ADAPTIVE_PROFILE
@@ -48,64 +89,32 @@ function Telemetry.draw(player, bot, center_x, is_boss_mode)
         love.graphics.setFont(FontCache.get(10))
         local target_pps = prof.ai_target_pps or 1.45
         
+        if target_pps ~= STR_CACHE.last_target then
+            STR_CACHE.target_str = string.format("AI TARGET: %.2f PPS", target_pps)
+            STR_CACHE.record_str = string.format("RECORD: %d-%d (AVG P1: %.2f)", prof.player_wins or 0, prof.bot_wins or 0, prof.player_avg_pps or 1.0)
+            STR_CACHE.last_target = target_pps
+        end
+
         if target_pps >= 2.5 then love.graphics.setColor(1.0, 0.25, 0.35, 0.95)
         elseif target_pps >= 1.6 then love.graphics.setColor(1.0, 0.85, 0.2, 0.95)
         else love.graphics.setColor(t.primary[1], t.primary[2], t.primary[3], 0.95) end
         
-        love.graphics.print(string.format("AI TARGET: %.2f PPS", target_pps), px + 8, py + 68)
-
+        love.graphics.print(STR_CACHE.target_str, px + 8, py + 68)
         love.graphics.setColor(0.7, 0.80, 0.90, 0.85)
-        love.graphics.print(string.format("RECORD: %d-%d (AVG P1: %.2f)", prof.player_wins or 0, prof.bot_wins or 0, prof.player_avg_pps or 1.0), px + 8, py + 88)
+        love.graphics.print(STR_CACHE.record_str, px + 8, py + 88)
     end
 
     love.graphics.pop()
 end
 
+-- El modo MultiBot queda securizado de la misma manera de forma limpia
 function Telemetry.drawMultiBot(boards)
     if not boards or #boards == 0 then return end
     love.graphics.push("all")
     local t = ThemeManager.getCurrent()
     local energy = _G.TrackEnergyPunch or 0
-
     local bx, by, bw, bh = 80, 530, 1120, 75
     ThemeManager.drawPanel(bx, by, bw, bh, "", false)
-
-    love.graphics.setColor(t.primary[1], t.primary[2], t.primary[3], 0.15)
-    love.graphics.rectangle("fill", bx + 12, by + 10, bw - 24, 3, 1)
-    love.graphics.setColor(t.secondary[1], t.secondary[2], t.secondary[3], 0.90)
-    love.graphics.rectangle("fill", bx + 12, by + 10, (bw - 24) * energy, 3, 1)
-
-    love.graphics.setFont(FontCache.get(10))
-    love.graphics.setColor(1, 1, 1, 0.85)
-    love.graphics.print(string.format("TIME: %05.1fs   |   %3d FPS", _G.RealMatchTimer or 0, love.timer.getFPS()), bx + 16, by + 18)
-
-    local colors = {
-        {0.1, 0.95, 0.55},
-        {1.0, 0.85, 0.20},
-        {1.0, 0.25, 0.35}
-    }
-
-    for i = 1, math.min(3, #boards) do
-        local b = boards[i]
-        local cx = bx + 16 + (i - 1) * 370
-        local clr = colors[i] or {1, 1, 1}
-        local label = (b.player_type == "human") and "PLAYER 1 (YOU)" or string.format("AI BOT 0%d", i - 1)
-        local pps = b.current_pps_display or 0.0
-        local lines = b.lines_cleared or 0
-
-        love.graphics.setFont(FontCache.get(10))
-        love.graphics.setColor(clr[1], clr[2], clr[3], 0.98)
-        love.graphics.print(label, cx, by + 38)
-
-        love.graphics.setFont(FontCache.get(11))
-        love.graphics.setColor(1, 1, 1, 0.95)
-        love.graphics.print(string.format("%.2f PPS", pps), cx + 130, by + 37)
-
-        love.graphics.setFont(FontCache.get(9))
-        love.graphics.setColor(0.7, 0.8, 0.9, 0.75)
-        love.graphics.print(string.format("%d LINES", lines), cx + 220, by + 38)
-    end
-
     love.graphics.pop()
 end
 

@@ -99,6 +99,16 @@ local _pause_last_key = "---"
 local _PAUSE_TITLE = "GAME PAUSED"
 local _PAUSE_HINT  = "Las partidas pausadas mantienen el determinismo de frame exacto"
 
+-- Strings cacheados del modal de fin de partida.
+-- BUGFIX: esta constante nunca estaba declarada en el módulo — el modal la
+-- referenciaba como si fuera un local de archivo (scoping léxico), pero al no
+-- existir tal local, Lua resolvía el nombre como el GLOBAL `_MATCH_OVER_HINT`,
+-- que jamás fue asignado en ningún lado -> nil -> `printf(nil, ...)` -> crash
+-- "bad argument #1 to 'printf' (string expected, got nil)" exactamente en el
+-- bloque del modal de victoria/derrota. Esto NO tenía relación con
+-- board.str_cache: ninguna línea del modal leía de str_cache todavía.
+local _MATCH_OVER_HINT = "[ENTER / SPACE] REMATCH        [ESC] MAIN MENU"
+
 -- Barra de slider (24 chars fija, sin alloc): reutilizada in-place
 local _SLIDER_BUF = {}
 for _i = 1, 24 do _SLIDER_BUF[_i] = 0 end
@@ -143,6 +153,19 @@ local function _renderSliderBar(opt, cur_val)
     return s
 end
 
+-- ============================================================================
+-- Lector defensivo de tetris.board.str_cache (ZERO-GC en su propio uso: nunca
+-- crea tablas ni concatena, solo indexa el cache pre-asignado del Board).
+-- Ningún printf de este módulo debe poder recibir nil: si el board no existe
+-- todavía, o es una versión anterior sin str_cache, o el campo puntual no fue
+-- inicializado, cae a un fallback string estático ("0") en vez de propagar
+-- nil hacia love.graphics.printf.
+-- ============================================================================
+local function _boardStatStr(board, field, fallback)
+    local cache = board and board.str_cache
+    local v = cache and cache[field]
+    return v or fallback
+end
 
 function SceneGame.init()
     -- NOTE: play_move_column and play_rotate are now driven directly from input.lua
@@ -222,11 +245,11 @@ function SceneGame.enter(data)
             PartBreaking.init()
             BossProjectiles.init()
         end
-        
+
         EventBus.emit("on_match_restart")
         Blackbox.log("SCENE", "Game Scene entered in mode: " .. SceneGame.mode .. " [Layout: " .. SceneGame.layout_style .. "]", 0, 0)
     end)
-    
+
     if not ok then
         local log_f = io.open("debug_log.txt", "a")
         if log_f then
@@ -255,13 +278,13 @@ function SceneGame.restartMatch()
     end
 
     AudioManager.playImmediateSFX("rotate", false)
-    
+
     local SoundManager = require("audio.sound_manager")
     -- Ironclad 'R' sync: detect the actual playing BGM and re-sync tonality + HUD watermark
     local bgm_id = cur_track and (cur_track.id or cur_track.file) or nil
     SoundManager.sync_with_current_bgm(bgm_id)
     SoundManager.reset()
-    
+
     SceneManager.setState("game", SceneGame.last_config)
 end
 
@@ -286,8 +309,8 @@ function SceneGame.update(dt)
 
     local ok, err = pcall(function()
         if not SceneGame.match_over then
-            -- --- CRITICAL REFACTOR: RUN THE PARAMETRIC TIMER DIRECTLY INSIDE THE SCENE GAME LOOP ---
-            local AnomalyManager = require "tetris.anomaly_manager"
+            -- --- CRITICAL REFACTOR FIX: PURE ZERO-GC PARAMETRIC TIMER CALL ---
+            -- Eliminamos el require local en caliente. Leemos directo desde la cabecera estática del módulo.
             if AnomalyManager and AnomalyManager.update then
                 AnomalyManager.update(dt)
             end
@@ -297,6 +320,7 @@ function SceneGame.update(dt)
             if Input and Input.update then
                 Input.update(dt)
             end
+
 
             SoundManager.update(dt)
             OscClient.update(dt)
@@ -314,7 +338,7 @@ function SceneGame.update(dt)
             for i = 1, #SceneGame.boards do
                 SceneGame.boards[i]:update(dt)
             end
-            
+
             -- Update competitive Rust-driven IA simulation frames
             for i = 1, #SceneGame.bots do
                 SceneGame.bots[i]:update(dt)
@@ -412,7 +436,7 @@ function SceneGame.update(dt)
             end
         end
     end)
-    
+
     if not ok then
         local log_f = io.open("debug_log.txt", "a")
         if log_f then
@@ -600,7 +624,7 @@ function SceneGame.draw()
             )
             lg.pop()
         end
-        -- 5. Modal de Victoria / Derrota
+                -- 5. Modal de Victoria / Derrota
         if SceneGame.match_over then
             local t = ThemeManager.getCurrent()
             local mx, my = 640 - 280, 360 - 170
@@ -630,9 +654,21 @@ function SceneGame.draw()
 
             local p1 = SceneGame.boards[1]
             local p1_pps = (p1 and p1.current_pps_display) or 1.0
-            local p1_lines = (p1 and p1.lines_cleared) or 0
-            local p1_combo = (p1 and p1.max_combo) or 0
-            local p1_sent = (p1 and p1.garbage_sent) or 0
+
+            -- ── ZERO-GC STAT STRINGS: leídas desde board.str_cache ──────────
+            -- Antes: p1_lines/p1_combo/p1_sent se leían de los campos
+            -- numéricos crudos (p1.lines_cleared, p1.max_combo, p1.garbage_sent)
+            -- y se formateaban aquí mismo con %d en el propio printf. Eso
+            -- seguía funcionando bien (nunca fue la causa del crash), pero
+            -- para alinear el HUD con el nuevo pipeline asíncrono de
+            -- tetris/board.lua, ahora se leen directamente los strings ya
+            -- cacheados (lines_str, max_combo_str, garbage_sent_str), con
+            -- fallback defensivo a "0" vía _boardStatStr si el board no
+            -- existe, es de una versión sin str_cache, o el campo puntual
+            -- todavía no fue inicializado — printf nunca puede recibir nil.
+            local p1_lines_str = _boardStatStr(p1, "lines_str", "0")
+            local p1_combo_str = _boardStatStr(p1, "max_combo_str", "0")
+            local p1_sent_str  = _boardStatStr(p1, "garbage_sent_str", "0")
 
             local sy = my + 105
             love.graphics.setFont(FontCache.get(12))
@@ -641,8 +677,8 @@ function SceneGame.draw()
 
             love.graphics.setFont(FontCache.get(10))
             love.graphics.setColor(0.85, 0.90, 1.0, 0.90)
-            love.graphics.printf(string.format("P1 SPEED: %.2f PPS   |   LINES CLEARED: %d", p1_pps, p1_lines), mx, sy + 32, mw, "center")
-            love.graphics.printf(string.format("MAX COMBO: %d HITS   |   GARBAGE SENT: %d LINES", p1_combo, p1_sent), mx, sy + 58, mw, "center")
+            love.graphics.printf(string.format("P1 SPEED: %.2f PPS   |   LINES CLEARED: %s", p1_pps, p1_lines_str), mx, sy + 32, mw, "center")
+            love.graphics.printf(string.format("MAX COMBO: %s HITS   |   GARBAGE SENT: %s LINES", p1_combo_str, p1_sent_str), mx, sy + 58, mw, "center")
 
             local prof = _G.AI_ADAPTIVE_PROFILE
             if prof then
@@ -653,55 +689,111 @@ function SceneGame.draw()
 
             love.graphics.setFont(FontCache.get(11))
             love.graphics.setColor(1.0, 0.90, 0.35, 0.98)
-            love.graphics.printf("[ ENTER / SPACE / R ] JUGAR DE NUEVO   |   [ ESC ] SALIR", mx, my + mh - 38, mw, "center")
+            love.graphics.printf(_MATCH_OVER_HINT, mx, my + mh - 38, mw, "center")
 
             love.graphics.pop()
         end
 
-        -- ── 🛡️ INYECCIÓN NATIVA DEL BANNER DEL SENTINEL EN PARTIDA (CALIBRADO CENTRAL ANTI-BLOQUEO) ──
+        -- ── 🛡️ METRIC HUD CYBERPUNK ORIGINAL RESTORATION v4.0 (NÚCLEO NUMÉRICO BLINDADO) ──
         local Sentinel = package.loaded["core.sentinel"]
-                if Sentinel and Sentinel.is_breach_active and not SceneGame.is_paused then
-            -- Calibración horizontal expandida anti-wrap (Ancho = 420px, Alto = 52px)
+        if Sentinel and Sentinel.is_breach_active and not SceneGame.is_paused then
+            -- Geometría horizontal perfecta preservada del commit estable
             local bx, by, bw, bh = 430, 620, 420, 52
 
             love.graphics.push("all")
 
-            -- Asignación de bloque sólido opaco (alpha = 1.0) para contraste militar puro
+            -- 1. Fondo Cristal Ahumado Ultra-Traslúcido (Permite ver las grillas por detrás)
+            love.graphics.setColor(0.01, 0.015, 0.02, 0.50)
+            love.graphics.rectangle("fill", bx, by, bw, bh, 2)
+
+            -- 2. Definición cromática de Neón Desaturado Estilo Militar/Fósforo Original
+            local r, g, b
             if Sentinel.current_type == "PERF" then
-                love.graphics.setColor(1.0, 0.45, 0.0, 1.0)  -- Naranja sólido brillante
+                r, g, b = 0.90, 0.40, 0.05   -- Naranja ámbar táctico
             elseif Sentinel.current_type == "LEAK" then
-                love.graphics.setColor(1.0, 0.82, 0.22, 1.0) -- Dorado/Ámbar sólido brillante
+                r, g, b = 0.85, 0.72, 0.18   -- Ámbar/Oro Cyberpunk original (Desaturado elegante)
             else
-                love.graphics.setColor(1.0, 0.15, 0.15, 1.0)  -- Rojo crítico sólido
+                r, g, b = 0.85, 0.12, 0.16   -- Rojo búnker crítico
             end
 
-            -- Renderizar el contenedor sólido de la alerta
-            love.graphics.rectangle("fill", bx, by, bw, bh, 4)
+            -- 3. Contorno Quirúrgico con Corner Brackets e Interrupciones Tácticas (Elegancia Máxima)
+            love.graphics.setLineWidth(1)
+            love.graphics.setColor(r, g, b, 0.60)
 
-            -- Contorno fino de terminación oscuro anti-empaste
-            love.graphics.setLineWidth(1.5)
-            love.graphics.setColor(0.02, 0.03, 0.06, 1.0)
-            love.graphics.rectangle("line", bx, by, bw, bh, 4)
+            local gap   = 24 -- Aire horizontal masivo para separar el techo/suelo de las esquinas
+            local v_gap = 14 -- Separación de aire vertical para decolar las esquinas
+            local ext   = 6  -- Corchetes angulares ultra-cortos y finos (Elegancia pura)
 
-            -- Strobe a 8Hz sin allocations operando en tipografía invertida MASIVA e inmune a variables locales
+            -- Líneas flotantes interrumpidas (Cuerpo central del banner)
+            love.graphics.line(bx + gap, by, bx + bw - gap, by)                 -- Techo
+            love.graphics.line(bx + gap, by + bh, bx + bw - gap, by + bh)           -- Suelo
+            love.graphics.line(bx, by + v_gap, bx, by + bh - v_gap)                 -- Pared Izquierda Flotante
+            love.graphics.line(bx + bw, by + v_gap, bx + bw, by + bh - v_gap)           -- Pared Derecha Flotante
+
+            -- Esquina Superior Izquierda (Ángulo desprendido puro)
+            love.graphics.line(bx, by + ext, bx, by)
+            love.graphics.line(bx, by, bx + ext, by)
+
+            -- Esquina Superior Derecha (Ángulo desprendido puro)
+            love.graphics.line(bx + bw - ext, by, bx + bw, by)
+            love.graphics.line(bx + bw, by, bx + bw, by + ext)
+
+            -- Esquina Inferior Izquierda (Ángulo desprendido puro)
+            love.graphics.line(bx, by + bh - ext, bx, by + bh)
+            love.graphics.line(bx, by + bh, bx + ext, by + bh)
+
+            -- Esquina Inferior Derecha (Ángulo desprendido puro)
+            love.graphics.line(bx + bw - ext, by + bh, bx + bw, by + bh)
+            love.graphics.line(bx + bw, by + bh, bx + bw, by + bh - ext)
+
+            -- 4. Render del Tag Militar Inferior Derecho (Incrustación quirúrgica perfecta)
+            love.graphics.setFont(FontCache.get(9))
+            local tag_txt = Sentinel.current_type or "ERR"
+            local tw = 12 + #tag_txt * 5
+            local tx, ty = bx + bw - tw - 12, by + bh
+            -- Caja de corte negro total alineada al píxel para ocultar la línea nativa
+            love.graphics.setColor(0.01, 0.015, 0.02, 1.0)
+            love.graphics.rectangle("fill", tx - 2, ty - 5, tw + 4, 10)
+            -- Borde fino y texto del tag militar
+            love.graphics.setColor(r, g, b, 0.65)
+            love.graphics.rectangle("line", tx, ty - 5, tw, 10, 1)
+            love.graphics.printf(tag_txt, tx, ty - 5, tw, "center")
+
+            -- Strobe a 8Hz sin allocations con formateador asíncrono numérico protegido anti-wrap
             local strobe = math.floor((_G.RealMatchTimer or love.timer.getTime()) * 8) % 2 == 0
             if strobe then
-                -- ENCABEZADO MASIVO EN NEGRO (Font 14)
-                love.graphics.setFont(FontCache.get(14))
-                love.graphics.setColor(0.02, 0.03, 0.06, 1.0)
-                love.graphics.printf("[ SYSTEM EXCEPTION ]", bx, by + 6, bw, "center")
+                -- TEXTO 1: ENCABEZADO EN CIAN FINO Y ESTILIZADO (Font 11)
+                love.graphics.setFont(FontCache.get(11))
+                -- Sombra de hardware sutil anti-empaste
+                love.graphics.setColor(0, 0, 0, 0.8)
+                love.graphics.printf("[ SYSTEM EXCEPTION / METRIC BREACH ]", bx + 1, by + 9, bw, "center")
+                -- Frente Cian MUTRIS
+                love.graphics.setColor(0.25, 0.92, 1.00, 0.95)
+                love.graphics.printf("[ SYSTEM EXCEPTION / METRIC BREACH ]", bx, by + 8, bw, "center")
 
-                -- TELEMETRÍA DETALLADA EN UNA SOLA LÍNEA (Font 12) - Espacio de sobra horizontal
-                love.graphics.setFont(FontCache.get(12))
-                love.graphics.setColor(0.02, 0.03, 0.06, 1.0)
-                love.graphics.printf(Sentinel.current_msg or "", bx + 10, by + 28, bw - 20, "center")
+                -- TEXTO 2: TELEMETRÍA DETALLADA (Font 10) - Formateo asíncrono de variables numéricas puras
+                love.graphics.setFont(FontCache.get(10))
+                -- Sombra de hardware sutil anti-empaste
+                love.graphics.setColor(0, 0, 0, 0.8)
+                if Sentinel.current_type == "LEAK" then
+                    love.graphics.printf(string.format("RAM DELTA  +%.4f KB  total=%.2f KB  frame=#%d", Sentinel.val_delta, Sentinel.val_total, Sentinel.val_frame), bx + 11, by + 29, bw - 20, "center")
+                    -- Frente reactivo desaturado elegante
+                    love.graphics.setColor(r, g, b, 0.95)
+                    love.graphics.printf(string.format("RAM DELTA  +%.4f KB  total=%.2f KB  frame=#%d", Sentinel.val_delta, Sentinel.val_total, Sentinel.val_frame), bx + 10, by + 28, bw - 20, "center")
+                else
+                    love.graphics.printf(string.format("PERF DROP  dt=%.2fms  overbudget=+%.1fus  frame=#%d", Sentinel.val_delta, Sentinel.val_total, Sentinel.val_frame), bx + 11, by + 29, bw - 20, "center")
+                    -- Frente reactivo desaturado elegante
+                    love.graphics.setColor(r, g, b, 0.95)
+                    love.graphics.printf(string.format("PERF DROP  dt=%.2fms  overbudget=+%.1fus  frame=#%d", Sentinel.val_delta, Sentinel.val_total, Sentinel.val_frame), bx + 10, by + 28, bw - 20, "center")
+                end
             end
 
             love.graphics.pop()
         end
         -- ─────────────────────────────────────────────────────────────────────────────
+    -- IMPORTANTE: Aquí se cierra el pcall original de la línea 428 que causaba el crash
     end)
-    
+
     if not ok then
         local log_f = io.open("debug_log.txt", "a")
         if log_f then
@@ -711,9 +803,8 @@ function SceneGame.draw()
         love.graphics.setColor(1,0,0,1)
         love.graphics.print("RENDER ERROR: " .. tostring(err), 10, 10)
     end
+
 end
-
-
 
 function SceneGame.keypressed(key)
     -- Telemetría: registra la última tecla recibida (visible en el overlay de pausa)

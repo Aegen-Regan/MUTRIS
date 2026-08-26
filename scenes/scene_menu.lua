@@ -463,16 +463,23 @@ function scene.draw()
         lg.setColor(0.02, 0.03, 0.06, 1.0)
         lg.rectangle("line", bx, by, bw, bh, 4)
 
-        -- Strobe a 8Hz sin allocations operando sobre la tipografía negra invertida
+        -- Strobe a 8Hz sin allocations operando sobre la tipografía negra invertida MASIVA
         local strobe = math.floor((_G.RealMatchTimer or love.timer.getTime()) * 8) % 2 == 0
         if strobe then
+            -- ENCABEZADO MASIVO EN NEGRO (Font 14)
             lg.setFont(FontCache.get(14))
-            lg.setColor(0.02, 0.03, 0.06, 1.0) -- TEXTO NEGRO PURO SOBRE COLOR SÓLIDO (Contraste Máximo)
+            lg.setColor(0.02, 0.03, 0.06, 1.0) -- TEXTO NEGRO SÓLIDO
             lg.printf("[ SYSTEM EXCEPTION / METRIC BREACH ]", bx, by + 8, bw, "center")
 
+            -- TELEMETRÍA DETALLADA EN NEGRO (Font 12) - Formateo asíncrono de variables numéricas fijas
             lg.setFont(FontCache.get(12))
-            lg.printf(Sentinel.current_msg or "", bx + 8, by + 30, bw - 16, "center")
+            if Sentinel.current_type == "LEAK" then
+                lg.printf(string.format("RAM DELTA  +%.4f KB  total=%.2f KB  frame=#%d", Sentinel.val_delta, Sentinel.val_total, Sentinel.val_frame), bx + 8, by + 32, bw - 16, "center")
+            else
+                lg.printf(string.format("PERF DROP  dt=%.2fms  overbudget=+%.1fus  frame=#%d", Sentinel.val_delta, Sentinel.val_total, Sentinel.val_frame), bx + 8, by + 32, bw - 16, "center")
+            end
         end
+
     end
 
     lg.setColor(1, 1, 1, 1)

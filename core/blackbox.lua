@@ -25,8 +25,11 @@ for i = 1, Blackbox.max_records do
         frame = 0,
         event_type = "NONE",
         param_num = 0.0,
-        param_num2 = 0.0, -- Mantenido por retrocompatibilidad con logs existentes
-        param_str = "NONE"
+        param_num2 = 0.0,
+        param_str = "NONE",
+        -- NUEVOS BUFERS DE TEXTO PRE-ASIGNADOS (Aniquilan el GC)
+        cached_time_tag  = "[000.0s] SYS",
+        cached_param_tag = "| SYSTEM INITIALIZED"
     }
 end
 
@@ -68,8 +71,13 @@ function Blackbox.log(evt_type, msg, p1, p2)
     e.param_num  = p1 or 0
     e.param_num2 = p2 or 0
 
+    -- FORMATEO ASÍNCRONO EN LA TRANSMISIÓN (Ocurre una sola vez, cero impacto por frame)
+    e.cached_time_tag  = string.format("[%04.1fs] %s", e.timestamp, e.event_type:sub(1, 10))
+    e.cached_param_tag = "| " .. e.param_str:sub(1, 18)
+
     Blackbox.pointer = (Blackbox.pointer % Blackbox.max_records) + 1
 end
+
 
 function Blackbox.record(evt_type, param_num, param_str)
     Blackbox.log(evt_type, param_str, param_num, 0)
@@ -139,14 +147,15 @@ function Blackbox.drawPermanentHUD(p1, p2, center_x, is_boss_mode)
     local count = 0
     local idx = (Blackbox.pointer - 2 + Blackbox.max_records) % Blackbox.max_records + 1
 
+    -- BUCLE ULTRA-RÁPIDO: Lee punteros estáticos precacheados, CERO ALLOCATIONS
     while count < 8 do
         local e = Blackbox.buffer[idx]
         if e.timestamp > 0 or e.event_type ~= "INIT" then
             love.graphics.setColor(0, 0.95, 1.0, 0.90)
-            love.graphics.print(string.format("[%04.1fs] %s", e.timestamp, e.event_type:sub(1, 10)), px + 8, line_y)
+            love.graphics.print(e.cached_time_tag, px + 8, line_y) -- Lectura estática directa
 
             love.graphics.setColor(1, 1, 1, 0.70)
-            love.graphics.print("| " .. e.param_str:sub(1, is_boss_mode and 14 or 18), px + (is_boss_mode and 95 or 105), line_y)
+            love.graphics.print(e.cached_param_tag, px + (is_boss_mode and 95 or 105), line_y) -- Lectura estática directa
 
             line_y = line_y + 13
             count = count + 1

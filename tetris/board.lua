@@ -1,5 +1,5 @@
 -- ================================================================
--- FILE: tetris/board.lua (METEORIC BOSS OVERHAUL ACTIVATED)
+-- FILE: tetris/board.lua (METEORIC BOSS OVERHAUL ACTIVATED — ZERO-GC HARDENED)
 -- ================================================================
 ---@diagnostic disable: undefined-global
 -- ============================================================================
@@ -40,6 +40,21 @@ Board.colors = {
     [8] = {0.5, 0.5, 0.55}
 }
 
+-- ============================================================================
+-- ── ZERO-GC STATIC FALLBACK CONSTANTS ───────────────────────────────────────
+-- Pre-allocated ONCE at module load. These previously existed as inline table
+-- LITERALS (`{{{1}}}`, `{0.6,0.6,0.6}`, `{1,1,1}`) sitting directly inside
+-- canMove()/drawBlock()/draw(), which is a hot per-frame / per-input path.
+-- Any time the "or" fallback actually triggered, Lua allocated a brand new
+-- table on the heap — this is the exact class of leak Sentinel was flagging
+-- (+1.8KB to +2.9KB deltas). Reusing shared, immutable constants here is
+-- safe because none of these fallback tables are ever mutated in place.
+-- ============================================================================
+local FALLBACK_SHAPE      = {{{1}}}
+local DEFAULT_BLOCK_COLOR = {0.6, 0.6, 0.6}
+local DEFAULT_TRAIL_COLOR = {1, 1, 1}
+local DEFAULT_POPUP_COLOR = {1, 1, 1}
+
 function Board.new(x, y, player_type, cols, rows, block_size)
     local self = setmetatable({}, Board)
     self.x, self.y = x, y
@@ -62,7 +77,7 @@ function Board.new(x, y, player_type, cols, rows, block_size)
     self.hold_piece = nil
     self.can_hold = true
     self.garbage_queue = {}
-    
+
     self.pieces_placed = 0
     self.lines_cleared = 0
     self.garbage_sent = 0
@@ -109,6 +124,28 @@ function Board.new(x, y, player_type, cols, rows, block_size)
         self.phantom_pool[i] = { active = false, x = 0, y = 0, id = 1, timer = 0, shape = nil }
     end
 
+    -- ── ASYNCHRONOUS STRING CACHE BUFFER (ZERO-GC) ──────────────────────────
+    -- IMPORTANT: this is a PER-INSTANCE table (self.str_cache), not a module
+    -- level local. A module-level STR_CACHE would be shared and silently
+    -- corrupted between the human board and the bot/boss board (two Board
+    -- instances exist simultaneously in versus/boss modes) — each board
+    -- needs its own independent set of cached strings. It is still
+    -- allocated exactly once, here at construction time, and every slot is
+    -- only overwritten (never re-created) inside trigger hooks below,
+    -- whenever the underlying integer actually mutates — never per-frame
+    -- inside update()/draw(). Score/Level/PPS are intentionally NOT cached
+    -- here because Board itself does not own that state (PPSCounter and
+    -- scene_game.lua's HUD do) — happy to extend this same pattern to those
+    -- modules on request.
+    self.str_cache = {
+        lines_str        = "0",
+        garbage_sent_str = "0",
+        garbage_recv_str = "0",
+        combo_str        = tostring(self.combo_count),
+        max_combo_str    = "0",
+        b2b_str          = "0",
+    }
+
     ParticleSystem.init(self)
     PPSCounter.init(self)
     BeatLock.initBoardState(self)
@@ -126,10 +163,13 @@ function Board:spawnPiece()
     EventBus.emit(EventBus.ON_PIECE_SPAWN, next_id, self.player_type == "human" and 1 or 2)
 
     if not self:canMove(self.active_piece.x, self.active_piece.y, self.active_piece.rotation) then
+        -- Zero-GC: pass raw numeric coordinates as p1/p2 and a static literal
+        -- message key instead of building a one-off concatenated string here.
+        -- Blackbox.log already owns the (rare, non-hot-path) formatting step.
         Blackbox.log(
             (self.player_type == "human") and "P1_BLOCK_OUT" or "BOT_BLOCK_OUT",
-            "SPAWN OVERLAP (" .. tostring(self.active_piece.x) .. ", " .. tostring(self.active_piece.y) .. ")",
-            next_id, 0
+            "SPAWN_OVERLAP",
+            self.active_piece.x, self.active_piece.y
         )
         self:triggerDeath()
     end
@@ -140,6 +180,13 @@ function Board:hold()
 
     local cur_id = self.active_piece.id
     if not self.hold_piece then
+        -- Note: this table is allocated at most ONCE per match (the very
+        -- first hold event) — it is not a per-frame or per-piece hot path,
+        -- so it falls outside the Zero-GC loop budget. Preserving the
+        -- nil/non-nil sentinel here intentionally, since external HUD code
+        -- (hold-box rendering) branches on `hold_piece == nil` to decide
+        -- whether anything has been held yet; collapsing that to an
+        -- always-present sentinel table would silently change that contract.
         self.hold_piece = { id = cur_id }
         self:spawnPiece()
     else
@@ -221,16 +268,20 @@ end
 function Board:canMove(px, py, pr)
     -- RulesetManager é um upvalue de módulo: sem require inline, sem quebra de trace JIT
     local shapes = RulesetManager.getShapes(self.active_piece.id)
-    local shape = shapes and shapes[pr] or {{{1}}}
+    -- Zero-GC: reuse the shared FALLBACK_SHAPE constant instead of building a
+    -- fresh {{{1}}} table literal on every single call. canMove() runs on
+    -- every gravity tick, every rotation attempt and every movement/ghost
+    -- check, so this was the single hottest allocation site in the file.
+    local shape = shapes and shapes[pr] or FALLBACK_SHAPE
     for r = 1, #shape do
         for c = 1, #shape[r] do
             if shape[r][c] ~= 0 then
                 local tx, ty = px + c - 1, py + r - 1
-                if tx < 1 or tx > self.cols or ty < 1 or ty > self.rows then 
-                    return false 
+                if tx < 1 or tx > self.cols or ty < 1 or ty > self.rows then
+                    return false
                 end
-                if self.grid[ty][tx] ~= 0 then 
-                    return false 
+                if self.grid[ty][tx] ~= 0 then
+                    return false
                 end
             end
         end
@@ -266,24 +317,30 @@ function Board:checkLines(is_tspin)
 
     if cleared > 0 then
         self.combo_count = self.combo_count + 1
-        if cleared == 4 or is_tspin then 
+        self.str_cache.combo_str = tostring(self.combo_count)
+
+        if cleared == 4 or is_tspin then
             self.b2b_count = self.b2b_count + 1
-        else 
-            self.b2b_count = 0 
+        else
+            self.b2b_count = 0
         end
+        self.str_cache.b2b_str = tostring(self.b2b_count)
 
         if self.player_type == "human" and _G.CURRENT_GAME_MODE == "benchmark" then
             BenchmarkManager.registerPlayerLineClear(cleared, is_tspin)
         end
-        
+
         EventBus.emit(EventBus.ON_LINE_CLEAR, cleared, is_tspin and 1 or 0, self.player_type == "human" and 1 or 2, self.combo_count)
 
         if self.is_zone_active then
             self.zone_lines_cleared = self.zone_lines_cleared + cleared
         else
             self.lines_cleared = self.lines_cleared + cleared
+            self.str_cache.lines_str = tostring(self.lines_cleared)
+
             self.max_combo = math.max(self.max_combo, self.combo_count)
-            
+            self.str_cache.max_combo_str = tostring(self.max_combo)
+
             local is_boss_mode = (_G.CURRENT_GAME_MODE == "boss_hunt" or self.is_boss or (self.opponent and self.opponent.is_boss))
 
             -- ☄️ BOMBARDEO DE METEORITOS EN MODO BOSS HUNT (CERO BASURA GRIS PLANA)
@@ -296,6 +353,7 @@ function Board:checkLines(is_tspin)
                 if self.opponent and attack > 0 then
                     GarbageManager.sendGarbage(self, self.opponent, attack)
                     self.garbage_sent = self.garbage_sent + attack
+                    self.str_cache.garbage_sent_str = tostring(self.garbage_sent)
                 end
             end
 
@@ -303,6 +361,8 @@ function Board:checkLines(is_tspin)
         end
     else
         self.combo_count = -1
+        self.str_cache.combo_str = tostring(self.combo_count)
+
         if not self.is_zone_active then
             local lines_to_push = 0
             if self.garbage_queue then
@@ -333,10 +393,12 @@ function Board:checkLines(is_tspin)
         end
 
         if ceiling_breach then
+            -- Zero-GC: static literal message key + raw numeric param instead
+            -- of a runtime ".." concatenation.
             Blackbox.log(
                 (self.player_type == "human") and "P1_DEATH" or "BOT_DEATH",
-                "CEILING OVERFLOW (MINOS IN R<=" .. tostring(self.visible_rows) .. ")",
-                0, 0
+                "CEILING_OVERFLOW",
+                self.visible_rows, 0
             )
             self:triggerDeath()
             return
@@ -411,7 +473,9 @@ function Board:setPopup(text, color, is_high_tier, subtext)
     -- Se eliminan los gsub de runtime que generaban fragmentos de string en el heap.
     self.popup_text     = tostring(text    or "")
     self.popup_sub      = tostring(subtext or "")
-    self.popup_color    = color or {1, 1, 1}
+    -- Zero-GC: shared immutable constant instead of a fresh {1,1,1} literal
+    -- every time a caller omits a color.
+    self.popup_color    = color or DEFAULT_POPUP_COLOR
     self.popup_timer    = 1.2
     self.popup_max_time = 1.2
     self.popup_scale    = is_high_tier and 1.65 or 1.35
@@ -430,7 +494,7 @@ function Board:triggerDeath()
     self.death_timer = 1.5
     _G.HitStopTimer = 0.25
     AudioManager.playImmediateSFX("death", self.player_type == "bot")
-    
+
     local bs = self.block_size or 24
     BloomShader.triggerShockwave(self.x + (self.cols * bs * 0.5), self.y + (self.visible_rows * bs * 0.5))
     self:triggerShake(16, 0.6)
@@ -439,7 +503,11 @@ function Board:triggerDeath()
 end
 
 function Board:drawBlock(x, y, id, alpha, override_size)
-    local clr = self.colors[id] or {0.6, 0.6, 0.6}
+    -- Zero-GC: reuse DEFAULT_BLOCK_COLOR instead of allocating {0.6,0.6,0.6}
+    -- inline. drawBlock() is called once per filled cell, per frame — this
+    -- was a live per-frame leak source any time an unmapped/invalid id
+    -- (e.g. anything outside 1-8) appeared on the grid.
+    local clr = self.colors[id] or DEFAULT_BLOCK_COLOR
     local a = alpha or 1.0
     local bs = override_size or self.block_size
     love.graphics.setColor(clr[1], clr[2], clr[3], a * 0.92)
@@ -516,15 +584,15 @@ function Board:update(dt)
     if not self.is_dying and self.active_piece then
         local Input = require "input"
         local AnomalyManager = require "tetris.anomaly_manager"
-        
+
         -- Securely fetch the baseline gravity speed modifier
         local gravity = (self.player_type == "human") and Input.getSoftDropFactor() or 0.8
-        
+
         -- Apply dynamic parametric gravity anomaly alterations (Anomaly ID 2)
         if AnomalyManager and AnomalyManager.active_anomaly_id == 2 and self.player_type == "human" then
             gravity = gravity * (AnomalyManager.gravity_multiplier or 1.0)
         end
-        
+
         -- Execute the safe frame movement step update
         self.active_piece:update(dt, gravity)
     end
@@ -564,7 +632,9 @@ function Board:draw()
         local tr = self.trail_pool[i]
         if tr.active and tr.shape then
             local a = (tr.timer / 0.25) * 0.35
-            local clr = self.colors[tr.id] or {1, 1, 1}
+            -- Zero-GC: shared DEFAULT_TRAIL_COLOR constant instead of a
+            -- fresh {1,1,1} literal on every active-trail frame.
+            local clr = self.colors[tr.id] or DEFAULT_TRAIL_COLOR
             love.graphics.setColor(clr[1], clr[2], clr[3], a)
             for r = 1, #tr.shape do
                 for c = 1, #tr.shape[r] do
@@ -681,6 +751,7 @@ end
 function Board:receiveGarbage(line_count)
     if not line_count or line_count <= 0 then return end
     self.garbage_received = self.garbage_received + line_count
+    self.str_cache.garbage_recv_str = tostring(self.garbage_received)
     self:pushToGrid(line_count)
 end
 Board.injectGarbage = Board.receiveGarbage

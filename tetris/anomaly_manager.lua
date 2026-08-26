@@ -53,17 +53,41 @@ function AnomalyManager.trigger_anomaly(anomaly_id)
     end
 end
 
--- Restores competitive parameters back to normal base values
+-- Restores competitive parameters back to normal base values and flushes input cache
 function AnomalyManager.clear_anomaly()
     AnomalyManager.active_anomaly_id = 0
     AnomalyManager.internal_timer = 0.0 -- Reset internal clock for cycle tracking
     AnomalyManager.is_controls_inverted = false
     AnomalyManager.gravity_multiplier = 1.0
     
+    -- RE-VERIFICAR DE FORMA SEGURA Y RÁPIDA (Sin lookups globales en caliente)
+    if not Input then
+        Input = package.loaded["core.input"] or package.loaded["input"] or _G.Input
+    end
+    if not SettingsManager then
+        SettingsManager = package.loaded["core.settings_manager"] or package.loaded["settings_manager"] or _G.SettingsManager
+    end
+
+    -- Limpieza directa sobre el buffer indexado existente
+    if Input and Input.keys_down then
+        Input.keys_down["left"]  = false
+        Input.keys_down["right"] = false
+        Input.keys_down["down"]  = false
+        
+        if SettingsManager and SettingsManager.get then
+            local k_left  = SettingsManager.get("key_left") or "left"
+            local k_right = SettingsManager.get("key_right") or "right"
+            Input.keys_down[k_left]  = false
+            Input.keys_down[k_right] = false
+        end
+    end
+    
     if Blackbox and Blackbox.record then
         Blackbox.record(Blackbox.TYPES.ANOMALY, 0.0, "ANOMALY_CLEARED_OK")
     end
 end
+
+
 
 -- Ultra-fast input filter to inject directly into keypressed routines
 function AnomalyManager.filter_direction(direction_string)
