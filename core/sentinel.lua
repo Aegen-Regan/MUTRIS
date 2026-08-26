@@ -11,20 +11,17 @@ local ANSI_RED     = "\27[31m[SENTINEL CRITICAL]\27[0m "
 local ANSI_YELLOW  = "\27[33m[SENTINEL WARN   ]\27[0m "
 local ANSI_MAGENTA = "\27[35m[SENTINEL PERF   ]\27[0m "
 
--- ── THRESHOLDS ───────────────────────────────────────────────────────────────
+-- --- THRESHOLDS
 local FRAME_BUDGET_SEC  = 1.0 / 238.0
-local RAM_DELTA_KB      = 0.005
+local RAM_DELTA_KB      = 1.0           -- Subido a 1.0 KB para mitigar falsos positivos
 local GARBAGE_QUEUE_MAX = 20
--- 180 frames @ 60Hz = 3.0s of cold-boot grace (module loads, skin texturing,
--- initial asset streaming). Every alarm check below must respect this window
--- — see CHECK 2 fix: it was previously ungated and firing as early as
--- frame #1, which is what caused the yellow alert to appear ~frame #60.
-local WARMUP_FRAMES     = 180
-local ALERT_DURATION    = 3.5
+local CONSECUTIVE_LIMIT = 3             -- La regla de los 3 frames de Claude
 
--- ── STATE (Pre-allocated fields, zero growth at runtime) ─────────────────────
-local _frame_count = 0
-local _prev_ram_kb = 0.0
+-- --- STATE (Pre-allocated fields, zero growth at runtime)
+local _frame_count       = 0
+local _prev_ram_kb       = 0.0
+local _perf_consecutives = 0             -- Inicializador numérico limpio
+local _leak_consecutives = 0             -- Inicializador numérico limpio
 
 -- Public Flags (Zero-GC communication layer for HUD matrices)
 -- "Silent on Success": both of these MUST be false/0.0 at boot and MUST
@@ -64,54 +61,56 @@ function Sentinel.auditFrame(dt, current_scene)
         Sentinel.visual_alert_timer = math.max(0, Sentinel.visual_alert_timer - dt)
         if Sentinel.visual_alert_timer == 0 then
             Sentinel.is_breach_active = false
+            Sentinel.current_type     = nil
         end
     end
 
-    -- CHECK 1: PERFORMANCE FLUCUATIONS
+    -- CHECK 1: PERFORMANCE FLUCTUATIONS (Con ventana de persistencia de 3 frames)
     if _frame_count > WARMUP_FRAMES and dt > FRAME_BUDGET_SEC then
-        Sentinel.visual_alert_timer = ALERT_DURATION
-        Sentinel.is_breach_active   = true
-        Sentinel.current_type       = "PERF"
-        
-        -- Capture pure numerical data points
-        Sentinel.val_delta          = dt * 1000.0
-        Sentinel.val_total          = (dt - FRAME_BUDGET_SEC) * 1000000.0
-        Sentinel.val_frame          = _frame_count
+        _perf_consecutives = _perf_consecutives + 1
+        if _perf_consecutives >= CONSECUTIVE_LIMIT then
+            Sentinel.visual_alert_timer = ALERT_DURATION
+            Sentinel.is_breach_active   = true
+            Sentinel.current_type       = "PERF"
+            
+            -- Capture pure numerical data points
+            Sentinel.val_delta          = dt * 1000.0
+            Sentinel.val_total          = (dt - FRAME_BUDGET_SEC) * 1000000.0
+            Sentinel.val_frame          = _frame_count
+        end
+    else
+        _perf_consecutives = 0 -- Rompe la racha si el rendimiento es óptimo
     end
 
     -- CHECK 2: HEAP MEMORY EXPLOSIONS
     local cur_ram_kb = collectgarbage("count")
     local ram_delta  = cur_ram_kb - _prev_ram_kb
 
-    -- BUGFIX (Silent Rule): this check had NO warmup gate at all, unlike
-    -- CHECK 1 above. Cold-boot streaming (module tables, skins, texture
-    -- caches) routinely moves the heap by far more than RAM_DELTA_KB
-    -- (0.005 KB = 5 bytes), so the LEAK alert was free to fire on frame 1
-    -- and kept re-arming itself through legitimate boot allocations — this
-    -- is exactly what surfaced as the yellow box around frame #60 and made
-    -- it look "stuck" into the Main Menu. Gating on _frame_count here
-    -- brings CHECK 2 in line with CHECK 1: real runtime spikes only count
-    -- once the engine is past cold boot.
+    -- BUGFIX (Silent Rule): Gating on _frame_count and enforcing CONSECUTIVE_LIMIT
     if _frame_count > WARMUP_FRAMES and ram_delta > RAM_DELTA_KB then
         local is_paused   = current_scene and current_scene.is_paused
         local is_blackout = _G.IsBlackoutActive
         
         if not is_paused and not is_blackout then
-            Sentinel.visual_alert_timer = ALERT_DURATION
-            Sentinel.is_breach_active   = true
-            Sentinel.current_type       = "LEAK"
-            
-            -- Store integers and floats directly in the module layout (No string.format!)
-            Sentinel.val_delta          = ram_delta
-            Sentinel.val_total          = cur_ram_kb
-            Sentinel.val_frame          = _frame_count
+            _leak_consecutives = _leak_consecutives + 1
+            if _leak_consecutives >= CONSECUTIVE_LIMIT then
+                Sentinel.visual_alert_timer = ALERT_DURATION
+                Sentinel.is_breach_active   = true
+                Sentinel.current_type       = "LEAK"
+                
+                -- Store integers and floats directly in the module layout (No string.format!)
+                Sentinel.val_delta          = ram_delta
+                Sentinel.val_total          = cur_ram_kb
+                Sentinel.val_frame          = _frame_count
+            end
+        else
+            _leak_consecutives = 0 -- Reset instantáneo si está en pausa o blackout
         end
+    else
+        _leak_consecutives = 0 -- Mitiga blips legítimos y transitorios (font/texture caches)
     end
-    -- Baseline tracking stays UNCONDITIONAL (runs every frame, warmup or
-    -- not) so that the moment frame #181 arrives, ram_delta is measured
-    -- against the immediately-preceding frame's heap — never against the
-    -- stale frame-0 snapshot from init(). This is what prevents a false
-    -- "spike" the instant warmup ends.
+
+    -- Baseline tracking stays UNCONDITIONAL (runs every frame, warmup or not)
     _prev_ram_kb = cur_ram_kb
 
     -- CHECK 3: GARBAGE QUEUE OVERFLOW
