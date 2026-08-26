@@ -296,43 +296,28 @@ function love.draw()
 end
 
 function love.keypressed(key, scancode, isrepeat)
-    -- BYPASS DEFINITIVO: Extraemos la escena real acoplada al stack dinámico
-    local current_scene = SceneManager.getScene(SceneManager.getState())
-    
-    if current_scene and current_scene.is_paused then
-        -- Filtro estricto de captura de periféricos para el panel de ingeniería cian
-        if key == "up" or key == "down" or key == "left" or key == "right" or key == "m" or key == "return" or key == "escape" or key == "space" or key == "kpenter" then
-            if current_scene.keypressed then
-                current_scene.keypressed(key)
-            end
-            return -- Cortocircuito de hardware absoluto: Silencia el gameplay de fondo
-        end
-        return -- Bloquea cualquier otra tecla de juego (como A o D) mientras esté pausado
-    end
-
-    -- F-key interceptors (sistema / global hotkeys)
+    -- ── F-KEY INTERCEPTORS: Hotkeys globales del sistema (prioridad máxima) ──
     if key == "f12" then
         if _G.GifEncoder and _G.GifEncoder.compile_clip then
             _G.GifEncoder.compile_clip()
         end
         return
     end
-
     if key == "f9" then _G.ToggleRecording(); return end
     if key == "f2" or key == "printscreen" or key == "sysrq" then _G.TakeScreenshot(); return end
     if key == "f5" then ThemeManager.cycleNext(); AudioManager.playSliderTick(); return end
     if key == "f6" then ThemeManager.cyclePrev(); AudioManager.playSliderTick(); return end
-    if key == "f7" then
-        PluginManager.reloadAll()
-        return
-    end
+    if key == "f7" then PluginManager.reloadAll(); return end
     if key == "f11" or (key == "return" and (love.keyboard.isDown("lalt") or love.keyboard.isDown("ralt"))) then
         _G.ToggleFullscreen()
         return
     end
 
-    -- Despacho estándar si el juego está en marcha
-    SceneManager.keypressed(key)
+    -- ── DESPACHO AL MICRO-KERNEL: SceneManager consume el evento vía pcall ──
+    -- Si la escena activa retorna true (input consumido), cortocircuito inmediato.
+    -- Cubre pausa, match_over, gameplay y cualquier sub-escena futura sin
+    -- hardcodear listas de teclas ni romper encapsulación en el kernel.
+    if SceneManager.keypressed(key) then return end
 end
 
 function love.keyreleased(key)

@@ -805,12 +805,6 @@ function SceneGame.keyreleased(key)
     end
 end
 
-function SceneGame.keyreleased(key)
-    if Input and Input.keyreleased then
-        Input.keyreleased(key)
-    end
-end
-
 function SceneGame.gamepadpressed(joystick, button)
     if SceneGame.match_over then
         if button == "a" or button == "start" then
@@ -844,66 +838,6 @@ function SceneGame.exit()
     collectgarbage("collect")
 end
 
-function SceneGame.keypressed(key)
-    -- --- 1. UNCONDITIONAL LIVE HOT-RESTART GAMEPLAY INTERCEPTION ---
-    if key == "r" then
-        SceneGame.restartMatch()
-        return
-    end
 
-    -- --- 2. ADVANCED TACTICAL PAUSE & ESCAPE INTERCEPTION ---
-    if key == "escape" then
-        local SceneManager = require "core.scene_manager"
-        
-        -- If the match is currently running and active, trigger the engine's built-in pause toggle
-        if not SceneGame.match_over then
-            -- Check if a local pause variable exists inside the frame layout, otherwise fall back safely
-            if SceneGame.is_paused ~= nil then
-                SceneGame.is_paused = not SceneGame.is_paused
-                local AudioManager = require "audio_manager"
-                if AudioManager and AudioManager.playImmediateSFX then
-                    AudioManager.playImmediateSFX("hold", false) -- Play an organic pause feedback audio click
-                end
-                return
-            else
-                -- If the engine layout does not support mid-game freezing, proceed to safe return menu state
-                SceneGame.match_over = false
-                if SceneManager and SceneManager.setState then
-                    SceneManager.setState(SceneGame.return_scene or "menu")
-                end
-                return
-            end
-        else
-            -- If match is already over (Game Over screen active), escape returns directly to menu principal
-            SceneGame.match_over = false
-            if SceneManager and SceneManager.setState then
-                SceneManager.setState(SceneGame.return_scene or "menu")
-            end
-            return
-        end
-    end
-
-    -- --- 3. RETRY MATCH CONTROL FOR GAME-OVER MODAL POPUPS ---
-    if SceneGame.match_over then
-        if key == "return" or key == "space" then
-            SceneGame.restartMatch()
-            return
-        end
-    end
-
-    -- Explicit hardware link: Forward the remaining inputs to the high-performance pipeline
-    local Input = require "input"
-    if Input and Input.keypressed then
-        Input.keypressed(key)
-    end
-end
-
-function SceneGame.keyreleased(key)
-    -- Explicit hardware link: Forward the release event directly into the pipeline
-    local Input = require "input"
-    if Input and Input.keyreleased then
-        Input.keyreleased(key)
-    end
-end
 
 return SceneGame
